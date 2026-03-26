@@ -7,21 +7,20 @@ import {IPredictionArena} from "../src/interfaces/IPredictionArena.sol";
 import {IRoundManager} from "../src/interfaces/IRoundManager.sol";
 
 contract PostAndReveal is Script {
-    address constant ARENA = 0xB9770aAf58358C5b8c3807d281A9DF0E6590EE09;
-    address constant ROUND_MANAGER = 0x87C250dE51750283f222173fDE2988321aF1Fa7F;
+    address constant ARENA = 0x5D0aFAb396CA23d25e2Bd703c9736aC095be8eB6;
+    address constant ROUND_MANAGER = 0xa2303C1FbFD8dD556355eE9E33Bb899759907d78;
 
     function run() external {
         uint256 roundId = vm.envUint("ROUND_ID");
         uint256 agentKey = vm.envUint("PRIVATE_KEY_AGENT1");
         address agent = vm.addr(agentKey);
 
-        // Predictions and salt — must match what was committed
+        // Predictions and salt - must match what was committed
         uint16[] memory preds = new uint16[](2);
         preds[0] = 7000; // BTC
         preds[1] = 4500; // XRP
         bytes32 salt = 0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef;
 
-        // Verify hash locally first
         // Compute hash with tight 2-byte packing (matches contract)
         bytes memory packed = abi.encodePacked(roundId);
         for (uint256 i = 0; i < preds.length; i++) {
