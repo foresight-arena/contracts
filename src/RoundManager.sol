@@ -32,6 +32,7 @@ contract RoundManager is IRoundManager {
 
     function createRound(bytes32[] calldata conditionIds, uint64 commitDeadline, uint64 revealDeadline)
         external
+        virtual
         onlyCurator
         returns (uint256 roundId)
     {
