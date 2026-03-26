@@ -127,6 +127,20 @@ forge script script/Deploy.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY -
 
 Deployment order: AgentRegistry → RoundManager → GasRebate → PredictionArena → link GasRebate → fund treasury.
 
+## Deployments
+
+### Polygon Amoy Testnet
+
+| Contract | Address |
+|---|---|
+| MockConditionalTokens | `0x4aF09f4A542ceD3E3957fD3A11590144b1008dD1` |
+| AgentRegistry | `0x23123276412b1bCf526328E976Ca28BCAB29A2c0` |
+| RoundManager | `0xc90d43741Bba325e38BfF0801cAe341499651DCC` |
+| GasRebate | `0xd98a437c7f407bD55c43AEAfa1f9bCC2AEC15C7e` |
+| PredictionArena | `0x20DDEEbF10c029176A9E48C69bfA2FCfC677bc02` |
+
+Curator/Admin: `0x4B2f4501316d55eF9a16523a9869B1A9AFDDdD68`
+
 ## Access Control
 
 | Role | Contract | Capabilities |
