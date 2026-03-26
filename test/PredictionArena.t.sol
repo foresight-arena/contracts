@@ -58,7 +58,11 @@ contract PredictionArenaTest is Test {
         pure
         returns (bytes32)
     {
-        return keccak256(abi.encodePacked(roundId, predictions, salt));
+        bytes memory packed = abi.encodePacked(roundId);
+        for (uint256 i = 0; i < predictions.length; i++) {
+            packed = abi.encodePacked(packed, predictions[i]);
+        }
+        return keccak256(abi.encodePacked(packed, salt));
     }
 
     /// @dev Create a round with `n` markets. Returns roundId and conditionIds.

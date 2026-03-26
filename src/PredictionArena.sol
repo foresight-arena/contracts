@@ -64,8 +64,14 @@ contract PredictionArena is IPredictionArena {
         require(!c.revealed, "Already revealed");
         require(predictions.length == r.conditionIds.length, "Wrong prediction count");
 
-        // Verify hash
-        bytes32 expectedHash = keccak256(abi.encodePacked(roundId, predictions, salt));
+        // Verify hash — manually pack uint16[] as tight 2-byte elements
+        // abi.encodePacked on dynamic arrays pads to 32 bytes per element,
+        // so we build the packed encoding explicitly for off-chain compatibility.
+        bytes memory packed = abi.encodePacked(roundId);
+        for (uint256 i = 0; i < predictions.length; i++) {
+            packed = abi.encodePacked(packed, predictions[i]);
+        }
+        bytes32 expectedHash = keccak256(abi.encodePacked(packed, salt));
         require(expectedHash == c.commitHash, "Hash mismatch");
 
         // Validate predictions

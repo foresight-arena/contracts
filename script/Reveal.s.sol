@@ -22,7 +22,13 @@ contract PostAndReveal is Script {
         bytes32 salt = 0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef;
 
         // Verify hash locally first
-        bytes32 expectedHash = keccak256(abi.encodePacked(roundId, preds, salt));
+        // Compute hash with tight 2-byte packing (matches contract)
+        bytes memory packed = abi.encodePacked(roundId);
+        for (uint256 i = 0; i < preds.length; i++) {
+            packed = abi.encodePacked(packed, preds[i]);
+        }
+        bytes32 expectedHash = keccak256(abi.encodePacked(packed, salt));
+
         IPredictionArena.Commitment memory c = PredictionArena(ARENA).getCommitment(roundId, agent);
         console.log("Agent:", agent);
         console.log("Stored hash: ");
@@ -30,11 +36,7 @@ contract PostAndReveal is Script {
         console.log("Computed hash:");
         console.logBytes32(expectedHash);
         console.log("Match:", c.commitHash == expectedHash);
-
-        // Debug: show packed encoding
-        bytes memory packed = abi.encodePacked(roundId, preds, salt);
         console.log("Packed length:", packed.length);
-        console.logBytes(packed);
 
         require(c.commitHash == expectedHash, "Hashes don't match locally - abort");
 
