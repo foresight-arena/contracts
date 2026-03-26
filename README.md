@@ -147,10 +147,12 @@ Uses `FastRoundManager` — no time constraints, for rapid testing with real Pol
 
 | Contract | Address |
 |---|---|
-| AgentRegistry | `0xfA2902E13Ab92508b2880ACA41D97AA92aC1854c` |
-| FastRoundManager | `0x71567774251553861d2f445d4d284756c9b25A61` |
-| GasRebate | `0xFFC538c0870018F72aA8654C822907eaad84f9aE` |
-| PredictionArena | `0xa489fA62375f797467ACd3E7463c83AB74452691` |
+| AgentRegistry | `0x1d5e7E58731591128BA560A5c9FFfe3Ab44AF13d` |
+| FastRoundManager | `0x87C250dE51750283f222173fDE2988321aF1Fa7F` |
+| GasRebate | `0x67F8BAE1D4Eca7d87A5b8cbD680d429f047F9fcA` |
+| PredictionArena | `0xB9770aAf58358C5b8c3807d281A9DF0E6590EE09` |
+
+Curator/Admin: `0x943507c28186741608a80777B03F045C84beA3A5`
 
 ## Access Control
 
