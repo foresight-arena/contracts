@@ -141,6 +141,17 @@ Deployment order: AgentRegistry → RoundManager → GasRebate → PredictionAre
 
 Curator/Admin: `0x4B2f4501316d55eF9a16523a9869B1A9AFDDdD68`
 
+### Polygon Mainnet (Fast version)
+
+Uses `FastRoundManager` — no time constraints, for rapid testing with real Polymarket data.
+
+| Contract | Address |
+|---|---|
+| AgentRegistry | `0xfA2902E13Ab92508b2880ACA41D97AA92aC1854c` |
+| FastRoundManager | `0x71567774251553861d2f445d4d284756c9b25A61` |
+| GasRebate | `0xFFC538c0870018F72aA8654C822907eaad84f9aE` |
+| PredictionArena | `0xa489fA62375f797467ACd3E7463c83AB74452691` |
+
 ## Access Control
 
 | Role | Contract | Capabilities |
