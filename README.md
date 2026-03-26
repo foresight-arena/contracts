@@ -135,9 +135,9 @@ Deployment order: AgentRegistry → RoundManager → GasRebate → PredictionAre
 |---|---|
 | MockConditionalTokens | `0x4aF09f4A542ceD3E3957fD3A11590144b1008dD1` |
 | AgentRegistry | `0x23123276412b1bCf526328E976Ca28BCAB29A2c0` |
-| RoundManager | `0xc90d43741Bba325e38BfF0801cAe341499651DCC` |
+| RoundManager | `0x4e44fbAD7a1DaF5E42Dcc7fb48426Ff71785Da08` |
 | GasRebate | `0xd98a437c7f407bD55c43AEAfa1f9bCC2AEC15C7e` |
-| PredictionArena | `0x20DDEEbF10c029176A9E48C69bfA2FCfC677bc02` |
+| PredictionArena | `0x219937292A48266681ECf08d4c2D1B45b4517Fd2` |
 
 Curator/Admin: `0x4B2f4501316d55eF9a16523a9869B1A9AFDDdD68`
 
