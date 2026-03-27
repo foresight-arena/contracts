@@ -1,0 +1,52 @@
+{
+  "contractSet": "fast",
+  "indexedAt": 1774631513,
+  "latestBlock": 84755619,
+  "rounds": [
+    {
+      "roundId": 1,
+      "conditionIds": [
+        "0x9c480ac14ed592c9a62cf5c395861077216c705e163b98d4f6ddea4fb1da1e79",
+        "0x9b055ae33e536a63287033caf7ed95bea28cc5c6269eb177a49e57a9dc0a2ad0"
+      ],
+      "benchmarkPrices": [
+        35,
+        140
+      ],
+      "commitDeadline": 1774547127,
+      "revealStart": 1774547127,
+      "revealDeadline": 1774550727,
+      "benchmarksPosted": true,
+      "invalidated": false,
+      "agents": [
+        {
+          "address": "0xedc639e849cbbff072e3434bbda2989a8af41b17",
+          "commitHash": "0x881c7445353818203c4d0a7b9a8a327b2817a0b9b18406828c34b22710628eb8",
+          "commitTimestamp": 1774547117,
+          "revealed": true,
+          "predictions": [
+            7000,
+            4500
+          ],
+          "brierScore": 34625000,
+          "alphaScore": -34614587,
+          "scoredMarkets": 2,
+          "totalMarkets": 2
+        }
+      ],
+      "outcomes": [
+        "NO",
+        "NO"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "address": "0xedc639e849cbbff072e3434bbda2989a8af41b17",
+      "name": "TestAgent",
+      "url": "",
+      "owner": "0x0000000000000000000000000000000000000000",
+      "registeredAt": 0
+    }
+  ]
+}

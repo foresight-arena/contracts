@@ -1,8 +1,9 @@
-import type { CSSProperties } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDataContext } from '../context/DataContext';
 import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { fetchMarketMetadata, type PolymarketInfo } from '../services/polymarket';
 import type { AgentRoundData } from '../types';
 
 function truncAddr(addr: string): string {
@@ -14,16 +15,19 @@ function formatTs(ts: number): string {
   return new Date(ts * 1000).toLocaleString();
 }
 
+function formatPct(value: number): string {
+  const pct = (value / 10000) * 100;
+  return pct % 1 === 0 ? pct.toFixed(0) + '%' : pct.toFixed(2) + '%';
+}
+
 function formatBrier(score: number): string {
-  return ((score / 1e8) * 100).toFixed(2) + '%';
+  const pct = (score / 1e8) * 100;
+  return pct % 1 === 0 ? pct.toFixed(0) + '%' : pct.toFixed(2) + '%';
 }
 
 function formatAlpha(score: number): string {
-  return ((score / 1e8) * 100).toFixed(2) + '%';
-}
-
-function formatPrediction(p: number): string {
-  return ((p / 10000) * 100).toFixed(2) + '%';
+  const pct = (score / 1e8) * 100;
+  return pct % 1 === 0 ? pct.toFixed(0) + '%' : pct.toFixed(2) + '%';
 }
 
 function truncConditionId(id: string): string {
@@ -67,9 +71,17 @@ export default function RoundDetailPage() {
   const { roundId } = useParams<{ roundId: string }>();
   const { rounds, agents: agentRegistry, loading } = useDataContext();
 
-  if (loading) return <LoadingSpinner />;
-
   const round = rounds.find((r) => r.roundId === Number(roundId));
+
+  // Fetch Polymarket metadata for this round's markets
+  const [marketMeta, setMarketMeta] = useState<Map<string, PolymarketInfo>>(new Map());
+  useEffect(() => {
+    if (round) {
+      fetchMarketMetadata(round.conditionIds).then(setMarketMeta);
+    }
+  }, [round]);
+
+  if (loading) return <LoadingSpinner />;
 
   if (!round) {
     return (
@@ -83,9 +95,7 @@ export default function RoundDetailPage() {
     );
   }
 
-  // agentRegistry is Map<string, AgentInfo> keyed by address
   const agentMap = agentRegistry;
-
   const agentEntries = Array.from(round.agents.values());
 
   return (
@@ -127,25 +137,49 @@ export default function RoundDetailPage() {
           <table>
             <thead>
               <tr>
-                <th>Index</th>
-                <th>Condition ID</th>
-                <th>Benchmark Price</th>
+                <th>#</th>
+                <th>Market</th>
+                <th>Benchmark</th>
+                <th>Outcome</th>
               </tr>
             </thead>
             <tbody>
-              {round.conditionIds.map((cid, idx) => (
-                <tr key={idx}>
-                  <td>{idx}</td>
-                  <td className="mono" title={cid}>
-                    {truncConditionId(cid)}
-                  </td>
-                  <td className="mono">
-                    {round.benchmarkPrices[idx] != null
-                      ? ((round.benchmarkPrices[idx] / 10000) * 100).toFixed(2) + '%'
-                      : '--'}
-                  </td>
-                </tr>
-              ))}
+              {round.conditionIds.map((cid, idx) => {
+                const meta = marketMeta.get(cid);
+                const outcome = round.outcomes?.[idx];
+                return (
+                  <tr key={idx}>
+                    <td>{idx + 1}</td>
+                    <td>
+                      {meta?.url ? (
+                        <a href={meta.url} target="_blank" rel="noopener noreferrer">
+                          {meta.title}
+                        </a>
+                      ) : (
+                        <span>{meta?.title || truncConditionId(cid)}</span>
+                      )}
+                      <br />
+                      <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }} title={cid}>
+                        {truncConditionId(cid)}
+                      </span>
+                    </td>
+                    <td className="mono">
+                      {round.benchmarkPrices[idx] != null
+                        ? formatPct(round.benchmarkPrices[idx])
+                        : '--'}
+                    </td>
+                    <td>
+                      {outcome ? (
+                        <span className={`badge ${outcome === 'YES' ? 'success' : 'error'}`}>
+                          {outcome}
+                        </span>
+                      ) : (
+                        <span className="badge">Pending</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -192,10 +226,24 @@ export default function RoundDetailPage() {
                               </>
                             )}
                             <br />
-                            <span className="address">{truncAddr(agent.address)}</span>
+                            <a
+                              href={`https://polygonscan.com/address/${agent.address}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="address"
+                            >
+                              {truncAddr(agent.address)}
+                            </a>
                           </span>
                         ) : (
-                          <span className="address">{truncAddr(agent.address)}</span>
+                          <a
+                            href={`https://polygonscan.com/address/${agent.address}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="address"
+                          >
+                            {truncAddr(agent.address)}
+                          </a>
                         )}
                       </td>
                       <td>
@@ -205,9 +253,23 @@ export default function RoundDetailPage() {
                           {agent.revealed ? 'Revealed' : 'Committed'}
                         </span>
                       </td>
-                      <td className="mono" style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <td className="mono" style={{ maxWidth: 400 }}>
                         {agent.predictions.length > 0
-                          ? agent.predictions.map((p) => formatPrediction(p)).join(', ')
+                          ? agent.predictions.map((p, i) => {
+                              const outcome = round.outcomes?.[i];
+                              let color = 'var(--text-primary)';
+                              if (outcome === 'YES') {
+                                color = p >= 5000 ? '#4ade80' : '#f87171'; // green if predicted up, red if predicted down
+                              } else if (outcome === 'NO') {
+                                color = p <= 5000 ? '#4ade80' : '#f87171'; // green if predicted down, red if predicted up
+                              }
+                              return (
+                                <span key={i}>
+                                  {i > 0 && ', '}
+                                  <span style={{ color }}>{formatPct(p)}</span>
+                                </span>
+                              );
+                            })
                           : '--'}
                       </td>
                       <td className="mono">{agent.brierScore ? formatBrier(agent.brierScore) : '--'}</td>

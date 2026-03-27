@@ -7,17 +7,8 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import type { Round, AgentInfo } from '../types';
-import { publicClient } from '../config/client';
+import type { Round, AgentRoundData, AgentInfo } from '../types';
 import { useContractContext } from './ContractContext';
-import { getCached, setCache } from '../services/cache';
-import {
-  fetchAllEvents,
-  serializeRounds,
-  deserializeRounds,
-  serializeAgents,
-  deserializeAgents,
-} from '../services/events';
 
 interface DataContextValue {
   rounds: Round[];
@@ -29,8 +20,24 @@ interface DataContextValue {
 
 const DataContext = createContext<DataContextValue | null>(null);
 
+// Convert the JSON format (agents as array) to the app format (agents as Map)
+function parseRounds(raw: any[]): Round[] {
+  return raw.map((r) => ({
+    ...r,
+    agents: new Map<string, AgentRoundData>(
+      (r.agents || []).map((a: AgentRoundData) => [a.address, a])
+    ),
+  }));
+}
+
+function parseAgents(raw: any[]): Map<string, AgentInfo> {
+  return new Map<string, AgentInfo>(
+    (raw || []).map((a: AgentInfo) => [a.address, a])
+  );
+}
+
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { contractSet, addresses } = useContractContext();
+  const { contractSet } = useContractContext();
 
   const [rounds, setRounds] = useState<Round[]>([]);
   const [agents, setAgents] = useState<Map<string, AgentInfo>>(new Map());
@@ -49,35 +56,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
 
-      // Try cache first
-      const cached = getCached(contractSet);
-      if (cached) {
-        try {
-          const cachedRounds = deserializeRounds(cached.rounds);
-          const cachedAgents = deserializeAgents(cached.agents);
-          if (!cancelled) {
-            setRounds(cachedRounds);
-            setAgents(cachedAgents);
-          }
-        } catch {
-          // Cache corrupt; ignore and fetch fresh
-        }
-      }
-
       try {
-        const result = await fetchAllEvents(publicClient, addresses);
+        // Load static JSON
+        const resp = await fetch('/data.json');
+        if (!resp.ok) {
+          throw new Error(`Failed to load data: ${resp.status}`);
+        }
+
+        const text = await resp.text();
+        if (!text.startsWith('{')) {
+          throw new Error('data.json not found — run the indexer first');
+        }
+
+        const data = JSON.parse(text);
         if (cancelled) return;
 
-        setRounds(result.rounds);
-        setAgents(result.agents);
-
-        // Persist to cache
-        setCache(
-          contractSet,
-          result.lastBlock,
-          serializeRounds(result.rounds),
-          serializeAgents(result.agents),
-        );
+        setRounds(parseRounds(data.rounds || []));
+        setAgents(parseAgents(data.agents || []));
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));
@@ -94,7 +89,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [contractSet, addresses, refreshKey]);
+  }, [contractSet, refreshKey]);
 
   const value = useMemo<DataContextValue>(
     () => ({ rounds, agents, loading, error, refresh }),

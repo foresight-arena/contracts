@@ -2,6 +2,7 @@ export interface Round {
   roundId: number;
   conditionIds: string[];
   benchmarkPrices: number[];
+  outcomes: (string | null)[]; // 'YES' | 'NO' | null (unresolved)
   commitDeadline: number; // unix timestamp
   revealStart: number;
   revealDeadline: number;

@@ -32,6 +32,58 @@ export function deserializeAgents(data: any): Map<string, AgentInfo> {
 }
 
 // ---------------------------------------------------------------------------
+// Chunked log fetching (works with restrictive RPCs like Alchemy free tier)
+// ---------------------------------------------------------------------------
+
+const CHUNK_SIZE = 1000n; // blocks per request; dRPC free tier allows max 1000
+
+async function getContractEventsChunked<TAbi extends readonly unknown[]>(
+  client: PublicClient,
+  params: {
+    address: `0x${string}`;
+    abi: TAbi;
+    eventName: string;
+    fromBlock: bigint;
+    toBlock: bigint;
+  },
+): Promise<any[]> {
+  const { fromBlock, toBlock, ...rest } = params;
+  const latestBlock = toBlock === BigInt(0)
+    ? await client.getBlockNumber()
+    : toBlock;
+
+  let chunkSize = CHUNK_SIZE;
+  let cursor = fromBlock;
+  const allEvents: any[] = [];
+
+  while (cursor <= latestBlock) {
+    const end = cursor + chunkSize - 1n > latestBlock ? latestBlock : cursor + chunkSize - 1n;
+    try {
+      const events = await client.getContractEvents({
+        ...rest,
+        fromBlock: cursor,
+        toBlock: end,
+      } as any);
+      allEvents.push(...events);
+      cursor = end + 1n;
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || '';
+      // If range too large, halve the chunk size
+      if (msg.includes('block range') || msg.includes('Log response size exceeded') || msg.includes('10 block range')) {
+        chunkSize = chunkSize > 10n ? chunkSize / 2n : 10n;
+        if (chunkSize <= 10n) {
+          // Absolute minimum — try 10 blocks at a time
+          chunkSize = 10n;
+        }
+        continue; // retry with smaller chunk
+      }
+      throw e;
+    }
+  }
+  return allEvents;
+}
+
+// ---------------------------------------------------------------------------
 // Core event fetching
 // ---------------------------------------------------------------------------
 
@@ -55,74 +107,20 @@ export async function fetchAllEvents(
 ): Promise<{ rounds: Round[]; agents: Map<string, AgentInfo>; lastBlock: number }> {
   const fromBlock = addresses.deployBlock;
 
-  // ------ Fetch all event types in parallel ------
-  const [
-    roundCreatedEvents,
-    benchmarksPostedEvents,
-    roundInvalidatedEvents,
-    committedEvents,
-    revealedEvents,
-    scoreComputedEvents,
-    agentRegisteredEvents,
-    agentUpdatedEvents,
-  ] = await Promise.all([
-    client.getContractEvents({
-      address: addresses.roundManager,
-      abi: roundManagerAbi,
-      eventName: 'RoundCreated',
-      fromBlock,
-      toBlock: 'latest',
-    }),
-    client.getContractEvents({
-      address: addresses.roundManager,
-      abi: roundManagerAbi,
-      eventName: 'BenchmarksPosted',
-      fromBlock,
-      toBlock: 'latest',
-    }),
-    client.getContractEvents({
-      address: addresses.roundManager,
-      abi: roundManagerAbi,
-      eventName: 'RoundInvalidated',
-      fromBlock,
-      toBlock: 'latest',
-    }),
-    client.getContractEvents({
-      address: addresses.predictionArena,
-      abi: predictionArenaAbi,
-      eventName: 'Committed',
-      fromBlock,
-      toBlock: 'latest',
-    }),
-    client.getContractEvents({
-      address: addresses.predictionArena,
-      abi: predictionArenaAbi,
-      eventName: 'Revealed',
-      fromBlock,
-      toBlock: 'latest',
-    }),
-    client.getContractEvents({
-      address: addresses.predictionArena,
-      abi: predictionArenaAbi,
-      eventName: 'ScoreComputed',
-      fromBlock,
-      toBlock: 'latest',
-    }),
-    client.getContractEvents({
-      address: addresses.agentRegistry,
-      abi: agentRegistryAbi,
-      eventName: 'AgentRegistered',
-      fromBlock,
-      toBlock: 'latest',
-    }),
-    client.getContractEvents({
-      address: addresses.agentRegistry,
-      abi: agentRegistryAbi,
-      eventName: 'AgentUpdated',
-      fromBlock,
-      toBlock: 'latest',
-    }),
-  ]);
+  // ------ Fetch all event types in parallel (chunked for restrictive RPCs) ------
+  const latestBlock = await client.getBlockNumber();
+  const fetchEvents = (address: `0x${string}`, abi: any, eventName: string) =>
+    getContractEventsChunked(client, { address, abi, eventName, fromBlock, toBlock: latestBlock });
+
+  // Fetch sequentially to avoid rate limiting on free-tier RPCs
+  const roundCreatedEvents = await fetchEvents(addresses.roundManager, roundManagerAbi, 'RoundCreated');
+  const benchmarksPostedEvents = await fetchEvents(addresses.roundManager, roundManagerAbi, 'BenchmarksPosted');
+  const roundInvalidatedEvents = await fetchEvents(addresses.roundManager, roundManagerAbi, 'RoundInvalidated');
+  const committedEvents = await fetchEvents(addresses.predictionArena, predictionArenaAbi, 'Committed');
+  const revealedEvents = await fetchEvents(addresses.predictionArena, predictionArenaAbi, 'Revealed');
+  const scoreComputedEvents = await fetchEvents(addresses.predictionArena, predictionArenaAbi, 'ScoreComputed');
+  const agentRegisteredEvents = await fetchEvents(addresses.agentRegistry, agentRegistryAbi, 'AgentRegistered');
+  const agentUpdatedEvents = await fetchEvents(addresses.agentRegistry, agentRegistryAbi, 'AgentUpdated');
 
   // ------ Track the highest block number seen ------
   let lastBlock = Number(fromBlock);
@@ -152,6 +150,7 @@ export async function fetchAllEvents(
       commitDeadline: Number(args.commitDeadline),
       revealStart: 0, // not in event; will be between commitDeadline and revealDeadline
       revealDeadline: Number(args.revealDeadline),
+      outcomes: [],
       benchmarksPosted: false,
       invalidated: false,
       agents: new Map<string, AgentRoundData>(),
