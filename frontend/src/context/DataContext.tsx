@@ -7,8 +7,9 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import type { Round, AgentRoundData, AgentInfo } from '../types';
+import type { Round, AgentInfo } from '../types';
 import { useContractContext } from './ContractContext';
+import { fetchAllData } from '../services/subgraph';
 
 interface DataContextValue {
   rounds: Round[];
@@ -19,22 +20,6 @@ interface DataContextValue {
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
-
-// Convert the JSON format (agents as array) to the app format (agents as Map)
-function parseRounds(raw: any[]): Round[] {
-  return raw.map((r) => ({
-    ...r,
-    agents: new Map<string, AgentRoundData>(
-      (r.agents || []).map((a: AgentRoundData) => [a.address, a])
-    ),
-  }));
-}
-
-function parseAgents(raw: any[]): Map<string, AgentInfo> {
-  return new Map<string, AgentInfo>(
-    (raw || []).map((a: AgentInfo) => [a.address, a])
-  );
-}
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { contractSet } = useContractContext();
@@ -57,22 +42,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       try {
-        // Load static JSON
-        const resp = await fetch('/data.json');
-        if (!resp.ok) {
-          throw new Error(`Failed to load data: ${resp.status}`);
-        }
-
-        const text = await resp.text();
-        if (!text.startsWith('{')) {
-          throw new Error('data.json not found — run the indexer first');
-        }
-
-        const data = JSON.parse(text);
+        const data = await fetchAllData();
         if (cancelled) return;
-
-        setRounds(parseRounds(data.rounds || []));
-        setAgents(parseAgents(data.agents || []));
+        setRounds(data.rounds);
+        setAgents(data.agents);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));
