@@ -10,5 +10,22 @@
       { "name": "payoutNumerators", "type": "uint256[]", "indexed": false }
     ],
     "anonymous": false
+  },
+  {
+    "type": "function",
+    "name": "payoutDenominator",
+    "inputs": [{ "name": "conditionId", "type": "bytes32" }],
+    "outputs": [{ "name": "", "type": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "payoutNumerators",
+    "inputs": [
+      { "name": "conditionId", "type": "bytes32" },
+      { "name": "index", "type": "uint256" }
+    ],
+    "outputs": [{ "name": "", "type": "uint256" }],
+    "stateMutability": "view"
   }
 ]

@@ -4,7 +4,10 @@ import {
   Revealed,
   ScoreComputed,
 } from "../generated/PredictionArena/PredictionArena"
-import { AgentRound, Agent, Round } from "../generated/schema"
+import { ConditionalTokens } from "../generated/PredictionArena/ConditionalTokens"
+import { AgentRound, Agent, Round, Market } from "../generated/schema"
+
+const CTF_ADDRESS = Address.fromString("0x4D97DCd97eC945f40cF65F87097ACe5EA0476045")
 
 function getOrCreateAgent(address: string, rawAddress: Address): Agent {
   let agent = Agent.load(address)
@@ -88,6 +91,28 @@ export function handleScoreComputed(event: ScoreComputed): void {
       agent.scoredRoundCount = agent.scoredRoundCount + 1
       agent.lastActiveTimestamp = event.block.timestamp
       agent.save()
+    }
+  }
+
+  // Resolve market outcomes via CTF contract call (handles pre-resolved markets)
+  let round = Round.load(roundId.toString())
+  if (round != null) {
+    let ctf = ConditionalTokens.bind(CTF_ADDRESS)
+    let conditionIds = round.conditionIds
+    for (let i = 0; i < conditionIds.length; i++) {
+      let marketId = conditionIds[i].toHexString()
+      let market = Market.load(marketId)
+      if (market != null && market.outcome == null) {
+        let denomResult = ctf.try_payoutDenominator(conditionIds[i])
+        if (!denomResult.reverted && denomResult.value.gt(BigInt.zero())) {
+          let payout0Result = ctf.try_payoutNumerators(conditionIds[i], BigInt.zero())
+          if (!payout0Result.reverted) {
+            market.outcome = payout0Result.value.gt(BigInt.zero()) ? "YES" : "NO"
+            market.resolvedAtTimestamp = event.block.timestamp
+            market.save()
+          }
+        }
+      }
     }
   }
 }

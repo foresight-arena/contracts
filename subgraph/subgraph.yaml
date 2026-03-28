@@ -48,6 +48,8 @@ dataSources:
       abis:
         - name: PredictionArena
           file: ./abis/PredictionArena.json
+        - name: ConditionalTokens
+          file: ./abis/ConditionalTokens.json
       eventHandlers:
         - event: Committed(indexed uint256,indexed address,bytes32)
           handler: handleCommitted

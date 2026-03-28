@@ -6,35 +6,56 @@ const headerStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  paddingBottom: 'var(--space-md)',
-  borderBottom: '1px solid var(--border)',
-  marginBottom: 'var(--space-md)',
+  padding: 'var(--space-md) 0',
+  marginBottom: 'var(--space-sm)',
+};
+
+const brandStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 'var(--space-sm)',
+};
+
+const logoStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--gradient-accent)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '0.875rem',
+  fontWeight: 800,
+  color: '#fff',
 };
 
 const titleStyle: CSSProperties = {
-  fontSize: '1.5rem',
+  fontSize: '1.125rem',
   fontWeight: 700,
   color: 'var(--text-primary)',
-  letterSpacing: '-0.02em',
+  letterSpacing: '-0.03em',
 };
 
 const toggleGroupStyle: CSSProperties = {
   display: 'flex',
-  gap: 'var(--space-xs)',
+  backgroundColor: 'var(--bg-secondary)',
+  borderRadius: 'var(--radius-sm)',
+  padding: 2,
+  border: '1px solid var(--border)',
 };
 
 function toggleBtnStyle(active: boolean): CSSProperties {
   return {
-    padding: '6px 14px',
-    fontSize: '0.8125rem',
+    padding: '5px 14px',
+    fontSize: '0.6875rem',
     fontWeight: 600,
-    border: '1px solid',
-    borderColor: active ? 'var(--accent)' : 'var(--border)',
+    border: 'none',
     borderRadius: 'var(--radius-sm)',
-    backgroundColor: active ? 'var(--accent)' : 'var(--bg-tertiary)',
-    color: active ? '#000' : 'var(--text-secondary)',
+    backgroundColor: active ? 'var(--accent)' : 'transparent',
+    color: active ? '#fff' : 'var(--text-muted)',
     cursor: 'pointer',
-    transition: 'all 0.15s ease',
+    transition: 'all 0.2s ease',
+    letterSpacing: '0.02em',
   };
 }
 
@@ -48,7 +69,10 @@ export default function Header() {
 
   return (
     <header style={headerStyle}>
-      <span style={titleStyle}>Foresight Arena</span>
+      <div style={brandStyle}>
+        <div style={logoStyle}>F</div>
+        <span style={titleStyle}>Foresight Arena</span>
+      </div>
       <div style={toggleGroupStyle}>
         {options.map((opt) => (
           <button

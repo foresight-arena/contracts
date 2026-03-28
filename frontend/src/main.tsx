@@ -9,6 +9,7 @@ import { DataProvider } from './context/DataContext';
 import ArenaPage from './pages/ArenaPage';
 import RoundDetailPage from './pages/RoundDetailPage';
 import LeaderboardPage from './pages/LeaderboardPage';
+import AboutPage from './pages/AboutPage';
 
 const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
       { index: true, element: <ArenaPage /> },
       { path: 'round/:roundId', element: <RoundDetailPage /> },
       { path: 'leaderboard', element: <LeaderboardPage /> },
+      { path: 'about', element: <AboutPage /> },
     ],
   },
 ]);
