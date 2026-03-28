@@ -1,0 +1,377 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "_curator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_admin",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "MIN_COMMIT_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_REVEAL_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ORACLE_BUFFER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "admin",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "createRound",
+    "inputs": [
+      {
+        "name": "conditionIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "commitDeadline",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "revealDeadline",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "curator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "currentRoundId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMarketCount",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRound",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IRoundManager.Round",
+        "components": [
+          {
+            "name": "conditionIds",
+            "type": "bytes32[]",
+            "internalType": "bytes32[]"
+          },
+          {
+            "name": "benchmarkPrices",
+            "type": "uint16[]",
+            "internalType": "uint16[]"
+          },
+          {
+            "name": "commitDeadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "revealStart",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "revealDeadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "benchmarksPosted",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "invalidated",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "invalidateRound",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "isCommitPhase",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isRevealPhase",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "postBenchmarkPrices",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "benchmarkPrices",
+        "type": "uint16[]",
+        "internalType": "uint16[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setAdmin",
+    "inputs": [
+      {
+        "name": "newAdmin",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setCurator",
+    "inputs": [
+      {
+        "name": "newCurator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "BenchmarksPosted",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "benchmarkPrices",
+        "type": "uint16[]",
+        "indexed": false,
+        "internalType": "uint16[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CuratorChanged",
+    "inputs": [
+      {
+        "name": "oldCurator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newCurator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoundCreated",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "conditionIds",
+        "type": "bytes32[]",
+        "indexed": false,
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "commitDeadline",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "revealDeadline",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoundInvalidated",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  }
+]

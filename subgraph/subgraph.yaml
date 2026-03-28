@@ -1,0 +1,102 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: FastRoundManager
+    network: matic
+    source:
+      address: "0xa2303C1FbFD8dD556355eE9E33Bb899759907d78"
+      abi: RoundManager
+      startBlock: 84710000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Round
+        - Market
+        - RoundMarket
+      abis:
+        - name: RoundManager
+          file: ./abis/RoundManager.json
+      eventHandlers:
+        - event: RoundCreated(indexed uint256,bytes32[],uint64,uint64)
+          handler: handleRoundCreated
+        - event: BenchmarksPosted(indexed uint256,uint16[])
+          handler: handleBenchmarksPosted
+        - event: RoundInvalidated(indexed uint256)
+          handler: handleRoundInvalidated
+      file: ./src/fast-round-manager.ts
+
+  - kind: ethereum
+    name: PredictionArena
+    network: matic
+    source:
+      address: "0x5D0aFAb396CA23d25e2Bd703c9736aC095be8eB6"
+      abi: PredictionArena
+      startBlock: 84710000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - AgentRound
+        - Agent
+      abis:
+        - name: PredictionArena
+          file: ./abis/PredictionArena.json
+      eventHandlers:
+        - event: Committed(indexed uint256,indexed address,bytes32)
+          handler: handleCommitted
+        - event: Revealed(indexed uint256,indexed address,uint16[],uint16)
+          handler: handleRevealed
+        - event: ScoreComputed(indexed uint256,indexed address,uint256,int256,uint16)
+          handler: handleScoreComputed
+      file: ./src/prediction-arena.ts
+
+  - kind: ethereum
+    name: AgentRegistry
+    network: matic
+    source:
+      address: "0x669734f7f6dd2a5616fE910e172366B267DfCF7E"
+      abi: AgentRegistry
+      startBlock: 84710000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Agent
+      abis:
+        - name: AgentRegistry
+          file: ./abis/AgentRegistry.json
+      eventHandlers:
+        - event: AgentRegistered(indexed address,string,string,address)
+          handler: handleAgentRegistered
+        - event: AgentUpdated(indexed address,string,string,address)
+          handler: handleAgentUpdated
+      file: ./src/agent-registry.ts
+
+  - kind: ethereum
+    name: ConditionalTokens
+    network: matic
+    source:
+      address: "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
+      abi: ConditionalTokens
+      startBlock: 84710000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Market
+      abis:
+        - name: ConditionalTokens
+          file: ./abis/ConditionalTokens.json
+      eventHandlers:
+        - event: ConditionResolution(indexed bytes32,indexed address,indexed bytes32,uint256,uint256[])
+          handler: handleConditionResolution
+      file: ./src/conditional-tokens.ts

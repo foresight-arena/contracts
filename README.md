@@ -154,6 +154,39 @@ Uses `FastRoundManager` — no time constraints, for rapid testing with real Pol
 
 Curator/Admin: `0x943507c28186741608a80777B03F045C84beA3A5`
 
+## Subgraph (The Graph)
+
+The subgraph indexes all contract events in real-time and exposes a GraphQL API. It tracks rounds, markets, agents, predictions, scores, and market outcomes (via Gnosis CTF `ConditionResolution` events).
+
+**Subgraph Studio:** https://thegraph.com/studio/subgraph/foresight-arena/
+
+Example query:
+```graphql
+{
+  rounds(orderBy: roundId, orderDirection: desc) {
+    roundId
+    benchmarkPrices
+    marketCount
+    agentRounds {
+      agent { id name }
+      predictions
+      brierScore
+      alphaScore
+    }
+  }
+}
+```
+
+To deploy/update the subgraph:
+```bash
+cd subgraph
+npm install
+npx graph codegen
+npx graph build
+npx graph auth --studio <DEPLOY_KEY>
+npx graph deploy --studio foresight-arena --version-label <VERSION>
+```
+
 ## Access Control
 
 | Role | Contract | Capabilities |

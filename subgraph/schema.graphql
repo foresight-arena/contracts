@@ -1,0 +1,60 @@
+type Round @entity {
+  id: ID!
+  roundId: BigInt!
+  conditionIds: [Bytes!]!
+  benchmarkPrices: [Int!]!
+  commitDeadline: BigInt!
+  revealStart: BigInt!
+  revealDeadline: BigInt!
+  benchmarksPosted: Boolean!
+  invalidated: Boolean!
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  marketCount: Int!
+  roundMarkets: [RoundMarket!]! @derivedFrom(field: "round")
+  agentRounds: [AgentRound!]! @derivedFrom(field: "round")
+}
+
+type Market @entity {
+  id: ID!
+  conditionId: Bytes!
+  outcome: String
+  resolvedAtTimestamp: BigInt
+  rounds: [RoundMarket!]! @derivedFrom(field: "market")
+}
+
+type RoundMarket @entity {
+  id: ID!
+  round: Round!
+  market: Market!
+  marketIndex: Int!
+  benchmarkPrice: Int
+}
+
+type Agent @entity {
+  id: ID!
+  address: Bytes!
+  name: String!
+  url: String!
+  owner: Bytes!
+  registeredAt: BigInt!
+  totalBrierScore: BigInt!
+  totalAlphaScore: BigInt!
+  scoredRoundCount: Int!
+  lastActiveTimestamp: BigInt!
+  agentRounds: [AgentRound!]! @derivedFrom(field: "agent")
+}
+
+type AgentRound @entity {
+  id: ID!
+  round: Round!
+  agent: Agent!
+  commitHash: Bytes!
+  commitTimestamp: BigInt!
+  revealed: Boolean!
+  predictions: [Int!]!
+  brierScore: BigInt!
+  alphaScore: BigInt!
+  scoredMarkets: Int!
+  totalMarkets: Int!
+}

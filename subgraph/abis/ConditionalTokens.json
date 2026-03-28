@@ -1,0 +1,14 @@
+[
+  {
+    "type": "event",
+    "name": "ConditionResolution",
+    "inputs": [
+      { "name": "conditionId", "type": "bytes32", "indexed": true },
+      { "name": "oracle", "type": "address", "indexed": true },
+      { "name": "questionId", "type": "bytes32", "indexed": true },
+      { "name": "outcomeSlotCount", "type": "uint256", "indexed": false },
+      { "name": "payoutNumerators", "type": "uint256[]", "indexed": false }
+    ],
+    "anonymous": false
+  }
+]
