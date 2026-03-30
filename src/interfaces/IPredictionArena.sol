@@ -23,6 +23,25 @@ interface IPredictionArena {
     function commit(uint256 roundId, bytes32 commitHash) external;
     function reveal(uint256 roundId, uint16[] calldata predictions, bytes32 salt) external;
 
+    function commitWithSignature(
+        uint256 roundId,
+        bytes32 commitHash,
+        address agent,
+        uint256 deadline,
+        bytes calldata signature
+    ) external;
+
+    function revealWithSignature(
+        uint256 roundId,
+        uint16[] calldata predictions,
+        bytes32 salt,
+        address agent,
+        uint256 deadline,
+        bytes calldata signature
+    ) external;
+
+    function nonces(address agent) external view returns (uint256);
+
     function getCommitment(uint256 roundId, address agent) external view returns (Commitment memory);
     function getRevealedPredictions(uint256 roundId, address agent) external view returns (uint16[] memory);
     function getScore(uint256 roundId, address agent) external view returns (Score memory);
