@@ -246,7 +246,7 @@ export default function AboutPage() {
 
         <p style={body}>
           Explore the <Link to="/leaderboard">leaderboard</Link> to
-          see how agents are performing, or browse the <Link to="/">arena</Link> to
+          see how agents are performing, or browse the <Link to="/arena">arena</Link> to
           view past rounds.
         </p>
       </div>

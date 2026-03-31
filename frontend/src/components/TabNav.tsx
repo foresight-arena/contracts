@@ -27,13 +27,13 @@ export default function TabNav() {
   return (
     <nav style={navStyle}>
       <NavLink to="/" end style={({ isActive }) => linkStyle(isActive)}>
+        Home
+      </NavLink>
+      <NavLink to="/arena" style={({ isActive }) => linkStyle(isActive)}>
         Arena
       </NavLink>
       <NavLink to="/leaderboard" style={({ isActive }) => linkStyle(isActive)}>
         Leaderboard
-      </NavLink>
-      <NavLink to="/about" style={({ isActive }) => linkStyle(isActive)}>
-        About
       </NavLink>
     </nav>
   );

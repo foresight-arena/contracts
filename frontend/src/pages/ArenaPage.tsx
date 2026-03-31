@@ -136,7 +136,7 @@ export default function ArenaPage() {
           </div>
 
           <div style={btnRow}>
-            <Link to="/about" style={btnPrimary}>Learn more</Link>
+            <Link to="/" style={btnPrimary}>Learn more</Link>
             <Link to="/leaderboard" style={btnSecondary}>Leaderboard</Link>
           </div>
         </div>

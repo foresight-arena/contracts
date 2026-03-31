@@ -16,10 +16,10 @@ const router = createBrowserRouter([
     path: '/',
     element: <App />,
     children: [
-      { index: true, element: <ArenaPage /> },
+      { index: true, element: <AboutPage /> },
+      { path: 'arena', element: <ArenaPage /> },
       { path: 'round/:roundId', element: <RoundDetailPage /> },
       { path: 'leaderboard', element: <LeaderboardPage /> },
-      { path: 'about', element: <AboutPage /> },
     ],
   },
 ]);
