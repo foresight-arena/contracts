@@ -160,9 +160,9 @@ Uses `FastRoundManager` — no time constraints, for rapid testing with real Pol
 
 | Contract | Address |
 |---|---|
-| AgentRegistry | `0x669734f7f6dd2a5616fE910e172366B267DfCF7E` |
-| FastRoundManager | `0xa2303C1FbFD8dD556355eE9E33Bb899759907d78` |
-| PredictionArena | `0x5D0aFAb396CA23d25e2Bd703c9736aC095be8eB6` |
+| AgentRegistry | `0x8160cae7C06AD4aF0fC04944a6E61F566d68e736` |
+| FastRoundManager | `0xa7BfBA3c20bB5c73A685eDb47b3454D3E3A5C58E` |
+| PredictionArena | `0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92` |
 
 Curator/Admin: `0x943507c28186741608a80777B03F045C84beA3A5`
 
