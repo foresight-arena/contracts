@@ -6,14 +6,13 @@ import {PredictionArena} from "../src/PredictionArena.sol";
 import {IPredictionArena} from "../src/interfaces/IPredictionArena.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {IRoundManager} from "../src/interfaces/IRoundManager.sol";
-import {GasRebate} from "../src/GasRebate.sol";
+
 import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {MockConditionalTokens} from "./mocks/MockConditionalTokens.sol";
 
 contract IntegrationTest is Test {
     PredictionArena public arena;
     RoundManager public roundManager;
-    GasRebate public gasRebate;
     AgentRegistry public registry;
     MockConditionalTokens public mockCtf;
 
@@ -23,25 +22,13 @@ contract IntegrationTest is Test {
     address public agent2 = makeAddr("agent2");
     address public agent3 = makeAddr("agent3");
 
-    uint256 public constant REBATE_PER_REVEAL = 0.01 ether;
-
     bytes32[] public conditionIds;
 
     function setUp() public {
-        // Deploy all contracts
         mockCtf = new MockConditionalTokens();
         registry = new AgentRegistry();
         roundManager = new RoundManager(curator, admin);
-        gasRebate = new GasRebate(admin, address(0), REBATE_PER_REVEAL);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), address(gasRebate), admin);
-
-        // Wire up gasRebate to arena
-        vm.prank(admin);
-        gasRebate.setPredictionArena(address(arena));
-
-        // Fund gasRebate treasury
-        vm.deal(address(this), 10 ether);
-        gasRebate.fundTreasury{value: 10 ether}();
+        arena = new PredictionArena(address(roundManager), address(mockCtf), admin);
 
         // Setup 5 condition IDs
         conditionIds.push(keccak256("market1"));
@@ -165,13 +152,7 @@ contract IntegrationTest is Test {
         assertEq(s.scoredMarkets, numScored, string.concat(label, " scoredMarkets mismatch"));
     }
 
-    function _claimAndVerifyRebate(address agent) internal {
-        uint256 balBefore = agent.balance;
-        vm.prank(agent);
-        gasRebate.claimRebate();
-        assertEq(agent.balance - balBefore, REBATE_PER_REVEAL);
-        assertEq(gasRebate.getClaimable(agent), 0);
-    }
+    // (GasRebate removed — relayer handles gas)
 
     // ---------------------------------------------------------------
     // test_fullRound_happyPath
@@ -276,15 +257,6 @@ contract IntegrationTest is Test {
         );
 
         // 10. Verify gas rebates accrued (3 accruals)
-        assertEq(gasRebate.getClaimable(agent1), REBATE_PER_REVEAL);
-        assertEq(gasRebate.getClaimable(agent2), REBATE_PER_REVEAL);
-        assertEq(gasRebate.getClaimable(agent3), REBATE_PER_REVEAL);
-        assertEq(gasRebate.totalDistributed(), REBATE_PER_REVEAL * 3);
-
-        // 11. Agents claim rebates — verify POL transfers
-        _claimAndVerifyRebate(agent1);
-        _claimAndVerifyRebate(agent2);
-        _claimAndVerifyRebate(agent3);
     }
 
     // ---------------------------------------------------------------
@@ -428,12 +400,6 @@ contract IntegrationTest is Test {
         assertEq(score3.scoredMarkets, 0, "Non-revealer should have 0 scoredMarkets");
         assertEq(score3.brierScore, 0, "Non-revealer should have 0 brierScore");
         assertEq(score3.alphaScore, 0, "Non-revealer should have 0 alphaScore");
-
-        // Non-revealer has no rebate
-        assertEq(gasRebate.getClaimable(agent3), 0, "Non-revealer should have no rebate");
-        // Revealers do
-        assertEq(gasRebate.getClaimable(agent1), REBATE_PER_REVEAL);
-        assertEq(gasRebate.getClaimable(agent2), REBATE_PER_REVEAL);
     }
 
     // ---------------------------------------------------------------
@@ -498,11 +464,6 @@ contract IntegrationTest is Test {
                 || alpha1_a1 != arena.getScore(roundId2, agent1).alphaScore,
             "Agent1 scores should differ between rounds"
         );
-
-        // All 4 reveals should have accrued rebates
-        assertEq(gasRebate.totalDistributed(), REBATE_PER_REVEAL * 4);
-        assertEq(gasRebate.getClaimable(agent1), REBATE_PER_REVEAL * 2);
-        assertEq(gasRebate.getClaimable(agent2), REBATE_PER_REVEAL * 2);
     }
 
     function _runRound1()
@@ -696,10 +657,6 @@ contract IntegrationTest is Test {
             scoreA.brierScore != scoreB.brierScore || scoreA.alphaScore != scoreB.alphaScore,
             "Scores should differ between concurrent rounds"
         );
-
-        // Verify 2 rebate accruals
-        assertEq(gasRebate.getClaimable(agent1), REBATE_PER_REVEAL * 2);
-        assertEq(gasRebate.totalDistributed(), REBATE_PER_REVEAL * 2);
 
         // Verify revealed predictions stored independently
         uint16[] memory revealedA = arena.getRevealedPredictions(roundA, agent1);

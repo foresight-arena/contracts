@@ -6,7 +6,7 @@ import {IRoundManager} from "../src/interfaces/IRoundManager.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {PredictionArena} from "../src/PredictionArena.sol";
 import {IPredictionArena} from "../src/interfaces/IPredictionArena.sol";
-import {GasRebate} from "../src/GasRebate.sol";
+
 import {MockConditionalTokens} from "../test/mocks/MockConditionalTokens.sol";
 
 /// @dev RoundManager with short windows for testnet E2E testing.
@@ -34,7 +34,6 @@ contract TestnetRoundManager is RoundManager {
 /// @dev Step 1: Deploy contracts, create round, two agents commit.
 contract E2EStep1 is Script {
     MockConditionalTokens mockCtf = MockConditionalTokens(0x4aF09f4A542ceD3E3957fD3A11590144b1008dD1);
-    GasRebate gasRebate = GasRebate(0xd98a437c7f407bD55c43AEAfa1f9bCC2AEC15C7e);
 
     function run() external {
         address deployer = msg.sender;
@@ -50,10 +49,8 @@ contract E2EStep1 is Script {
         TestnetRoundManager rm = new TestnetRoundManager(deployer, deployer);
         console.log("TestnetRoundManager:", address(rm));
 
-        PredictionArena arena = new PredictionArena(address(rm), address(mockCtf), address(gasRebate), deployer);
+        PredictionArena arena = new PredictionArena(address(rm), address(mockCtf), deployer);
         console.log("PredictionArena:", address(arena));
-
-        gasRebate.setPredictionArena(address(arena));
 
         // Fund agent B for gas
         payable(agentB).transfer(0.02 ether);

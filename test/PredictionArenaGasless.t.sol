@@ -5,14 +5,13 @@ import "forge-std/Test.sol";
 import {PredictionArena} from "../src/PredictionArena.sol";
 import {IPredictionArena} from "../src/interfaces/IPredictionArena.sol";
 import {RoundManager} from "../src/RoundManager.sol";
-import {GasRebate} from "../src/GasRebate.sol";
+
 import {MockConditionalTokens} from "./mocks/MockConditionalTokens.sol";
 
 contract PredictionArenaGaslessTest is Test {
     PredictionArena public arena;
     RoundManager public roundManager;
     MockConditionalTokens public mockCtf;
-    GasRebate public gasRebate;
 
     address admin = address(0xA);
     address curator = address(0xC);
@@ -46,11 +45,7 @@ contract PredictionArenaGaslessTest is Test {
 
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
-        gasRebate = new GasRebate(admin, address(0), 0.001 ether);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), address(gasRebate), admin);
-
-        vm.prank(admin);
-        gasRebate.setPredictionArena(address(arena));
+        arena = new PredictionArena(address(roundManager), address(mockCtf), admin);
 
         DOMAIN_SEPARATOR = arena.DOMAIN_SEPARATOR();
     }

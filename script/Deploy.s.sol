@@ -6,15 +6,12 @@ import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {FastRoundManager} from "../src/FastRoundManager.sol";
 import {PredictionArena} from "../src/PredictionArena.sol";
-import {GasRebate} from "../src/GasRebate.sol";
 
 contract Deploy is Script {
     function run() external {
         address curator = vm.envAddress("CURATOR_ADDRESS");
         address admin = vm.envAddress("ADMIN_ADDRESS");
         address ctf = vm.envAddress("CTF_ADDRESS");
-        uint256 rebatePerReveal = vm.envUint("REBATE_PER_REVEAL");
-        uint256 initialTreasury = vm.envUint("INITIAL_TREASURY");
         bool fastMode = vm.envOr("FAST_MODE", false);
 
         vm.startBroadcast();
@@ -30,19 +27,10 @@ contract Deploy is Script {
             roundManagerAddr = address(rm);
         }
 
-        GasRebate gasRebate = new GasRebate(admin, address(0), rebatePerReveal);
-
-        PredictionArena arena = new PredictionArena(roundManagerAddr, ctf, address(gasRebate), admin);
-
-        gasRebate.setPredictionArena(address(arena));
-
-        if (initialTreasury > 0) {
-            gasRebate.fundTreasury{value: initialTreasury}();
-        }
+        PredictionArena arena = new PredictionArena(roundManagerAddr, ctf, admin);
 
         vm.stopBroadcast();
 
-        // --- Deployment summary ---
         console.log("");
         console.log("==========================================================");
         console.log("  DEPLOYMENT COMPLETE");
@@ -56,16 +44,11 @@ contract Deploy is Script {
         console.log("");
         console.log("  AgentRegistry:     ", address(registry));
         console.log("  RoundManager:      ", roundManagerAddr);
-        console.log("  GasRebate:         ", address(gasRebate));
         console.log("  PredictionArena:   ", address(arena));
         console.log("");
         console.log("  CTF (external):    ", ctf);
         console.log("  Curator:           ", curator);
         console.log("  Admin:             ", admin);
-        console.log("  Rebate per reveal: ", rebatePerReveal);
-        if (initialTreasury > 0) {
-            console.log("  Treasury funded:   ", initialTreasury);
-        }
         console.log("==========================================================");
     }
 }

@@ -6,14 +6,13 @@ import {PredictionArena} from "../src/PredictionArena.sol";
 import {IPredictionArena} from "../src/interfaces/IPredictionArena.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {IRoundManager} from "../src/interfaces/IRoundManager.sol";
-import {GasRebate} from "../src/GasRebate.sol";
+
 import {MockConditionalTokens} from "./mocks/MockConditionalTokens.sol";
 
 contract PredictionArenaTest is Test {
     PredictionArena public arena;
     RoundManager public roundManager;
     MockConditionalTokens public mockCtf;
-    GasRebate public gasRebate;
 
     address admin = address(0xA);
     address curator = address(0xC);
@@ -42,11 +41,7 @@ contract PredictionArenaTest is Test {
 
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
-        gasRebate = new GasRebate(admin, address(0), REBATE_PER_REVEAL);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), address(gasRebate), admin);
-
-        vm.prank(admin);
-        gasRebate.setPredictionArena(address(arena));
+        arena = new PredictionArena(address(roundManager), address(mockCtf), admin);
     }
 
     // ---------------------------------------------------------------

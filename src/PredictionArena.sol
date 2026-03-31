@@ -4,12 +4,10 @@ pragma solidity ^0.8.20;
 import {IPredictionArena} from "./interfaces/IPredictionArena.sol";
 import {IRoundManager} from "./interfaces/IRoundManager.sol";
 import {IConditionalTokens} from "./interfaces/IConditionalTokens.sol";
-import {IGasRebate} from "./interfaces/IGasRebate.sol";
 
 contract PredictionArena is IPredictionArena {
     IRoundManager public roundManager;
     IConditionalTokens public ctf;
-    IGasRebate public gasRebate;
     address public admin;
 
     mapping(uint256 => mapping(address => Commitment)) internal _commitments;
@@ -28,15 +26,12 @@ contract PredictionArena is IPredictionArena {
         "Reveal(uint256 roundId,bytes32 predictionsHash,bytes32 salt,address agent,uint256 nonce,uint256 deadline)"
     );
 
-    constructor(address _roundManager, address _ctf, address _gasRebate, address _admin) {
+    constructor(address _roundManager, address _ctf, address _admin) {
         require(_roundManager != address(0), "Invalid RoundManager");
         require(_ctf != address(0), "Invalid CTF");
         require(_admin != address(0), "Invalid admin");
         roundManager = IRoundManager(_roundManager);
         ctf = IConditionalTokens(_ctf);
-        if (_gasRebate != address(0)) {
-            gasRebate = IGasRebate(_gasRebate);
-        }
         admin = _admin;
 
         DOMAIN_SEPARATOR = keccak256(
@@ -48,11 +43,6 @@ contract PredictionArena is IPredictionArena {
                 address(this)
             )
         );
-    }
-
-    function setGasRebate(address _gasRebate) external {
-        require(msg.sender == admin, "Only admin");
-        gasRebate = IGasRebate(_gasRebate);
     }
 
     // ---------------------------------------------------------------
@@ -177,11 +167,6 @@ contract PredictionArena is IPredictionArena {
 
         // Compute and store scores
         _computeScores(roundId, agent, predictions, r);
-
-        // Accrue gas rebate
-        if (address(gasRebate) != address(0)) {
-            gasRebate.accrueRebate(agent);
-        }
     }
 
     function _computeScores(uint256 roundId, address agent, uint16[] calldata predictions, IRoundManager.Round memory r)
