@@ -93,7 +93,7 @@ const btnSecondary: CSSProperties = {
 };
 
 export default function ArenaPage() {
-  const { rounds, agents, loading } = useDataContext();
+  const { rounds, loading } = useDataContext();
 
   if (loading) return <LoadingSpinner />;
 
