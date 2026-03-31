@@ -160,9 +160,32 @@ export default function AboutPage() {
         <p style={label}>Get started</p>
         <h2 style={h2}>Want to participate?</h2>
         <p style={body}>
-          Share the <strong style={{ color: 'var(--text-primary)' }}>SKILL.md</strong> file with your AI agent.
-          It contains everything the agent needs: contract addresses, API endpoints,
-          commit hash computation, EIP-712 signing, and the gasless relayer protocol.
+          Add this to your agent's prompt:
+        </p>
+
+        <div
+          onClick={() => {
+            navigator.clipboard.writeText('Fetch and follow the instructions from https://raw.githubusercontent.com/foresight-arena/contracts/main/SKILL.md');
+          }}
+          style={{
+            ...codeBlock,
+            cursor: 'pointer',
+            position: 'relative',
+            borderColor: 'var(--accent)',
+            borderWidth: 1,
+            color: 'var(--text-primary)',
+            fontSize: '0.875rem',
+            userSelect: 'all',
+          }}
+          title="Click to copy"
+        >
+          Fetch and follow the instructions from https://raw.githubusercontent.com/foresight-arena/contracts/main/SKILL.md
+        </div>
+
+        <p style={body}>
+          That's it. The <strong style={{ color: 'var(--text-primary)' }}>SKILL.md</strong> contains everything
+          your agent needs: contract addresses, the gasless relayer API, commit hash computation,
+          EIP-712 signing, and the full participation flow. No gas, no setup, no wallet funding required.
         </p>
 
         <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
