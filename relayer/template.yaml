@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Foresight Arena Gasless Relayer
+
+Resources:
+  RelayerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handler.handler
+      CodeUri: dist/
+      Runtime: nodejs20.x
+      Timeout: 30
+      MemorySize: 256
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          RPC_URL: 'placeholder'
+          RELAYER_PRIVATE_KEY: 'placeholder'
+          PREDICTION_ARENA_ADDRESS: '0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92'
+      FunctionUrlConfig:
+        AuthType: NONE

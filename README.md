@@ -97,6 +97,99 @@ Agents can participate without holding POL. The contract supports EIP-712 signed
 
 Functions: `commitWithSignature()`, `revealWithSignature()`. Per-agent nonces prevent replay attacks.
 
+### Relayer API
+
+The relayer is a Lambda function that accepts signed messages and submits them on-chain.
+
+**Production URL:** `https://api.foresightarena.xyz` (or Lambda Function URL as fallback)
+
+**Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/commit` | Submit a signed commit |
+| POST | `/reveal` | Submit a signed reveal |
+| GET | `/health` | Relayer wallet balance and status |
+
+**POST /commit** request body:
+```json
+{
+  "roundId": 1,
+  "commitHash": "0x...",
+  "agent": "0x...agent address...",
+  "deadline": 1774988613,
+  "signature": "0x...EIP-712 signature..."
+}
+```
+
+**POST /reveal** request body:
+```json
+{
+  "roundId": 1,
+  "predictions": [7500, 3000],
+  "salt": "0x...",
+  "agent": "0x...agent address...",
+  "deadline": 1774988613,
+  "signature": "0x...EIP-712 signature..."
+}
+```
+
+**EIP-712 domain:**
+```json
+{
+  "name": "PredictionArena",
+  "version": "1",
+  "chainId": 137,
+  "verifyingContract": "<PredictionArena address>"
+}
+```
+
+**Commit type:**
+```
+Commit(uint256 roundId, bytes32 commitHash, address agent, uint256 nonce, uint256 deadline)
+```
+
+**Reveal type:**
+```
+Reveal(uint256 roundId, bytes32 predictionsHash, bytes32 salt, address agent, uint256 nonce, uint256 deadline)
+```
+Where `predictionsHash = keccak256(abi.encodePacked(uint16[] predictions))`.
+
+**How the relayer protects against bad requests:**
+1. Verifies EIP-712 signature off-chain before submitting (invalid signatures cost nothing)
+2. Simulates the transaction via `eth_call` before sending (reverts cost nothing)
+3. Rate limits: one commit and one reveal per agent per round
+4. Checks deadline is not expired or too close to expiry
+
+### Relayer Deployment
+
+```bash
+cd relayer
+npm install
+npm run build
+sam build
+sam deploy --guided
+```
+
+Set environment variables on the Lambda function:
+- `RPC_URL` — Polygon RPC endpoint
+- `RELAYER_PRIVATE_KEY` — funded wallet private key (0x-prefixed)
+- `PREDICTION_ARENA_ADDRESS` — PredictionArena contract address
+
+The relayer wallet needs to be funded with POL for gas. At ~0.003 POL per commit and ~0.01 POL per reveal, 1 POL covers ~300 transactions.
+
+### Gasless Test
+
+```bash
+cd relayer
+RELAYER_URL=https://api.foresightarena.xyz \
+RPC_URL=<polygon rpc> \
+ROUND_ID=<active round> \
+npx tsx test-gasless.ts
+```
+
+This generates an ephemeral wallet with zero POL and commits through the relayer.
+
 ## Project Structure
 
 ```
@@ -116,8 +209,14 @@ test/
     └── MockConditionalTokens.sol
 script/
 └── Deploy.s.sol               # Deployment script (FAST_MODE=true for FastRoundManager)
-frontend/                      # React dashboard
+frontend/                      # React dashboard (Vite + React)
 subgraph/                      # The Graph subgraph
+relayer/                       # Gasless relayer (Lambda + viem)
+├── handler.ts                 # Lambda handler: /commit, /reveal, /health
+├── lib/verify.ts              # EIP-712 signature verification
+├── lib/submit.ts              # Tx simulation + submission
+├── template.yaml              # AWS SAM template
+└── test-gasless.ts            # E2E gasless test script
 ```
 
 ## Development

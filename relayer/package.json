@@ -1,0 +1,19 @@
+{
+  "name": "foresight-arena-relayer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild handler.ts --bundle --platform=node --target=node20 --outfile=dist/handler.mjs --format=esm --external:@aws-sdk/*",
+    "dev": "node --import tsx handler.ts"
+  },
+  "dependencies": {
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0",
+    "tsx": "^4.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
