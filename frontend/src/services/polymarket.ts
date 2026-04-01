@@ -7,9 +7,15 @@ export interface PolymarketInfo {
 
 const cache = new Map<string, PolymarketInfo>();
 
+// In dev, Vite proxy handles /api/polymarket → gamma-api.polymarket.com
+// In production, use the relayer Lambda as a CORS proxy
+const POLYMARKET_BASE = import.meta.env.DEV
+  ? '/api/polymarket'
+  : (import.meta.env.VITE_RELAYER_URL || 'https://api.foresightarena.xyz') + '/polymarket';
+
 async function fetchOne(cid: string): Promise<PolymarketInfo | null> {
   try {
-    const resp = await fetch(`/api/polymarket/markets?condition_ids=${cid}`);
+    const resp = await fetch(`${POLYMARKET_BASE}/markets?condition_ids=${cid}`);
     if (!resp.ok) return null;
     const markets = await resp.json();
     if (!Array.isArray(markets) || markets.length === 0) return null;
@@ -41,7 +47,6 @@ export async function fetchMarketMetadata(
     }
   }
 
-  // Fetch individually (gamma API doesn't support comma-separated IDs)
   const fetches = toFetch.map(async (cid) => {
     const info = await fetchOne(cid);
     if (info) {

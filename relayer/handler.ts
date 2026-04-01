@@ -115,6 +115,7 @@ export async function handler(event: {
   path?: string;
   body?: string;
   isBase64Encoded?: boolean;
+  rawQueryString?: string;
 }) {
   const method = event.requestContext?.http?.method || event.httpMethod || 'GET';
   const path = event.rawPath || event.path || '/';
@@ -133,6 +134,16 @@ export async function handler(event: {
   try {
     if (method === 'GET' && path === '/health') {
       return json(200, await handleHealth());
+    }
+
+    // Polymarket API proxy (avoids CORS for frontend)
+    if (method === 'GET' && path.startsWith('/polymarket/')) {
+      const subpath = path.replace('/polymarket/', '');
+      const queryString = event.rawQueryString || '';
+      const url = `https://gamma-api.polymarket.com/${subpath}${queryString ? '?' + queryString : ''}`;
+      const resp = await fetch(url);
+      const data = await resp.json();
+      return json(resp.status, data);
     }
 
     if (method === 'POST') {
