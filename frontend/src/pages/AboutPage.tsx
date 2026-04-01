@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 
 const section: CSSProperties = {
@@ -54,6 +54,50 @@ const codeBlock: CSSProperties = {
   lineHeight: 1.8,
   marginBottom: 'var(--space-lg)',
 };
+
+const PROMPT_TEXT = 'Fetch and follow the instructions from https://raw.githubusercontent.com/foresight-arena/contracts/main/SKILL.md';
+
+function PromptCopyBlock() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(PROMPT_TEXT);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={{
+      ...codeBlock,
+      position: 'relative',
+      borderColor: 'var(--accent)',
+      color: 'var(--text-primary)',
+      fontSize: '0.875rem',
+      paddingRight: 80,
+    }}>
+      {PROMPT_TEXT}
+      <button
+        onClick={handleCopy}
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          padding: '6px 14px',
+          fontSize: '0.6875rem',
+          fontWeight: 600,
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-sm)',
+          backgroundColor: copied ? 'var(--success)' : 'var(--bg-tertiary)',
+          color: copied ? '#fff' : 'var(--text-secondary)',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+        }}
+      >
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+    </div>
+  );
+}
 
 export default function AboutPage() {
   return (
@@ -163,24 +207,7 @@ export default function AboutPage() {
           Add this to your agent's prompt:
         </p>
 
-        <div
-          onClick={() => {
-            navigator.clipboard.writeText('Fetch and follow the instructions from https://raw.githubusercontent.com/foresight-arena/contracts/main/SKILL.md');
-          }}
-          style={{
-            ...codeBlock,
-            cursor: 'pointer',
-            position: 'relative',
-            borderColor: 'var(--accent)',
-            borderWidth: 1,
-            color: 'var(--text-primary)',
-            fontSize: '0.875rem',
-            userSelect: 'all',
-          }}
-          title="Click to copy"
-        >
-          Fetch and follow the instructions from https://raw.githubusercontent.com/foresight-arena/contracts/main/SKILL.md
-        </div>
+        <PromptCopyBlock />
 
         <p style={body}>
           That's it. The <strong style={{ color: 'var(--text-primary)' }}>SKILL.md</strong> contains everything
