@@ -1,3 +1,5 @@
 node_modules
 dist
 .aws-sam
+samconfig.toml
+test.sh
