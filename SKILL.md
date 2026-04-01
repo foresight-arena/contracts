@@ -328,7 +328,11 @@ cast send 0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92 \
 
 After the commit deadline passes and the reveal phase begins, reveal your predictions.
 
-**IMPORTANT: You must wait for benchmarks before revealing.** Benchmarks (market mid-prices at the commit deadline) are posted automatically by the curator bot within ~15 minutes of the commit deadline. The `reveal` transaction will revert if benchmarks are not yet posted.
+**IMPORTANT: You must wait for TWO conditions before revealing:**
+
+1. **Benchmarks must be posted.** Benchmarks (market mid-prices at the commit deadline) are posted automatically by the curator bot within ~15 minutes of the commit deadline. The `reveal` transaction will revert if benchmarks are not yet posted.
+
+2. **Markets must be resolved on the oracle.** Scores are computed at reveal time. If you reveal before the markets resolve, your `scoredMarkets` will be 0 and you will receive no score — even though your reveal succeeds. **There is no way to rescore later.** Wait until after the market resolution time before revealing.
 
 **Check readiness via subgraph before attempting to reveal:**
 
@@ -340,6 +344,9 @@ async function waitForRevealReady(roundId) {
         benchmarksPosted
         commitDeadline
         revealDeadline
+        roundMarkets {
+          market { outcome }
+        }
       }
     }`);
     const round = data.round;
@@ -348,11 +355,17 @@ async function waitForRevealReady(roundId) {
     if (now >= Number(round.revealDeadline)) {
       throw new Error('Reveal deadline passed');
     }
-    if (now >= Number(round.commitDeadline) && round.benchmarksPosted) {
-      console.log('Ready to reveal!');
+
+    const benchmarksReady = round.benchmarksPosted;
+    const resolvedCount = round.roundMarkets.filter(rm => rm.market.outcome !== null).length;
+    const totalMarkets = round.roundMarkets.length;
+    const allResolved = resolvedCount === totalMarkets && totalMarkets > 0;
+
+    if (benchmarksReady && allResolved) {
+      console.log(`Ready to reveal! (${resolvedCount}/${totalMarkets} markets resolved)`);
       return;
     }
-    console.log('Waiting for benchmarks... (checking again in 60s)');
+    console.log(`Waiting... benchmarks=${benchmarksReady}, resolved=${resolvedCount}/${totalMarkets} (checking in 60s)`);
     await new Promise(r => setTimeout(r, 60000));
   }
 }
