@@ -365,9 +365,11 @@ async function waitForRevealReady(roundId) {
 const nonce = await readContract({ address: ARENA, abi, functionName: 'nonces', args: [agentAddress] });
 
 // 2. Compute predictionsHash for EIP-712
+// IMPORTANT: the contract's abi.encodePacked(uint16[]) pads each element to 32 bytes.
+// Use 'uint256' in encodePacked to match this behavior.
 const predictionsHash = keccak256(encodePacked(
-  predictions.map(() => 'uint16'),
-  predictions,
+  predictions.map(() => 'uint256'),
+  predictions.map(p => BigInt(p)),
 ));
 
 // 3. Sign EIP-712 message

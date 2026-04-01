@@ -48,11 +48,12 @@ export async function verifyRevealSignature(
   req: RevealRequest,
   nonce: bigint,
 ): Promise<boolean> {
-  // EIP-712 encodes dynamic arrays as keccak256 of packed encoding
+  // Contract uses abi.encodePacked(uint16[]) which pads each element to 32 bytes
+  // This matches keccak256(abi.encode(uint256[])) for the values
   const predictionsHash = keccak256(
     encodePacked(
-      req.predictions.map(() => 'uint16' as const),
-      req.predictions.map((p) => p as unknown as bigint),
+      req.predictions.map(() => 'uint256' as const),
+      req.predictions.map((p) => BigInt(p)),
     ),
   );
 
