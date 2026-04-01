@@ -93,11 +93,66 @@ curl -s -X POST \
 
 ### Via RPC (direct contract read)
 
-```
-FastRoundManager.currentRoundId() → uint256
-FastRoundManager.getRound(uint256 roundId) → Round
-FastRoundManager.isCommitPhase(uint256 roundId) → bool
-FastRoundManager.isRevealPhase(uint256 roundId) → bool
+Use this ABI for reading round data with viem:
+
+```javascript
+import { createPublicClient, http, parseAbi } from 'viem';
+import { polygon } from 'viem/chains';
+
+const ROUND_MANAGER = '0xa7BfBA3c20bB5c73A685eDb47b3454D3E3A5C58E';
+const ARENA = '0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92';
+
+const roundManagerAbi = parseAbi([
+  'function currentRoundId() view returns (uint256)',
+  'function isCommitPhase(uint256 roundId) view returns (bool)',
+  'function isRevealPhase(uint256 roundId) view returns (bool)',
+  'function getMarketCount(uint256 roundId) view returns (uint256)',
+]);
+
+// Note: getRound returns a struct — use this ABI format for viem:
+const getRoundAbi = [{
+  type: 'function',
+  name: 'getRound',
+  inputs: [{ name: 'roundId', type: 'uint256' }],
+  outputs: [{
+    name: '',
+    type: 'tuple',
+    components: [
+      { name: 'conditionIds', type: 'bytes32[]' },
+      { name: 'benchmarkPrices', type: 'uint16[]' },
+      { name: 'commitDeadline', type: 'uint64' },
+      { name: 'revealStart', type: 'uint64' },
+      { name: 'revealDeadline', type: 'uint64' },
+      { name: 'benchmarksPosted', type: 'bool' },
+      { name: 'invalidated', type: 'bool' },
+    ],
+  }],
+  stateMutability: 'view',
+}] as const;
+
+const arenaAbi = parseAbi([
+  'function hasCommitted(uint256 roundId, address agent) view returns (bool)',
+  'function hasRevealed(uint256 roundId, address agent) view returns (bool)',
+  'function nonces(address) view returns (uint256)',
+  'function getScore(uint256 roundId, address agent) view returns (uint256 brierScore, int256 alphaScore, uint16 scoredMarkets, uint16 totalMarkets)',
+]);
+
+const client = createPublicClient({
+  chain: polygon,
+  transport: http('https://polygon-rpc.com'),
+});
+
+// Get current round
+const roundId = await client.readContract({
+  address: ROUND_MANAGER, abi: roundManagerAbi, functionName: 'currentRoundId',
+});
+
+// Get round details
+const round = await client.readContract({
+  address: ROUND_MANAGER, abi: getRoundAbi, functionName: 'getRound', args: [roundId],
+});
+console.log('Condition IDs:', round.conditionIds);
+console.log('Commit deadline:', new Date(Number(round.commitDeadline) * 1000));
 ```
 
 ### Identify what to predict
