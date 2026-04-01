@@ -147,6 +147,13 @@ export async function handler(event: {
       return json(200, await handleHealth());
     }
 
+    // Nonce lookup — agents can query without RPC
+    if (method === 'GET' && path.startsWith('/nonce/')) {
+      const agent = path.replace('/nonce/', '') as `0x${string}`;
+      const nonce = await getAgentNonce(agent);
+      return json(200, { agent, nonce: nonce.toString() });
+    }
+
     // Manual benchmark posting trigger
     if (method === 'POST' && path === '/post-benchmarks') {
       const results = await checkAndPostBenchmarks();
