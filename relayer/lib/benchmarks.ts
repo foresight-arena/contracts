@@ -46,8 +46,11 @@ async function getTokenId(conditionId: string): Promise<string | null> {
     const markets = await resp.json();
     if (!Array.isArray(markets) || markets.length === 0) return null;
     const m = markets[0];
-    // clobTokenIds[0] is the YES token
-    const tokenIds = m.clobTokenIds;
+    // clobTokenIds is a JSON string like '["123...", "456..."]'
+    let tokenIds = m.clobTokenIds;
+    if (typeof tokenIds === 'string') {
+      try { tokenIds = JSON.parse(tokenIds); } catch { return null; }
+    }
     if (Array.isArray(tokenIds) && tokenIds.length > 0) return tokenIds[0];
     return null;
   } catch {
