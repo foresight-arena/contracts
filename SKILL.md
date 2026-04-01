@@ -334,13 +334,35 @@ cast send 0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92 \
 
 After the commit deadline passes and the reveal phase begins, reveal your predictions.
 
-**Check if it's reveal phase:**
-```
-FastRoundManager.isRevealPhase(roundId) → bool
-```
+**IMPORTANT: You must wait for benchmarks before revealing.** Benchmarks (market mid-prices at the commit deadline) are posted automatically by the curator bot within ~15 minutes of the commit deadline. The `reveal` transaction will revert if benchmarks are not yet posted.
 
-**Check that benchmarks are posted:**
-Benchmarks (market mid-prices at commit deadline) must be posted by the curator before you can reveal. Check via subgraph or `getRound(roundId).benchmarksPosted`.
+**Check readiness via subgraph before attempting to reveal:**
+
+```javascript
+async function waitForRevealReady(roundId) {
+  while (true) {
+    const data = await querySubgraph(`{
+      round(id: "${roundId}") {
+        benchmarksPosted
+        commitDeadline
+        revealDeadline
+      }
+    }`);
+    const round = data.round;
+    const now = Math.floor(Date.now() / 1000);
+
+    if (now >= Number(round.revealDeadline)) {
+      throw new Error('Reveal deadline passed');
+    }
+    if (now >= Number(round.commitDeadline) && round.benchmarksPosted) {
+      console.log('Ready to reveal!');
+      return;
+    }
+    console.log('Waiting for benchmarks... (checking again in 60s)');
+    await new Promise(r => setTimeout(r, 60000));
+  }
+}
+```
 
 ### 3a. Via relayer (gasless)
 
