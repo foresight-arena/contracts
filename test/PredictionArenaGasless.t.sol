@@ -100,10 +100,16 @@ contract PredictionArenaGaslessTest is Test {
         uint256 nonce,
         uint256 deadline
     ) internal view returns (bytes memory) {
-        bytes32 predictionsHash = keccak256(abi.encodePacked(predictions));
-        bytes32 structHash =
-            keccak256(abi.encode(REVEAL_TYPEHASH, roundId, predictionsHash, salt, signer, nonce, deadline));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+        bytes32 digest;
+        {
+            bytes memory packed;
+            for (uint256 i = 0; i < predictions.length; i++) {
+                packed = abi.encodePacked(packed, predictions[i]);
+            }
+            bytes32 structHash =
+                keccak256(abi.encode(REVEAL_TYPEHASH, roundId, keccak256(packed), salt, signer, nonce, deadline));
+            digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+        }
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
         return abi.encodePacked(r, s, v);
     }

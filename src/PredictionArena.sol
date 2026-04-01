@@ -87,8 +87,12 @@ contract PredictionArena is IPredictionArena {
     ) external {
         require(block.timestamp <= deadline, "Signature expired");
 
-        // EIP-712 encodes dynamic arrays as keccak256 of their packed encoding
-        bytes memory packedPredictions = abi.encodePacked(predictions);
+        // EIP-712 encodes dynamic arrays as keccak256 of their tight encoding
+        // abi.encodePacked(uint16[]) pads to 32 bytes per element, so we pack manually
+        bytes memory packedPredictions = new bytes(0);
+        for (uint256 i = 0; i < predictions.length; i++) {
+            packedPredictions = abi.encodePacked(packedPredictions, predictions[i]);
+        }
         bytes32 structHash = keccak256(
             abi.encode(REVEAL_TYPEHASH, roundId, keccak256(packedPredictions), salt, agent, nonces[agent]++, deadline)
         );
