@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Foresight Arena Gasless Relayer
+Description: Foresight Arena Gasless Relayer + Benchmark Poster
 
 Resources:
   RelayerFunction:
@@ -9,7 +9,7 @@ Resources:
       Handler: handler.handler
       CodeUri: dist/
       Runtime: nodejs20.x
-      Timeout: 30
+      Timeout: 60
       MemorySize: 256
       Architectures:
         - x86_64
@@ -18,5 +18,14 @@ Resources:
           RPC_URL: 'placeholder'
           RELAYER_PRIVATE_KEY: 'placeholder'
           PREDICTION_ARENA_ADDRESS: '0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92'
+          ROUND_MANAGER_ADDRESS: '0xa7BfBA3c20bB5c73A685eDb47b3454D3E3A5C58E'
+          CURATOR_PRIVATE_KEY: 'placeholder'
       FunctionUrlConfig:
         AuthType: NONE
+      Events:
+        BenchmarkCron:
+          Type: Schedule
+          Properties:
+            Schedule: rate(15 minutes)
+            Description: Check for rounds needing benchmark prices
+            Enabled: true

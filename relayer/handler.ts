@@ -1,6 +1,7 @@
 import type { CommitRequest, RevealRequest, RelayerResponse, HealthResponse } from './lib/types.js';
 import { verifyCommitSignature, verifyRevealSignature } from './lib/verify.js';
 import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal } from './lib/submit.js';
+import { checkAndPostBenchmarks } from './lib/benchmarks.js';
 
 // Lazy init on first request
 let initialized = false;
@@ -107,7 +108,7 @@ async function handleHealth(): Promise<HealthResponse> {
   };
 }
 
-// Lambda handler (Function URL)
+// Lambda handler (Function URL + EventBridge cron)
 export async function handler(event: {
   requestContext?: { http?: { method: string; path: string } };
   rawPath?: string;
@@ -116,7 +117,17 @@ export async function handler(event: {
   body?: string;
   isBase64Encoded?: boolean;
   rawQueryString?: string;
+  source?: string;         // EventBridge sets this to 'aws.events'
+  'detail-type'?: string;  // EventBridge scheduled event
 }) {
+  // EventBridge cron trigger — run benchmark poster
+  if (event.source === 'aws.events' || event['detail-type'] === 'Scheduled Event') {
+    console.log('Cron trigger: checking for pending benchmarks');
+    const results = await checkAndPostBenchmarks();
+    console.log(results.join('\n'));
+    return { statusCode: 200, body: JSON.stringify({ results }) };
+  }
+
   const method = event.requestContext?.http?.method || event.httpMethod || 'GET';
   const path = event.rawPath || event.path || '/';
 
@@ -134,6 +145,12 @@ export async function handler(event: {
   try {
     if (method === 'GET' && path === '/health') {
       return json(200, await handleHealth());
+    }
+
+    // Manual benchmark posting trigger
+    if (method === 'POST' && path === '/post-benchmarks') {
+      const results = await checkAndPostBenchmarks();
+      return json(200, { results });
     }
 
     // Polymarket API proxy (avoids CORS for frontend)
