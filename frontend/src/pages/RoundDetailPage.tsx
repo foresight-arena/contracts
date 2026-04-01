@@ -274,7 +274,7 @@ export default function RoundDetailPage() {
                       </td>
                       <td className="mono">{agent.brierScore ? formatBrier(agent.brierScore) : '--'}</td>
                       <td className="mono">{agent.alphaScore != null && agent.scoredMarkets > 0 ? formatAlpha(agent.alphaScore) : '--'}</td>
-                      <td>{agent.scoredMarkets ?? '--'}</td>
+                      <td>{agent.revealed ? agent.scoredMarkets : '--'}</td>
                     </tr>
                   );
                 })}
