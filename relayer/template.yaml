@@ -2,6 +2,25 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Foresight Arena Gasless Relayer + Benchmark Poster
 
+Parameters:
+  RpcUrl:
+    Type: String
+    Description: Polygon RPC endpoint
+  RelayerPrivateKey:
+    Type: String
+    NoEcho: true
+    Description: Relayer wallet private key (0x-prefixed)
+  CuratorPrivateKey:
+    Type: String
+    NoEcho: true
+    Description: Curator wallet private key for posting benchmarks (0x-prefixed)
+  PredictionArenaAddress:
+    Type: String
+    Default: '0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92'
+  RoundManagerAddress:
+    Type: String
+    Default: '0xa7BfBA3c20bB5c73A685eDb47b3454D3E3A5C58E'
+
 Resources:
   RelayerFunction:
     Type: AWS::Serverless::Function
@@ -15,11 +34,11 @@ Resources:
         - x86_64
       Environment:
         Variables:
-          RPC_URL: 'placeholder'
-          RELAYER_PRIVATE_KEY: 'placeholder'
-          PREDICTION_ARENA_ADDRESS: '0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92'
-          ROUND_MANAGER_ADDRESS: '0xa7BfBA3c20bB5c73A685eDb47b3454D3E3A5C58E'
-          CURATOR_PRIVATE_KEY: 'placeholder'
+          RPC_URL: !Ref RpcUrl
+          RELAYER_PRIVATE_KEY: !Ref RelayerPrivateKey
+          CURATOR_PRIVATE_KEY: !Ref CuratorPrivateKey
+          PREDICTION_ARENA_ADDRESS: !Ref PredictionArenaAddress
+          ROUND_MANAGER_ADDRESS: !Ref RoundManagerAddress
       FunctionUrlConfig:
         AuthType: NONE
       Events:
