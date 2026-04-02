@@ -48,12 +48,11 @@ export async function verifyRevealSignature(
   req: RevealRequest,
   nonce: bigint,
 ): Promise<boolean> {
-  // Contract uses abi.encodePacked(uint16[]) which pads each element to 32 bytes
-  // This matches keccak256(abi.encode(uint256[])) for the values
+  // Tight 2-byte packing (matches contract and commit hash encoding)
   const predictionsHash = keccak256(
     encodePacked(
-      req.predictions.map(() => 'uint256' as const),
-      req.predictions.map((p) => BigInt(p)),
+      req.predictions.map(() => 'uint16' as const),
+      req.predictions.map((p) => p as unknown as bigint),
     ),
   );
 

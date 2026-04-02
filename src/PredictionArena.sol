@@ -90,7 +90,11 @@ contract PredictionArena is IPredictionArena {
         require(block.timestamp <= deadline, "Signature expired");
 
         uint256 nonce = nonces[agent]++;
-        bytes memory packedPredictions = abi.encodePacked(predictions);
+        // Tight 2-byte packing for predictionsHash (matches commit hash encoding)
+        bytes memory packedPredictions;
+        for (uint256 i = 0; i < predictions.length; i++) {
+            packedPredictions = abi.encodePacked(packedPredictions, predictions[i]);
+        }
         bytes32 structHash =
             keccak256(abi.encode(REVEAL_TYPEHASH, roundId, keccak256(packedPredictions), salt, agent, nonce, deadline));
         _verifySignature(agent, structHash, signature);
