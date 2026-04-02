@@ -1,6 +1,6 @@
 import type { CommitRequest, RevealRequest, RelayerResponse, HealthResponse } from './lib/types.js';
 import { verifyCommitSignature, verifyRevealSignature } from './lib/verify.js';
-import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal } from './lib/submit.js';
+import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister } from './lib/submit.js';
 import { checkAndPostBenchmarks } from './lib/benchmarks.js';
 
 // Lazy init on first request
@@ -152,6 +152,20 @@ export async function handler(event: {
       const agent = path.replace('/nonce/', '') as `0x${string}`;
       const nonce = await getAgentNonce(agent);
       return json(200, { agent, nonce: nonce.toString() });
+    }
+
+    // Agent registration (gasless — relayer pays, checks if already registered)
+    if (method === 'POST' && path === '/register') {
+      const { agent, name, url } = JSON.parse(
+        event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
+      );
+      if (!agent || !name) return json(400, { success: false, error: 'Missing agent or name' });
+
+      const already = await isAgentRegistered(agent as `0x${string}`);
+      if (already) return json(200, { success: true, alreadyRegistered: true });
+
+      const txHash = await submitRegister(agent as `0x${string}`, name, url || '');
+      return json(200, { success: true, txHash });
     }
 
     // Manual benchmark posting trigger

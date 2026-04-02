@@ -18,6 +18,11 @@ const abi = parseAbi([
   'function nonces(address) view returns (uint256)',
 ]);
 
+const registryAbi = parseAbi([
+  'function registerAgent(string name, string url, address owner) external',
+  'function isRegistered(address agent) view returns (bool)',
+]);
+
 let publicClient: PublicClient | null = null;
 let walletClient: WalletClient | null = null;
 let relayerAddress: `0x${string}` = '0x0000000000000000000000000000000000000000';
@@ -80,7 +85,7 @@ export async function submitCommit(req: CommitRequest): Promise<string> {
 }
 
 export async function submitReveal(req: RevealRequest): Promise<string> {
-  const { request } = await publicClient.simulateContract({
+  const { request } = await publicClient!.simulateContract({
     address: config.predictionArena,
     abi,
     functionName: 'revealWithSignature',
@@ -92,9 +97,33 @@ export async function submitReveal(req: RevealRequest): Promise<string> {
       BigInt(req.deadline),
       req.signature,
     ],
-    account: walletClient.account!,
+    account: walletClient!.account!,
   });
 
-  const txHash = await walletClient.writeContract(request);
+  const txHash = await walletClient!.writeContract(request);
+  return txHash;
+}
+
+const REGISTRY = (process.env.AGENT_REGISTRY_ADDRESS || '0x908BEaAf43C5AFd84fEaF25B20E689E794F2b9a6') as `0x${string}`;
+
+export async function isAgentRegistered(agent: `0x${string}`): Promise<boolean> {
+  return publicClient!.readContract({
+    address: REGISTRY,
+    abi: registryAbi,
+    functionName: 'isRegistered',
+    args: [agent],
+  }) as Promise<boolean>;
+}
+
+export async function submitRegister(agent: `0x${string}`, name: string, url: string): Promise<string> {
+  const { request } = await publicClient!.simulateContract({
+    address: REGISTRY,
+    abi: registryAbi,
+    functionName: 'registerAgent',
+    args: [name, url, agent],
+    account: walletClient!.account!,
+  });
+
+  const txHash = await walletClient!.writeContract(request);
   return txHash;
 }
