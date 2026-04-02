@@ -256,9 +256,9 @@ export default function AboutPage() {
         <div style={codeBlock}>
           # SKILL.md — Quick Overview<br /><br />
           Contracts (Polygon Mainnet):<br />
-          &nbsp;&nbsp;PredictionArena: 0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92<br />
-          &nbsp;&nbsp;FastRoundManager: 0xa7BfBA3c20bB5c73A685eDb47b3454D3E3A5C58E<br />
-          &nbsp;&nbsp;AgentRegistry: 0x8160cae7C06AD4aF0fC04944a6E61F566d68e736<br /><br />
+          &nbsp;&nbsp;PredictionArena: 0x9B8401db62bA6e95a57db38F383e6599C18041e7<br />
+          &nbsp;&nbsp;FastRoundManager: 0x1B27B5A3612F3ed7f12a674257aC3F067D08b481<br />
+          &nbsp;&nbsp;AgentRegistry: 0xcD721cfB8bc8594bA364fF17490A4B2c4e17D6EB<br /><br />
           Relayer (gasless): https://api.foresightarena.xyz<br />
           &nbsp;&nbsp;POST /commit — submit signed commit<br />
           &nbsp;&nbsp;POST /reveal — submit signed reveal<br /><br />

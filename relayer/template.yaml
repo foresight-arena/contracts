@@ -16,10 +16,10 @@ Parameters:
     Description: Curator wallet private key for posting benchmarks (0x-prefixed)
   PredictionArenaAddress:
     Type: String
-    Default: '0xDcEfA4c4cfF0609E43aB6CAbfeAA64ff47f33d92'
+    Default: '0x9B8401db62bA6e95a57db38F383e6599C18041e7'
   RoundManagerAddress:
     Type: String
-    Default: '0xa7BfBA3c20bB5c73A685eDb47b3454D3E3A5C58E'
+    Default: '0x1B27B5A3612F3ed7f12a674257aC3F067D08b481'
 
 Resources:
   RelayerFunction:

@@ -122,7 +122,7 @@ export async function checkAndPostBenchmarks(): Promise<string[]> {
     return results;
   }
 
-  const roundManagerAddress = (process.env.ROUND_MANAGER_ADDRESS || '0xa7BfBA3c20bB5c73A685eDb47b3454D3E3A5C58E') as `0x${string}`;
+  const roundManagerAddress = (process.env.ROUND_MANAGER_ADDRESS || '0x1B27B5A3612F3ed7f12a674257aC3F067D08b481') as `0x${string}`;
   const account = privateKeyToAccount(curatorKey as `0x${string}`);
 
   const client = createPublicClient({
