@@ -22,12 +22,12 @@ async function fetchOne(cid: string): Promise<PolymarketInfo | null> {
     const markets = await resp.json();
     if (!Array.isArray(markets) || markets.length === 0) return null;
     const m = markets[0];
-    const slug = m.slug || '';
+    const eventSlug = m.events?.[0]?.slug || m.slug || '';
     return {
       conditionId: m.conditionId || cid,
-      title: m.question || m.title || slug || cid,
-      slug,
-      url: slug ? `https://polymarket.com/event/${slug}` : '',
+      title: m.question || m.title || cid,
+      slug: eventSlug,
+      url: eventSlug ? `https://polymarket.com/event/${eventSlug}` : '',
       endDate: m.endDateIso || m.end_date_iso || null,
       closed: m.closed || false,
     };
