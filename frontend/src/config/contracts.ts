@@ -8,9 +8,9 @@ export interface ContractAddresses {
 
 export const CONTRACT_SETS: Record<ContractSetName, ContractAddresses> = {
   fast: {
-    roundManager: '0x1B27B5A3612F3ed7f12a674257aC3F067D08b481',
-    predictionArena: '0x9B8401db62bA6e95a57db38F383e6599C18041e7',
-    agentRegistry: '0xcD721cfB8bc8594bA364fF17490A4B2c4e17D6EB',
+    roundManager: '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0',
+    predictionArena: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f',
+    agentRegistry: '0x908BEaAf43C5AFd84fEaF25B20E689E794F2b9a6',
   },
   production: {
     roundManager: '0x0000000000000000000000000000000000000000',

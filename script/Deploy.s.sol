@@ -13,10 +13,18 @@ contract Deploy is Script {
         address admin = vm.envAddress("ADMIN_ADDRESS");
         address ctf = vm.envAddress("CTF_ADDRESS");
         bool fastMode = vm.envOr("FAST_MODE", false);
+        address existingRegistry = vm.envOr("AGENT_REGISTRY_ADDRESS", address(0));
 
         vm.startBroadcast();
 
-        AgentRegistry registry = new AgentRegistry();
+        address registryAddr;
+        if (existingRegistry != address(0)) {
+            registryAddr = existingRegistry;
+            console.log("  Using existing AgentRegistry:", registryAddr);
+        } else {
+            AgentRegistry registry = new AgentRegistry();
+            registryAddr = address(registry);
+        }
 
         address roundManagerAddr;
         if (fastMode) {
@@ -39,10 +47,10 @@ contract Deploy is Script {
         if (fastMode) {
             console.log("  Mode:              FAST (no time constraints)");
         } else {
-            console.log("  Mode:              PRODUCTION (1h commit, 2h buffer, 12h reveal)");
+            console.log("  Mode:              PRODUCTION");
         }
         console.log("");
-        console.log("  AgentRegistry:     ", address(registry));
+        console.log("  AgentRegistry:     ", registryAddr);
         console.log("  RoundManager:      ", roundManagerAddr);
         console.log("  PredictionArena:   ", address(arena));
         console.log("");
