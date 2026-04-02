@@ -23,8 +23,10 @@ contract PredictionArenaTest is Test {
     bytes32 constant SALT = keccak256("salt");
     bytes32 constant SALT2 = keccak256("salt2");
 
-    event Committed(uint256 indexed roundId, address indexed agent, bytes32 commitHash);
-    event Revealed(uint256 indexed roundId, address indexed agent, uint16[] predictions, uint16 scoredMarkets);
+    event Committed(uint256 indexed roundId, address indexed agent, bytes32 commitHash, uint256 nonce);
+    event Revealed(
+        uint256 indexed roundId, address indexed agent, uint16[] predictions, uint16 scoredMarkets, uint256 nonce
+    );
     event ScoreComputed(
         uint256 indexed roundId, address indexed agent, uint256 brierScore, int256 alphaScore, uint16 scoredMarkets
     );
@@ -162,7 +164,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.expectEmit(true, true, false, true);
-        emit Committed(roundId, agent1, commitHash);
+        emit Committed(roundId, agent1, commitHash, type(uint256).max);
 
         vm.prank(agent1);
         arena.commit(roundId, commitHash);
@@ -299,7 +301,7 @@ contract PredictionArenaTest is Test {
         vm.warp(r.revealStart);
 
         vm.expectEmit(true, true, false, true);
-        emit Revealed(roundId, agent1, preds, 5);
+        emit Revealed(roundId, agent1, preds, 5, type(uint256).max);
 
         vm.expectEmit(true, true, false, true);
         // brierScore: (10000 - 7000)^2 = 9000000, alphaScore: (5000 - 10000)^2 - (7000 - 10000)^2 = 25000000 - 9000000 = 16000000

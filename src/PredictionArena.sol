@@ -49,12 +49,14 @@ contract PredictionArena is IPredictionArena {
     // Direct (gas-paying) paths
     // ---------------------------------------------------------------
 
+    uint256 private constant DIRECT_CALL_NONCE = type(uint256).max;
+
     function commit(uint256 roundId, bytes32 commitHash) external {
-        _commit(roundId, commitHash, msg.sender);
+        _commit(roundId, commitHash, msg.sender, DIRECT_CALL_NONCE);
     }
 
     function reveal(uint256 roundId, uint16[] calldata predictions, bytes32 salt) external {
-        _reveal(roundId, predictions, salt, msg.sender);
+        _reveal(roundId, predictions, salt, msg.sender, DIRECT_CALL_NONCE);
     }
 
     // ---------------------------------------------------------------
@@ -70,11 +72,11 @@ contract PredictionArena is IPredictionArena {
     ) external {
         require(block.timestamp <= deadline, "Signature expired");
 
-        bytes32 structHash =
-            keccak256(abi.encode(COMMIT_TYPEHASH, roundId, commitHash, agent, nonces[agent]++, deadline));
+        uint256 nonce = nonces[agent]++;
+        bytes32 structHash = keccak256(abi.encode(COMMIT_TYPEHASH, roundId, commitHash, agent, nonce, deadline));
         _verifySignature(agent, structHash, signature);
 
-        _commit(roundId, commitHash, agent);
+        _commit(roundId, commitHash, agent, nonce);
     }
 
     function revealWithSignature(
@@ -87,14 +89,13 @@ contract PredictionArena is IPredictionArena {
     ) external {
         require(block.timestamp <= deadline, "Signature expired");
 
-        // EIP-712 encodes dynamic arrays as keccak256 of their packed encoding
+        uint256 nonce = nonces[agent]++;
         bytes memory packedPredictions = abi.encodePacked(predictions);
-        bytes32 structHash = keccak256(
-            abi.encode(REVEAL_TYPEHASH, roundId, keccak256(packedPredictions), salt, agent, nonces[agent]++, deadline)
-        );
+        bytes32 structHash =
+            keccak256(abi.encode(REVEAL_TYPEHASH, roundId, keccak256(packedPredictions), salt, agent, nonce, deadline));
         _verifySignature(agent, structHash, signature);
 
-        _reveal(roundId, predictions, salt, agent);
+        _reveal(roundId, predictions, salt, agent, nonce);
     }
 
     // ---------------------------------------------------------------
@@ -119,7 +120,7 @@ contract PredictionArena is IPredictionArena {
         require(recovered != address(0) && recovered == expected, "Invalid signature");
     }
 
-    function _commit(uint256 roundId, bytes32 commitHash, address agent) internal {
+    function _commit(uint256 roundId, bytes32 commitHash, address agent, uint256 eventNonce) internal {
         require(commitHash != bytes32(0), "Empty hash");
 
         IRoundManager.Round memory r = roundManager.getRound(roundId);
@@ -133,10 +134,12 @@ contract PredictionArena is IPredictionArena {
         c.commitHash = commitHash;
         commitCount[roundId]++;
 
-        emit Committed(roundId, agent, commitHash);
+        emit Committed(roundId, agent, commitHash, eventNonce);
     }
 
-    function _reveal(uint256 roundId, uint16[] calldata predictions, bytes32 salt, address agent) internal {
+    function _reveal(uint256 roundId, uint16[] calldata predictions, bytes32 salt, address agent, uint256 eventNonce)
+        internal
+    {
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         require(r.conditionIds.length > 0, "Round does not exist");
         require(!r.invalidated, "Round invalidated");
@@ -166,12 +169,16 @@ contract PredictionArena is IPredictionArena {
         _revealedPredictions[roundId][agent] = predictions;
 
         // Compute and store scores
-        _computeScores(roundId, agent, predictions, r);
+        _computeScores(roundId, agent, predictions, r, eventNonce);
     }
 
-    function _computeScores(uint256 roundId, address agent, uint16[] calldata predictions, IRoundManager.Round memory r)
-        internal
-    {
+    function _computeScores(
+        uint256 roundId,
+        address agent,
+        uint16[] calldata predictions,
+        IRoundManager.Round memory r,
+        uint256 eventNonce
+    ) internal {
         uint256 totalBrier;
         int256 totalAlpha;
         uint16 scoredMarkets;
@@ -210,7 +217,7 @@ contract PredictionArena is IPredictionArena {
             s.alphaScore = totalAlpha / int256(uint256(scoredMarkets));
         }
 
-        emit Revealed(roundId, agent, predictions, scoredMarkets);
+        emit Revealed(roundId, agent, predictions, scoredMarkets, eventNonce);
         emit ScoreComputed(roundId, agent, s.brierScore, s.alphaScore, scoredMarkets);
     }
 

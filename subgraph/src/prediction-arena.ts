@@ -21,6 +21,7 @@ function getOrCreateAgent(address: string, rawAddress: Address): Agent {
     agent.totalBrierScore = BigInt.zero()
     agent.totalAlphaScore = BigInt.zero()
     agent.scoredRoundCount = 0
+    agent.gaslessNonce = 0
     agent.lastActiveTimestamp = BigInt.zero()
   }
   return agent
@@ -52,6 +53,16 @@ export function handleCommitted(event: Committed): void {
 
   let agent = getOrCreateAgent(agentAddr, event.params.agent)
   agent.lastActiveTimestamp = event.block.timestamp
+  // Track gasless nonce: if nonce != max uint256, it was a gasless call
+  let maxUint = BigInt.fromI32(1).leftShift(255)  // approximate; exact check below
+  let nonce = event.params.nonce
+  if (nonce.lt(maxUint)) {
+    // Gasless call — nonce is the actual nonce used. Next nonce = nonce + 1
+    let nextNonce = nonce.toI32() + 1
+    if (nextNonce > agent.gaslessNonce) {
+      agent.gaslessNonce = nextNonce
+    }
+  }
   agent.save()
 }
 
@@ -67,6 +78,20 @@ export function handleRevealed(event: Revealed): void {
   ar.predictions = event.params.predictions
   ar.scoredMarkets = event.params.scoredMarkets
   ar.save()
+
+  // Track gasless nonce on reveal too
+  let maxUint = BigInt.fromI32(1).leftShift(255)
+  let nonce = event.params.nonce
+  if (nonce.lt(maxUint)) {
+    let agent = Agent.load(agentAddr)
+    if (agent != null) {
+      let nextNonce = nonce.toI32() + 1
+      if (nextNonce > agent.gaslessNonce) {
+        agent.gaslessNonce = nextNonce
+      }
+      agent.save()
+    }
+  }
 }
 
 export function handleScoreComputed(event: ScoreComputed): void {

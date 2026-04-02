@@ -42,6 +42,7 @@ type Agent @entity {
   totalBrierScore: BigInt!
   totalAlphaScore: BigInt!
   scoredRoundCount: Int!
+  gaslessNonce: Int!
   lastActiveTimestamp: BigInt!
   agentRounds: [AgentRound!]! @derivedFrom(field: "agent")
 }

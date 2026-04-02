@@ -15,6 +15,7 @@ export function handleAgentRegistered(event: AgentRegistered): void {
     agent.totalBrierScore = BigInt.zero()
     agent.totalAlphaScore = BigInt.zero()
     agent.scoredRoundCount = 0
+    agent.gaslessNonce = 0
     agent.lastActiveTimestamp = BigInt.zero()
   }
 

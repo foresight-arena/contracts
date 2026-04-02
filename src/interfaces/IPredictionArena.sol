@@ -14,8 +14,10 @@ interface IPredictionArena {
         uint16 totalMarkets;
     }
 
-    event Committed(uint256 indexed roundId, address indexed agent, bytes32 commitHash);
-    event Revealed(uint256 indexed roundId, address indexed agent, uint16[] predictions, uint16 scoredMarkets);
+    event Committed(uint256 indexed roundId, address indexed agent, bytes32 commitHash, uint256 nonce);
+    event Revealed(
+        uint256 indexed roundId, address indexed agent, uint16[] predictions, uint16 scoredMarkets, uint256 nonce
+    );
     event ScoreComputed(
         uint256 indexed roundId, address indexed agent, uint256 brierScore, int256 alphaScore, uint16 scoredMarkets
     );

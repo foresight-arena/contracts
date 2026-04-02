@@ -31,8 +31,10 @@ contract PredictionArenaGaslessTest is Test {
         "Reveal(uint256 roundId,bytes32 predictionsHash,bytes32 salt,address agent,uint256 nonce,uint256 deadline)"
     );
 
-    event Committed(uint256 indexed roundId, address indexed agent, bytes32 commitHash);
-    event Revealed(uint256 indexed roundId, address indexed agent, uint16[] predictions, uint16 scoredMarkets);
+    event Committed(uint256 indexed roundId, address indexed agent, bytes32 commitHash, uint256 nonce);
+    event Revealed(
+        uint256 indexed roundId, address indexed agent, uint16[] predictions, uint16 scoredMarkets, uint256 nonce
+    );
     event ScoreComputed(
         uint256 indexed roundId, address indexed agent, uint256 brierScore, int256 alphaScore, uint16 scoredMarkets
     );
@@ -130,7 +132,7 @@ contract PredictionArenaGaslessTest is Test {
         // Relayer submits on behalf of agent
         vm.prank(relayer);
         vm.expectEmit(true, true, false, true);
-        emit Committed(roundId, agent, commitHash);
+        emit Committed(roundId, agent, commitHash, 0);
         arena.commitWithSignature(roundId, commitHash, agent, deadline, sig);
 
         assertTrue(arena.hasCommitted(roundId, agent));

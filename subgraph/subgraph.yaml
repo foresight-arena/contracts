@@ -51,9 +51,9 @@ dataSources:
         - name: ConditionalTokens
           file: ./abis/ConditionalTokens.json
       eventHandlers:
-        - event: Committed(indexed uint256,indexed address,bytes32)
+        - event: Committed(indexed uint256,indexed address,bytes32,uint256)
           handler: handleCommitted
-        - event: Revealed(indexed uint256,indexed address,uint16[],uint16)
+        - event: Revealed(indexed uint256,indexed address,uint16[],uint16,uint256)
           handler: handleRevealed
         - event: ScoreComputed(indexed uint256,indexed address,uint256,int256,uint16)
           handler: handleScoreComputed
