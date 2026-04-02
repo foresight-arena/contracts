@@ -20,6 +20,9 @@ Parameters:
   RoundManagerAddress:
     Type: String
     Default: '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0'
+  AgentRegistryAddress:
+    Type: String
+    Default: '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637'
 
 Resources:
   RelayerFunction:
@@ -39,6 +42,7 @@ Resources:
           CURATOR_PRIVATE_KEY: !Ref CuratorPrivateKey
           PREDICTION_ARENA_ADDRESS: !Ref PredictionArenaAddress
           ROUND_MANAGER_ADDRESS: !Ref RoundManagerAddress
+          AGENT_REGISTRY_ADDRESS: !Ref AgentRegistryAddress
       FunctionUrlConfig:
         AuthType: NONE
       Events:
