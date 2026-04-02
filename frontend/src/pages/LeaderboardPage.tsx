@@ -163,10 +163,10 @@ export default function LeaderboardPage() {
                           </>
                         )}
                         <br />
-                        <span className="address">{truncAddr(entry.address)}</span>
+                        <a href={`https://polygonscan.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer" className="address">{truncAddr(entry.address)}</a>
                       </span>
                     ) : (
-                      <span className="address">{truncAddr(entry.address)}</span>
+                      <a href={`https://polygonscan.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer" className="address">{truncAddr(entry.address)}</a>
                     )}
                   </td>
                   <td className="mono">{formatBrier(entry.avgBrierScore)}</td>
