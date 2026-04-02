@@ -60,9 +60,10 @@ contract PredictionArenaGaslessTest is Test {
             conditionIds[i] = keccak256(abi.encodePacked("gasless_market_", i));
         }
         uint64 commitDeadline = uint64(block.timestamp) + 2 hours;
-        uint64 revealDeadline = commitDeadline + 2 hours + 13 hours;
+        uint64 revealStart = commitDeadline + 2 hours;
+        uint64 revealDeadline = revealStart + 13 hours;
         vm.prank(curator);
-        roundId = roundManager.createRound(conditionIds, commitDeadline, revealDeadline);
+        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline, 1);
     }
 
     function _computeCommitHash(uint256 roundId, uint16[] memory predictions, bytes32 salt)
@@ -285,6 +286,13 @@ contract PredictionArenaGaslessTest is Test {
         benchmarks[2] = 5000;
         vm.prank(curator);
         roundManager.postBenchmarkPrices(roundId, benchmarks);
+
+        // Resolve at least 1 market so minResolvedMarkets is satisfied
+        uint256[] memory yesPayouts = new uint256[](2);
+        yesPayouts[0] = 1;
+        yesPayouts[1] = 0;
+        mockCtf.setPayouts(keccak256(abi.encodePacked("gasless_market_", uint256(0))), yesPayouts);
+
         vm.warp(block.timestamp + 2 hours + 1);
 
         // Reveal with nonce 0 — succeeds
@@ -325,6 +333,13 @@ contract PredictionArenaGaslessTest is Test {
         benchmarks[2] = 5000;
         vm.prank(curator);
         roundManager.postBenchmarkPrices(roundId, benchmarks);
+
+        // Resolve at least 1 market so minResolvedMarkets is satisfied
+        uint256[] memory yesPayouts = new uint256[](2);
+        yesPayouts[0] = 1;
+        yesPayouts[1] = 0;
+        mockCtf.setPayouts(keccak256(abi.encodePacked("gasless_market_", uint256(0))), yesPayouts);
+
         vm.warp(block.timestamp + 2 hours + 1);
 
         // Agent reveals via relayer (gasless) — nonce is still 0 since commit was direct
@@ -360,6 +375,13 @@ contract PredictionArenaGaslessTest is Test {
         benchmarks[2] = 5000;
         vm.prank(curator);
         roundManager.postBenchmarkPrices(roundId, benchmarks);
+
+        // Resolve at least 1 market so minResolvedMarkets is satisfied
+        uint256[] memory yesPayouts = new uint256[](2);
+        yesPayouts[0] = 1;
+        yesPayouts[1] = 0;
+        mockCtf.setPayouts(keccak256(abi.encodePacked("gasless_market_", uint256(0))), yesPayouts);
+
         vm.warp(block.timestamp + 2 hours + 1);
 
         // Agent reveals directly (pays gas)

@@ -199,6 +199,8 @@ contract PredictionArena is IPredictionArena {
             scoredMarkets++;
         }
 
+        require(scoredMarkets >= r.minResolvedMarkets, "Not enough markets resolved");
+
         Score storage s = _scores[roundId][agent];
         s.totalMarkets = uint16(r.conditionIds.length);
         s.scoredMarkets = scoredMarkets;

@@ -6,6 +6,7 @@ type Round @entity {
   commitDeadline: BigInt!
   revealStart: BigInt!
   revealDeadline: BigInt!
+  minResolvedMarkets: Int!
   benchmarksPosted: Boolean!
   invalidated: Boolean!
   createdAtBlock: BigInt!

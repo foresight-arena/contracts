@@ -5,7 +5,6 @@ import {IRoundManager} from "./interfaces/IRoundManager.sol";
 
 contract RoundManager is IRoundManager {
     uint64 public constant MIN_COMMIT_WINDOW = 1 hours;
-    uint64 public constant ORACLE_BUFFER = 2 hours;
     uint64 public constant MIN_REVEAL_WINDOW = 12 hours;
 
     mapping(uint256 => Round) internal _rounds;
@@ -30,24 +29,28 @@ contract RoundManager is IRoundManager {
         admin = _admin;
     }
 
-    function createRound(bytes32[] calldata conditionIds, uint64 commitDeadline, uint64 revealDeadline)
-        external
-        virtual
-        onlyCurator
-        returns (uint256 roundId)
-    {
+    function createRound(
+        bytes32[] calldata conditionIds,
+        uint64 commitDeadline,
+        uint64 revealStart,
+        uint64 revealDeadline,
+        uint16 minResolvedMarkets
+    ) external virtual onlyCurator returns (uint256 roundId) {
         require(conditionIds.length >= 1 && conditionIds.length <= 20, "Invalid market count");
         require(commitDeadline > uint64(block.timestamp) + MIN_COMMIT_WINDOW, "Commit deadline too soon");
-        require(revealDeadline > commitDeadline + ORACLE_BUFFER + MIN_REVEAL_WINDOW, "Reveal deadline too soon");
+        require(revealStart > commitDeadline, "Reveal start must be after commit deadline");
+        require(revealDeadline > revealStart + MIN_REVEAL_WINDOW, "Reveal deadline too soon");
+        require(minResolvedMarkets <= conditionIds.length, "Min resolved exceeds market count");
 
         roundId = ++currentRoundId;
         Round storage r = _rounds[roundId];
         r.conditionIds = conditionIds;
         r.commitDeadline = commitDeadline;
-        r.revealStart = commitDeadline + ORACLE_BUFFER;
+        r.revealStart = revealStart;
         r.revealDeadline = revealDeadline;
+        r.minResolvedMarkets = minResolvedMarkets;
 
-        emit RoundCreated(roundId, conditionIds, commitDeadline, revealDeadline);
+        emit RoundCreated(roundId, conditionIds, commitDeadline, revealStart, revealDeadline, minResolvedMarkets);
     }
 
     function postBenchmarkPrices(uint256 roundId, uint16[] calldata benchmarkPrices) external onlyCurator {

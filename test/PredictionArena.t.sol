@@ -33,7 +33,7 @@ contract PredictionArenaTest is Test {
 
     // Timing helpers
     uint64 constant COMMIT_WINDOW = 1 hours;
-    uint64 constant ORACLE_BUFFER = 2 hours;
+    uint64 constant REVEAL_START_BUFFER = 2 hours;
     uint64 constant REVEAL_WINDOW = 12 hours;
 
     function setUp() public {
@@ -68,10 +68,11 @@ contract PredictionArenaTest is Test {
         }
 
         uint64 commitDeadline = uint64(block.timestamp) + COMMIT_WINDOW + 1;
-        uint64 revealDeadline = commitDeadline + ORACLE_BUFFER + REVEAL_WINDOW + 1;
+        uint64 revealStart = commitDeadline + REVEAL_START_BUFFER;
+        uint64 revealDeadline = revealStart + REVEAL_WINDOW + 1;
 
         vm.prank(curator);
-        roundId = roundManager.createRound(conditionIds, commitDeadline, revealDeadline);
+        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline, 1);
     }
 
     /// @dev Create a standard 5-market round.
@@ -360,18 +361,13 @@ contract PredictionArenaTest is Test {
 
         _postBenchmarks(roundId, 5, 5000);
 
-        // No markets resolved
+        // No markets resolved — should revert because minResolvedMarkets = 1
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 
         vm.prank(agent1);
+        vm.expectRevert("Not enough markets resolved");
         arena.reveal(roundId, preds, SALT);
-
-        IPredictionArena.Score memory s = arena.getScore(roundId, agent1);
-        assertEq(s.scoredMarkets, 0);
-        assertEq(s.totalMarkets, 5);
-        assertEq(s.brierScore, 0);
-        assertEq(s.alphaScore, 0);
     }
 
     function test_reveal_hashMismatch() public {
@@ -443,7 +439,7 @@ contract PredictionArenaTest is Test {
     }
 
     function test_reveal_duplicate() public {
-        (uint256 roundId,) = _createStandardRound();
+        (uint256 roundId, bytes32[] memory cIds) = _createStandardRound();
         uint16[] memory preds = _uniformPredictions(5, 5000);
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
@@ -451,6 +447,8 @@ contract PredictionArenaTest is Test {
         arena.commit(roundId, commitHash);
 
         _postBenchmarks(roundId, 5, 5000);
+        _resolveYes(cIds[0]); // resolve at least 1 market
+
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 

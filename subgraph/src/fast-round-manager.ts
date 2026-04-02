@@ -13,8 +13,9 @@ export function handleRoundCreated(event: RoundCreated): void {
   round.conditionIds = event.params.conditionIds
   round.benchmarkPrices = []
   round.commitDeadline = event.params.commitDeadline
-  round.revealStart = event.params.commitDeadline
+  round.revealStart = event.params.revealStart
   round.revealDeadline = event.params.revealDeadline
+  round.minResolvedMarkets = event.params.minResolvedMarkets
   round.benchmarksPosted = false
   round.invalidated = false
   round.createdAtBlock = event.block.number

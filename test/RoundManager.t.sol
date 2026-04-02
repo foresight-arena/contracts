@@ -13,10 +13,17 @@ contract RoundManagerTest is Test {
     address alice = address(0xA1);
 
     uint64 constant MIN_COMMIT_WINDOW = 1 hours;
-    uint64 constant ORACLE_BUFFER = 2 hours;
+    uint64 constant REVEAL_START_BUFFER = 2 hours;
     uint64 constant MIN_REVEAL_WINDOW = 12 hours;
 
-    event RoundCreated(uint256 indexed roundId, bytes32[] conditionIds, uint64 commitDeadline, uint64 revealDeadline);
+    event RoundCreated(
+        uint256 indexed roundId,
+        bytes32[] conditionIds,
+        uint64 commitDeadline,
+        uint64 revealStart,
+        uint64 revealDeadline,
+        uint16 minResolvedMarkets
+    );
     event BenchmarksPosted(uint256 indexed roundId, uint16[] benchmarkPrices);
     event RoundInvalidated(uint256 indexed roundId);
     event CuratorChanged(address indexed oldCurator, address indexed newCurator);
@@ -41,15 +48,20 @@ contract RoundManagerTest is Test {
         return uint64(block.timestamp) + MIN_COMMIT_WINDOW + 1;
     }
 
-    function _validRevealDeadline(uint64 commitDeadline) internal pure returns (uint64) {
-        return commitDeadline + ORACLE_BUFFER + MIN_REVEAL_WINDOW + 1;
+    function _validRevealStart(uint64 commitDeadline) internal pure returns (uint64) {
+        return commitDeadline + REVEAL_START_BUFFER;
+    }
+
+    function _validRevealDeadline(uint64 revealStart) internal pure returns (uint64) {
+        return revealStart + MIN_REVEAL_WINDOW + 1;
     }
 
     function _createDefaultRound() internal returns (uint256 roundId) {
         uint64 commit = _validCommitDeadline();
-        uint64 reveal = _validRevealDeadline(commit);
+        uint64 rStart = _validRevealStart(commit);
+        uint64 reveal = _validRevealDeadline(rStart);
         vm.prank(curator);
-        roundId = rm.createRound(_conditionIds(3), commit, reveal);
+        roundId = rm.createRound(_conditionIds(3), commit, rStart, reveal, 1);
     }
 
     // ---------------------------------------------------------------
@@ -59,13 +71,14 @@ contract RoundManagerTest is Test {
     function test_createRound_success() public {
         bytes32[] memory ids = _conditionIds(3);
         uint64 commit = _validCommitDeadline();
-        uint64 reveal = _validRevealDeadline(commit);
+        uint64 rStart = _validRevealStart(commit);
+        uint64 reveal = _validRevealDeadline(rStart);
 
         vm.expectEmit(true, false, false, true);
-        emit RoundCreated(1, ids, commit, reveal);
+        emit RoundCreated(1, ids, commit, rStart, reveal, 1);
 
         vm.prank(curator);
-        uint256 roundId = rm.createRound(ids, commit, reveal);
+        uint256 roundId = rm.createRound(ids, commit, rStart, reveal, 1);
 
         assertEq(roundId, 1);
         assertEq(rm.currentRoundId(), 1);
@@ -74,7 +87,7 @@ contract RoundManagerTest is Test {
         assertEq(r.conditionIds.length, 3);
         assertEq(r.conditionIds[0], ids[0]);
         assertEq(r.commitDeadline, commit);
-        assertEq(r.revealStart, commit + ORACLE_BUFFER);
+        assertEq(r.revealStart, rStart);
         assertEq(r.revealDeadline, reveal);
         assertFalse(r.benchmarksPosted);
         assertFalse(r.invalidated);
@@ -82,50 +95,55 @@ contract RoundManagerTest is Test {
 
     function test_createRound_onlyCurator() public {
         uint64 commit = _validCommitDeadline();
-        uint64 reveal = _validRevealDeadline(commit);
+        uint64 rStart = _validRevealStart(commit);
+        uint64 reveal = _validRevealDeadline(rStart);
 
         vm.prank(alice);
         vm.expectRevert("Only curator");
-        rm.createRound(_conditionIds(3), commit, reveal);
+        rm.createRound(_conditionIds(3), commit, rStart, reveal, 1);
     }
 
     function test_createRound_emptyMarkets() public {
         uint64 commit = _validCommitDeadline();
-        uint64 reveal = _validRevealDeadline(commit);
+        uint64 rStart = _validRevealStart(commit);
+        uint64 reveal = _validRevealDeadline(rStart);
         bytes32[] memory empty = new bytes32[](0);
 
         vm.prank(curator);
         vm.expectRevert("Invalid market count");
-        rm.createRound(empty, commit, reveal);
+        rm.createRound(empty, commit, rStart, reveal, 1);
     }
 
     function test_createRound_tooManyMarkets() public {
         uint64 commit = _validCommitDeadline();
-        uint64 reveal = _validRevealDeadline(commit);
+        uint64 rStart = _validRevealStart(commit);
+        uint64 reveal = _validRevealDeadline(rStart);
 
         vm.prank(curator);
         vm.expectRevert("Invalid market count");
-        rm.createRound(_conditionIds(21), commit, reveal);
+        rm.createRound(_conditionIds(21), commit, rStart, reveal, 1);
     }
 
     function test_createRound_commitDeadlineTooSoon() public {
         // commitDeadline <= block.timestamp + MIN_COMMIT_WINDOW
         uint64 commit = uint64(block.timestamp) + MIN_COMMIT_WINDOW; // exactly at boundary, not >
-        uint64 reveal = _validRevealDeadline(commit);
+        uint64 rStart = _validRevealStart(commit);
+        uint64 reveal = _validRevealDeadline(rStart);
 
         vm.prank(curator);
         vm.expectRevert("Commit deadline too soon");
-        rm.createRound(_conditionIds(3), commit, reveal);
+        rm.createRound(_conditionIds(3), commit, rStart, reveal, 1);
     }
 
     function test_createRound_revealDeadlineTooSoon() public {
         uint64 commit = _validCommitDeadline();
-        // revealDeadline <= commitDeadline + ORACLE_BUFFER + MIN_REVEAL_WINDOW
-        uint64 reveal = commit + ORACLE_BUFFER + MIN_REVEAL_WINDOW; // exactly at boundary, not >
+        uint64 rStart = _validRevealStart(commit);
+        // revealDeadline <= revealStart + MIN_REVEAL_WINDOW
+        uint64 reveal = rStart + MIN_REVEAL_WINDOW; // exactly at boundary, not >
 
         vm.prank(curator);
         vm.expectRevert("Reveal deadline too soon");
-        rm.createRound(_conditionIds(3), commit, reveal);
+        rm.createRound(_conditionIds(3), commit, rStart, reveal, 1);
     }
 
     function test_createRound_multipleRounds() public {
@@ -374,15 +392,16 @@ contract RoundManagerTest is Test {
 
         // Verify new curator can create rounds
         uint64 commit = _validCommitDeadline();
-        uint64 reveal = _validRevealDeadline(commit);
+        uint64 rStart = _validRevealStart(commit);
+        uint64 reveal = _validRevealDeadline(rStart);
         vm.prank(newCurator);
-        uint256 roundId = rm.createRound(_conditionIds(2), commit, reveal);
+        uint256 roundId = rm.createRound(_conditionIds(2), commit, rStart, reveal, 1);
         assertEq(roundId, 1);
 
         // Verify old curator cannot
         vm.prank(curator);
         vm.expectRevert("Only curator");
-        rm.createRound(_conditionIds(2), commit, reveal);
+        rm.createRound(_conditionIds(2), commit, rStart, reveal, 1);
     }
 
     function test_setAdmin() public {

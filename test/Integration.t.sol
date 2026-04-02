@@ -61,11 +61,11 @@ contract IntegrationTest is Test {
         returns (uint256 roundId, uint64 commitDeadline, uint64 revealStart, uint64 revealDeadline)
     {
         commitDeadline = uint64(block.timestamp) + 2 hours;
-        revealDeadline = commitDeadline + 2 hours + 13 hours; // > ORACLE_BUFFER + MIN_REVEAL_WINDOW
         revealStart = commitDeadline + 2 hours;
+        revealDeadline = revealStart + 13 hours;
 
         vm.prank(curator);
-        roundId = roundManager.createRound(conditionIds, commitDeadline, revealDeadline);
+        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline, 1);
     }
 
     /// @dev Sets oracle payouts for all 5 markets: markets 1,2,3 = YES [1,0], markets 4,5 = NO [0,1].
@@ -520,11 +520,11 @@ contract IntegrationTest is Test {
         }
 
         uint64 commitDeadline2 = uint64(block.timestamp) + 2 hours;
-        uint64 revealDeadline2 = commitDeadline2 + 2 hours + 13 hours;
         uint64 revealStart2 = commitDeadline2 + 2 hours;
+        uint64 revealDeadline2 = revealStart2 + 13 hours;
 
         vm.prank(curator);
-        roundId2 = roundManager.createRound(conditionIds, commitDeadline2, revealDeadline2);
+        roundId2 = roundManager.createRound(conditionIds, commitDeadline2, revealStart2, revealDeadline2, 1);
 
         uint16[] memory preds1 = new uint16[](5);
         preds1[0] = 3000;
@@ -579,15 +579,17 @@ contract IntegrationTest is Test {
     function test_concurrentRounds() public {
         // Create 2 rounds with overlapping commit windows
         uint64 commitDeadlineA = uint64(block.timestamp) + 3 hours;
-        uint64 revealDeadlineA = commitDeadlineA + 2 hours + 13 hours;
+        uint64 revealStartA = commitDeadlineA + 2 hours;
+        uint64 revealDeadlineA = revealStartA + 13 hours;
 
         uint64 commitDeadlineB = uint64(block.timestamp) + 4 hours;
-        uint64 revealDeadlineB = commitDeadlineB + 2 hours + 13 hours;
+        uint64 revealStartB = commitDeadlineB + 2 hours;
+        uint64 revealDeadlineB = revealStartB + 13 hours;
 
         vm.prank(curator);
-        uint256 roundA = roundManager.createRound(conditionIds, commitDeadlineA, revealDeadlineA);
+        uint256 roundA = roundManager.createRound(conditionIds, commitDeadlineA, revealStartA, revealDeadlineA, 1);
         vm.prank(curator);
-        uint256 roundB = roundManager.createRound(conditionIds, commitDeadlineB, revealDeadlineB);
+        uint256 roundB = roundManager.createRound(conditionIds, commitDeadlineB, revealStartB, revealDeadlineB, 1);
 
         assertEq(roundA, 1);
         assertEq(roundB, 2);
@@ -636,7 +638,6 @@ contract IntegrationTest is Test {
         _setDefaultPayouts();
 
         // Warp past both revealStarts (B's revealStart is later)
-        uint64 revealStartB = commitDeadlineB + 2 hours;
         vm.warp(revealStartB + 1);
 
         // Agent reveals in both rounds

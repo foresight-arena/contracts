@@ -13,21 +13,28 @@ import {MockConditionalTokens} from "../test/mocks/MockConditionalTokens.sol";
 contract TestnetRoundManager is RoundManager {
     constructor(address _curator, address _admin) RoundManager(_curator, _admin) {}
 
-    function createTestRound(bytes32[] calldata conditionIds, uint64 commitDeadline, uint64 revealDeadline)
-        external
-        returns (uint256 roundId)
-    {
+    function createTestRound(
+        bytes32[] calldata conditionIds,
+        uint64 commitDeadline,
+        uint64 revealStart,
+        uint64 revealDeadline,
+        uint16 minResolvedMarkets
+    ) external returns (uint256 roundId) {
         require(msg.sender == curator, "Only curator");
         require(conditionIds.length >= 1 && conditionIds.length <= 20, "Invalid market count");
         require(commitDeadline > uint64(block.timestamp), "Commit deadline in past");
-        require(revealDeadline > commitDeadline, "Reveal before commit");
+        require(revealStart > commitDeadline, "Reveal start before commit");
+        require(revealDeadline > revealStart, "Reveal before start");
 
         roundId = ++currentRoundId;
         IRoundManager.Round storage r = _rounds[roundId];
         r.conditionIds = conditionIds;
         r.commitDeadline = commitDeadline;
-        r.revealStart = commitDeadline + 10; // 10s oracle buffer
+        r.revealStart = revealStart;
         r.revealDeadline = revealDeadline;
+        r.minResolvedMarkets = minResolvedMarkets;
+
+        emit RoundCreated(roundId, conditionIds, commitDeadline, revealStart, revealDeadline, minResolvedMarkets);
     }
 }
 
@@ -37,11 +44,7 @@ contract E2EStep1 is Script {
 
     function run() external {
         address deployer = msg.sender;
-        // Agent B key (deterministic for reproducibility)
-        uint256 agentBKey = uint256(keccak256("foresight_e2e_agent_b"));
-        address agentB = vm.addr(agentBKey);
         console.log("Agent A (deployer):", deployer);
-        console.log("Agent B:", agentB);
 
         vm.startBroadcast();
 
@@ -53,7 +56,7 @@ contract E2EStep1 is Script {
         console.log("PredictionArena:", address(arena));
 
         // Fund agent B for gas
-        payable(agentB).transfer(0.02 ether);
+        payable(vm.addr(uint256(keccak256("foresight_e2e_agent_b")))).transfer(0.02 ether);
 
         // Create round: 3 markets, 3min commit window, 10min reveal window
         bytes32[] memory cids = new bytes32[](3);
@@ -62,8 +65,9 @@ contract E2EStep1 is Script {
         cids[2] = keccak256("e2e_market_3");
 
         uint64 commitDeadline = uint64(block.timestamp) + 180;
-        uint64 revealDeadline = commitDeadline + 600;
-        uint256 roundId = rm.createTestRound(cids, commitDeadline, revealDeadline);
+        uint64 revealStart = commitDeadline + 10; // 10s oracle buffer for testnet
+        uint64 revealDeadline = revealStart + 600;
+        uint256 roundId = rm.createTestRound(cids, commitDeadline, revealStart, revealDeadline, 1);
         console.log("Round ID:", roundId);
         console.log("Commit deadline:", commitDeadline);
 
@@ -87,24 +91,24 @@ contract E2EStep1 is Script {
         vm.stopBroadcast();
 
         // Agent B commits from their own address
-        uint16[] memory predsB = new uint16[](3);
-        predsB[0] = 6000;
-        predsB[1] = 4000;
-        predsB[2] = 5500;
-        bytes32 saltB = keccak256("salt_agent_b");
-        bytes32 hashB;
         {
+            uint256 agentBKey = uint256(keccak256("foresight_e2e_agent_b"));
+            uint16[] memory predsB = new uint16[](3);
+            predsB[0] = 6000;
+            predsB[1] = 4000;
+            predsB[2] = 5500;
+            bytes32 saltB = keccak256("salt_agent_b");
             bytes memory packedB = abi.encodePacked(roundId);
             for (uint256 i = 0; i < predsB.length; i++) {
                 packedB = abi.encodePacked(packedB, predsB[i]);
             }
-            hashB = keccak256(abi.encodePacked(packedB, saltB));
-        }
+            bytes32 hashB = keccak256(abi.encodePacked(packedB, saltB));
 
-        vm.startBroadcast(agentBKey);
-        arena.commit(roundId, hashB);
-        console.log("Agent B committed");
-        vm.stopBroadcast();
+            vm.startBroadcast(agentBKey);
+            arena.commit(roundId, hashB);
+            console.log("Agent B committed");
+            vm.stopBroadcast();
+        }
 
         console.log("");
         console.log("=== STEP 1 COMPLETE ===");

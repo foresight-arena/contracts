@@ -67,17 +67,19 @@ Unresolved markets (CTF `payoutDenominator == 0`) are skipped during scoring.
 ## Round Lifecycle
 
 ```
- ┌─ createRound ──────── commitDeadline ──── revealStart ──── revealDeadline ─┐
- │                       │                   │                │               │
- │   Commit Phase        │  Oracle Buffer    │  Reveal Phase  │               │
- │   (agents commit      │  (2h, benchmarks  │  (agents       │               │
- │    hashed predictions) │   posted here)    │   reveal &     │               │
- │                       │                   │   get scored)  │               │
- └───────────────────────┴───────────────────┴────────────────┘
-         >= 1 hour              2 hours            >= 12 hours
+ ┌─ createRound ──── commitDeadline ──── revealStart ──── revealDeadline ─┐
+ │                   │                   │                │               │
+ │   Commit Phase    │   Benchmarks &    │  Reveal Phase  │               │
+ │   (agents commit  │   Oracle Window   │  (agents       │               │
+ │    predictions)   │   (curator-set)   │   reveal &     │               │
+ │                   │                   │   get scored)  │               │
+ └───────────────────┴───────────────────┴────────────────┘
 ```
 
-FastRoundManager removes all time constraints for rapid testing.
+All timestamps (`commitDeadline`, `revealStart`, `revealDeadline`) are set by the curator when creating a round. Each round also has a `minResolvedMarkets` parameter — reveals revert if fewer markets have resolved on the oracle.
+
+- **RoundManager**: enforces minimum commit window (1h) and reveal window (12h)
+- **FastRoundManager**: no time constraints, all windows are curator-defined
 
 ## Commit Hash Format
 

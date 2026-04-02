@@ -43,19 +43,6 @@
   },
   {
     "type": "function",
-    "name": "ORACLE_BUFFER",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "admin",
     "inputs": [],
     "outputs": [
@@ -82,9 +69,19 @@
         "internalType": "uint64"
       },
       {
+        "name": "revealStart",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
         "name": "revealDeadline",
         "type": "uint64",
         "internalType": "uint64"
+      },
+      {
+        "name": "minResolvedMarkets",
+        "type": "uint16",
+        "internalType": "uint16"
       }
     ],
     "outputs": [
@@ -181,6 +178,11 @@
             "name": "revealDeadline",
             "type": "uint64",
             "internalType": "uint64"
+          },
+          {
+            "name": "minResolvedMarkets",
+            "type": "uint16",
+            "internalType": "uint16"
           },
           {
             "name": "benchmarksPosted",
@@ -353,10 +355,22 @@
         "internalType": "uint64"
       },
       {
+        "name": "revealStart",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
         "name": "revealDeadline",
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"
+      },
+      {
+        "name": "minResolvedMarkets",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
       }
     ],
     "anonymous": false
