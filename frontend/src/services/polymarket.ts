@@ -3,6 +3,8 @@ export interface PolymarketInfo {
   title: string;
   slug: string;
   url: string;
+  endDate: string | null; // ISO timestamp when market resolves
+  closed: boolean;
 }
 
 const cache = new Map<string, PolymarketInfo>();
@@ -26,6 +28,8 @@ async function fetchOne(cid: string): Promise<PolymarketInfo | null> {
       title: m.question || m.title || slug || cid,
       slug,
       url: slug ? `https://polymarket.com/event/${slug}` : '',
+      endDate: m.endDateIso || m.end_date_iso || null,
+      closed: m.closed || false,
     };
   } catch {
     return null;

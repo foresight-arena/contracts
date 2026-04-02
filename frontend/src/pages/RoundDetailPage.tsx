@@ -6,6 +6,19 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { fetchMarketMetadata, type PolymarketInfo } from '../services/polymarket';
 import type { AgentRoundData } from '../types';
 
+function formatCountdown(endDate: string | null): { text: string; isCountdown: boolean } {
+  if (!endDate) return { text: '--', isCountdown: false };
+  const end = new Date(endDate).getTime();
+  const now = Date.now();
+  const diff = end - now;
+  if (diff <= 0) return { text: 'Closed', isCountdown: false };
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (h > 24) return { text: `${Math.floor(h / 24)}d ${h % 24}h`, isCountdown: true };
+  if (h > 0) return { text: `${h}h ${m}m`, isCountdown: true };
+  return { text: `${m}m`, isCountdown: true };
+}
+
 function truncAddr(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
@@ -169,13 +182,20 @@ export default function RoundDetailPage() {
                         : '--'}
                     </td>
                     <td>
-                      {outcome ? (
-                        <span className={`badge ${outcome === 'YES' ? 'success' : 'error'}`}>
-                          {outcome}
-                        </span>
-                      ) : (
-                        <span className="badge">Pending</span>
-                      )}
+                      {(() => {
+                        if (outcome) return (
+                          <span className={`badge ${outcome === 'YES' ? 'success' : 'error'}`} title="Oracle has posted the outcome on-chain">
+                            {outcome}
+                          </span>
+                        );
+                        if (meta?.closed) return <span className="badge warning" style={{ cursor: 'help' }} title="Market closed on Polymarket, waiting for the oracle to post the result on-chain">Awaiting oracle</span>;
+                        if (meta?.endDate) {
+                          const cd = formatCountdown(meta.endDate);
+                          if (cd.isCountdown) return <span className="badge warning" style={{ cursor: 'help' }} title={`Market closes around ${new Date(meta.endDate).toLocaleString()}`}>Resolves in {cd.text}</span>;
+                          return <span className="badge warning" style={{ cursor: 'help' }} title="Market close time has passed, waiting for oracle resolution">Awaiting oracle</span>;
+                        }
+                        return <span className="badge" style={{ cursor: 'help' }} title="Resolution time unknown">Pending</span>;
+                      })()}
                     </td>
                   </tr>
                 );
