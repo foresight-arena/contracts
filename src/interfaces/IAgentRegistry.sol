@@ -13,7 +13,15 @@ interface IAgentRegistry {
     event AgentUpdated(address indexed agent, string name, string url, address owner);
 
     function registerAgent(string calldata name, string calldata url, address owner) external;
+    function registerAgentWithSignature(
+        address agent,
+        string calldata name,
+        string calldata url,
+        address owner,
+        bytes calldata signature
+    ) external;
     function updateAgent(string calldata name, string calldata url, address owner) external;
     function isRegistered(address agent) external view returns (bool);
     function getAgent(address agent) external view returns (Agent memory);
+    function nonces(address agent) external view returns (uint256);
 }

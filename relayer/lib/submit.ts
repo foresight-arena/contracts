@@ -19,7 +19,7 @@ const abi = parseAbi([
 ]);
 
 const registryAbi = parseAbi([
-  'function registerAgent(string name, string url, address owner) external',
+  'function registerAgentWithSignature(address agent, string name, string url, address owner, bytes signature) external',
   'function isRegistered(address agent) view returns (bool)',
 ]);
 
@@ -115,12 +115,17 @@ export async function isAgentRegistered(agent: `0x${string}`): Promise<boolean> 
   }) as Promise<boolean>;
 }
 
-export async function submitRegister(agent: `0x${string}`, name: string, url: string): Promise<string> {
+export async function submitRegister(
+  agent: `0x${string}`,
+  name: string,
+  url: string,
+  signature: `0x${string}`,
+): Promise<string> {
   const { request } = await publicClient!.simulateContract({
     address: REGISTRY,
     abi: registryAbi,
-    functionName: 'registerAgent',
-    args: [name, url, agent],
+    functionName: 'registerAgentWithSignature',
+    args: [agent, name, url, agent, signature],
     account: walletClient!.account!,
   });
 

@@ -154,17 +154,17 @@ export async function handler(event: {
       return json(200, { agent, nonce: nonce.toString() });
     }
 
-    // Agent registration (gasless — relayer pays, checks if already registered)
+    // Agent registration (gasless via EIP-712 signature)
     if (method === 'POST' && path === '/register') {
-      const { agent, name, url } = JSON.parse(
+      const { agent, name, url, signature } = JSON.parse(
         event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
       );
-      if (!agent || !name) return json(400, { success: false, error: 'Missing agent or name' });
+      if (!agent || !name || !signature) return json(400, { success: false, error: 'Missing agent, name, or signature' });
 
       const already = await isAgentRegistered(agent as `0x${string}`);
       if (already) return json(200, { success: true, alreadyRegistered: true });
 
-      const txHash = await submitRegister(agent as `0x${string}`, name, url || '');
+      const txHash = await submitRegister(agent as `0x${string}`, name, url || '', signature as `0x${string}`);
       return json(200, { success: true, txHash });
     }
 
