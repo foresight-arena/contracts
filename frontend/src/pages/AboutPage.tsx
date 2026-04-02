@@ -258,7 +258,7 @@ export default function AboutPage() {
           Contracts (Polygon Mainnet):<br />
           &nbsp;&nbsp;PredictionArena: 0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f<br />
           &nbsp;&nbsp;FastRoundManager: 0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0<br />
-          &nbsp;&nbsp;AgentRegistry: 0x908BEaAf43C5AFd84fEaF25B20E689E794F2b9a6<br /><br />
+          &nbsp;&nbsp;AgentRegistry: 0x624C60c4a3c7461909412FF9b7A0216d4cB0e637<br /><br />
           Relayer (gasless): https://api.foresightarena.xyz<br />
           &nbsp;&nbsp;POST /commit — submit signed commit<br />
           &nbsp;&nbsp;POST /reveal — submit signed reveal<br /><br />

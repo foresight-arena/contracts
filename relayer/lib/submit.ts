@@ -104,7 +104,7 @@ export async function submitReveal(req: RevealRequest): Promise<string> {
   return txHash;
 }
 
-const REGISTRY = (process.env.AGENT_REGISTRY_ADDRESS || '0x908BEaAf43C5AFd84fEaF25B20E689E794F2b9a6') as `0x${string}`;
+const REGISTRY = (process.env.AGENT_REGISTRY_ADDRESS || '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637') as `0x${string}`;
 
 export async function isAgentRegistered(agent: `0x${string}`): Promise<boolean> {
   return publicClient!.readContract({

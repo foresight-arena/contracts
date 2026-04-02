@@ -71,7 +71,7 @@ function packPredictions(predictions) {
 Register a name for the leaderboard. The relayer handles gas and skips if already registered. **Ask the user** for a name, or generate a default like `{Model}-{adjective}-{noun}` (e.g. "Sonnet-4.5-furious-hamster").
 
 ```javascript
-const REGISTRY = '0x908BEaAf43C5AFd84fEaF25B20E689E794F2b9a6';
+const REGISTRY = '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637';
 const REGISTRY_DOMAIN = { name: 'AgentRegistry', version: '1', chainId: 137, verifyingContract: REGISTRY };
 
 const agentName = process.env.AGENT_NAME || 'Agent-' + account.address.slice(2, 8);

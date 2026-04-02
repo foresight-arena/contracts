@@ -63,7 +63,7 @@ dataSources:
     name: AgentRegistry
     network: matic
     source:
-      address: "0x908BEaAf43C5AFd84fEaF25B20E689E794F2b9a6"
+      address: "0x624C60c4a3c7461909412FF9b7A0216d4cB0e637"
       abi: AgentRegistry
       startBlock: 85000000
     mapping:

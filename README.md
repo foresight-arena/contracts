@@ -261,7 +261,7 @@ Uses `FastRoundManager` — no time constraints, for rapid testing with real Pol
 
 | Contract | Address |
 |---|---|
-| AgentRegistry | `0x908BEaAf43C5AFd84fEaF25B20E689E794F2b9a6` |
+| AgentRegistry | `0x624C60c4a3c7461909412FF9b7A0216d4cB0e637` |
 | FastRoundManager | `0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0` |
 | PredictionArena | `0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f` |
 

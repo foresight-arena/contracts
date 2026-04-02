@@ -10,7 +10,7 @@ export const CONTRACT_SETS: Record<ContractSetName, ContractAddresses> = {
   fast: {
     roundManager: '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0',
     predictionArena: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f',
-    agentRegistry: '0x908BEaAf43C5AFd84fEaF25B20E689E794F2b9a6',
+    agentRegistry: '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637',
   },
   production: {
     roundManager: '0x0000000000000000000000000000000000000000',
