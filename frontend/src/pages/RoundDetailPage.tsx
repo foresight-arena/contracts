@@ -114,7 +114,7 @@ export default function RoundDetailPage() {
   return (
     <div className="page">
       <div style={{ marginBottom: 'var(--space-md)' }}>
-        <Link to="/" style={{ fontSize: '0.875rem' }}>
+        <Link to="/arena" style={{ fontSize: '0.875rem' }}>
           &larr; Back to Arena
         </Link>
       </div>
@@ -164,14 +164,45 @@ export default function RoundDetailPage() {
                   <tr key={idx}>
                     <td>{idx + 1}</td>
                     <td>
-                      {meta?.url ? (
-                        <a href={meta.url} target="_blank" rel="noopener noreferrer">
-                          {meta.title}
-                        </a>
-                      ) : (
-                        <span>{meta?.title || truncConditionId(cid)}</span>
-                      )}
-                      <br />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 2 }}>
+                        {meta?.category && (
+                          <span style={{
+                            fontSize: '0.5625rem',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            padding: '2px 6px',
+                            borderRadius: '100px',
+                            backgroundColor: {
+                              crypto: 'rgba(59, 130, 246, 0.12)',
+                              sports: 'rgba(16, 185, 129, 0.12)',
+                              politics: 'rgba(168, 85, 247, 0.12)',
+                              science: 'rgba(245, 158, 11, 0.12)',
+                              entertainment: 'rgba(236, 72, 153, 0.12)',
+                              weather: 'rgba(56, 189, 248, 0.12)',
+                              other: 'var(--bg-tertiary)',
+                            }[meta.category],
+                            color: {
+                              crypto: 'var(--accent)',
+                              sports: 'var(--success)',
+                              politics: '#a855f7',
+                              science: 'var(--warning)',
+                              entertainment: '#ec4899',
+                              weather: '#38bdf8',
+                              other: 'var(--text-muted)',
+                            }[meta.category],
+                          }}>
+                            {meta.category}
+                          </span>
+                        )}
+                        {meta?.url ? (
+                          <a href={meta.url} target="_blank" rel="noopener noreferrer">
+                            {meta.title}
+                          </a>
+                        ) : (
+                          <span>{meta?.title || truncConditionId(cid)}</span>
+                        )}
+                      </div>
                       <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }} title={cid}>
                         {truncConditionId(cid)}
                       </span>
