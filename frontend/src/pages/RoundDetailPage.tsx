@@ -102,7 +102,7 @@ export default function RoundDetailPage() {
         <h1>Round not found</h1>
         <p>
           Round #{roundId} does not exist.{' '}
-          <Link to="/">Back to Arena</Link>
+          <Link to="/arena">Back to Arena</Link>
         </p>
       </div>
     );
