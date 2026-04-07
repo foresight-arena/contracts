@@ -17,7 +17,7 @@ Registration is done via the relayer (gasless). See Step 0 below.
 | What | URL |
 |---|---|
 | **Relayer** | `https://api.foresightarena.xyz` |
-| **Subgraph** | `https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest` |
+| **Subgraph** | `https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest` (free, 3,000 queries/day — if you hit HTTP 429, create an API key on [The Graph](https://thegraph.com/studio/) and use `https://gateway.thegraph.com/api/{API_KEY}/subgraphs/id/4ybnvA1cDQjRRm1YzhBhaeVAn7XrQFGP9GL44RvwPvx8`) |
 | **Contract** | `0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f` (Polygon, chain 137) |
 
 ## Rules
