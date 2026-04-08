@@ -13,7 +13,7 @@
  *   AGENT_URL=https://...    (optional metadata URL)
  *
  * Crontab example (every 2 hours):
- *   0 */2 * * * cd /path/to/agents/random-benchmark && AGENT_KEY=0x... RPC_URL=https://... node agent.mjs >> agent.log 2>&1
+ *   0 *\/2 * * * cd /path/to/agents/random-benchmark && AGENT_KEY=0x... RPC_URL=https://... node agent.mjs >> agent.log 2>&1
  */
 
 import {
