@@ -186,7 +186,14 @@ export async function handler(event: {
       const queryString = event.rawQueryString || '';
       const url = `https://gamma-api.polymarket.com/${subpath}${queryString ? '?' + queryString : ''}`;
       const resp = await fetch(url);
-      const data = await resp.json();
+      let data = await resp.json();
+
+      // Fallback: gamma API excludes closed markets by default — retry with closed=true
+      if (Array.isArray(data) && data.length === 0 && subpath === 'markets' && !queryString.includes('closed=')) {
+        const closedResp = await fetch(`${url}&closed=true`);
+        data = await closedResp.json();
+      }
+
       return json(resp.status, data);
     }
 
