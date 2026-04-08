@@ -3,7 +3,7 @@
  * Foresight Arena — Random Benchmark Agent
  *
  * A minimal direct-mode agent that participates without relayer or subgraph.
- * Polls for new rounds, commits random predictions, and reveals when ready.
+ * Runs once per invocation — designed for crontab scheduling.
  *
  * Usage:
  *   AGENT_KEY=0x... RPC_URL=https://... node agent.mjs
@@ -11,7 +11,9 @@
  * Optional:
  *   AGENT_NAME=MyAgent       (default: Random-<addr>)
  *   AGENT_URL=https://...    (optional metadata URL)
- *   POLL_INTERVAL=7200       (seconds, default: 7200 = 2 hours)
+ *
+ * Crontab example (every 2 hours):
+ *   0 *\/2 * * * cd /path/to/agents/random-benchmark && AGENT_KEY=0x... RPC_URL=https://... node agent.mjs >> agent.log 2>&1
  */
 
 import {
@@ -36,7 +38,6 @@ const RPC_URL = process.env.RPC_URL;
 if (!AGENT_KEY) throw new Error('Set AGENT_KEY env var (0x-prefixed private key)');
 if (!RPC_URL) throw new Error('Set RPC_URL env var (Polygon RPC endpoint)');
 
-const POLL_INTERVAL = Number(process.env.POLL_INTERVAL || 7200) * 1000;
 const AGENT_NAME = process.env.AGENT_NAME;
 const AGENT_URL = process.env.AGENT_URL || '';
 
@@ -78,14 +79,14 @@ const publicClient = createPublicClient({ chain: polygon, transport });
 const walletClient = createWalletClient({ chain: polygon, transport, account });
 
 const roundManager = getContract({ address: ADDRESSES.roundManager, abi: roundManagerAbi, client: publicClient });
-const arena = getContract({ address: ADDRESSES.arena, abi: arenaAbi, client: publicClient });
 const registry = getContract({ address: ADDRESSES.registry, abi: registryAbi, client: publicClient });
 const ctf = getContract({ address: ADDRESSES.ctf, abi: ctfAbi, client: publicClient });
 
-// ─── Reveal Queue (persisted to disk) ─────────────────────────────────────────
+// ─── Persistent State (survives between cron runs) ────────────────────────────
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const QUEUE_PATH = join(__dirname, `reveal-queue-${account.address.toLowerCase()}.json`);
+const STATE_PATH = join(__dirname, `state-${account.address.toLowerCase()}.json`);
 
 function loadQueue() {
   if (!existsSync(QUEUE_PATH)) return [];
@@ -95,6 +96,16 @@ function loadQueue() {
 
 function saveQueue(queue) {
   writeFileSync(QUEUE_PATH, JSON.stringify(queue, null, 2));
+}
+
+function loadState() {
+  if (!existsSync(STATE_PATH)) return {};
+  try { return JSON.parse(readFileSync(STATE_PATH, 'utf-8')); }
+  catch { return {}; }
+}
+
+function saveState(state) {
+  writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -131,10 +142,7 @@ function log(msg) {
 
 async function ensureRegistered() {
   const registered = await registry.read.isRegistered([account.address]);
-  if (registered) {
-    log(`Already registered: ${account.address}`);
-    return;
-  }
+  if (registered) return;
 
   const name = AGENT_NAME || `Random-${account.address.slice(2, 8)}`;
   log(`Registering as "${name}"...`);
@@ -148,7 +156,7 @@ async function ensureRegistered() {
   });
   const hash = await walletClient.writeContract(request);
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  log(`Registered in tx ${receipt.transactionHash} (block ${receipt.blockNumber})`);
+  log(`Registered in tx ${receipt.transactionHash}`);
 }
 
 // ─── Commit ───────────────────────────────────────────────────────────────────
@@ -179,13 +187,7 @@ async function tryCommit(roundId, round) {
 
     // Add to reveal queue
     const queue = loadQueue();
-    queue.push({
-      roundId,
-      predictions,
-      salt,
-      commitHash,
-      committedAt: new Date().toISOString(),
-    });
+    queue.push({ roundId, predictions, salt, commitHash, committedAt: new Date().toISOString() });
     saveQueue(queue);
     log(`Queued reveal for round ${roundId}: predictions=[${predictions.join(',')}]`);
   } catch (err) {
@@ -253,7 +255,6 @@ async function processRevealQueue() {
       const hash = await walletClient.writeContract(request);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       log(`Revealed round ${roundId} in tx ${receipt.transactionHash}`);
-      // Drop from queue (don't push to remaining)
     } catch (err) {
       if (err.message.includes('Already revealed')) {
         log(`Round ${roundId}: already revealed, dropping`);
@@ -267,55 +268,38 @@ async function processRevealQueue() {
   saveQueue(remaining);
 }
 
-// ─── Main Loop ────────────────────────────────────────────────────────────────
+// ─── Main (single run) ───────────────────────────────────────────────────────
 
 async function main() {
   log(`Agent: ${account.address}`);
-  log(`Poll interval: ${POLL_INTERVAL / 1000}s`);
-  log(`RPC: ${RPC_URL}`);
 
   await ensureRegistered();
 
-  let lastSeenRound = 0n;
+  // 1. Process reveal queue
+  await processRevealQueue();
 
-  // Initial round check
-  try {
-    lastSeenRound = await roundManager.read.currentRoundId();
-    log(`Current round: ${lastSeenRound}`);
-  } catch (err) {
-    log(`Failed to read currentRoundId: ${err.message}`);
+  // 2. Check for new rounds
+  const state = loadState();
+  let lastSeenRound = BigInt(state.lastSeenRound || 0);
+  const currentRound = await roundManager.read.currentRoundId();
+
+  if (lastSeenRound === 0n) {
+    // First run — start from current round
+    log(`First run, starting from round ${currentRound}`);
+    lastSeenRound = currentRound;
   }
 
-  async function tick() {
-    try {
-      // 1. Process reveal queue first
-      await processRevealQueue();
-
-      // 2. Check for new rounds
-      const currentRound = await roundManager.read.currentRoundId();
-
-      if (currentRound > lastSeenRound) {
-        log(`New round detected: ${currentRound} (was ${lastSeenRound})`);
-
-        // Try to commit to all new rounds
-        for (let id = lastSeenRound + 1n; id <= currentRound; id++) {
-          const round = await roundManager.read.getRound([id]);
-          await tryCommit(Number(id), round);
-        }
-
-        lastSeenRound = currentRound;
-      } else {
-        log(`No new rounds (current: ${currentRound})`);
-      }
-    } catch (err) {
-      log(`Tick error: ${err.message}`);
+  if (currentRound > lastSeenRound) {
+    for (let id = lastSeenRound + 1n; id <= currentRound; id++) {
+      const round = await roundManager.read.getRound([id]);
+      await tryCommit(Number(id), round);
     }
+  } else {
+    log(`No new rounds (current: ${currentRound})`);
   }
 
-  // Run immediately, then on interval
-  await tick();
-  setInterval(tick, POLL_INTERVAL);
-  log(`Running... (Ctrl+C to stop)`);
+  saveState({ lastSeenRound: currentRound.toString() });
+  log('Done.');
 }
 
 main().catch((err) => {
