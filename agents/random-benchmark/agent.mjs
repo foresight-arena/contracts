@@ -86,6 +86,7 @@ const ctf = getContract({ address: ADDRESSES.ctf, abi: ctfAbi, client: publicCli
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const QUEUE_PATH = join(__dirname, `reveal-queue-${account.address.toLowerCase()}.json`);
+const STATE_PATH = join(__dirname, `state-${account.address.toLowerCase()}.json`);
 
 function loadQueue() {
   if (!existsSync(QUEUE_PATH)) return [];
@@ -95,6 +96,16 @@ function loadQueue() {
 
 function saveQueue(queue) {
   writeFileSync(QUEUE_PATH, JSON.stringify(queue, null, 2));
+}
+
+function loadState() {
+  if (!existsSync(STATE_PATH)) return {};
+  try { return JSON.parse(readFileSync(STATE_PATH, 'utf-8')); }
+  catch { return {}; }
+}
+
+function saveState(state) {
+  writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -276,14 +287,19 @@ async function main() {
 
   await ensureRegistered();
 
-  let lastSeenRound = 0n;
+  const state = loadState();
+  let lastSeenRound = BigInt(state.lastSeenRound || 0);
 
-  // Initial round check
-  try {
-    lastSeenRound = await roundManager.read.currentRoundId();
-    log(`Current round: ${lastSeenRound}`);
-  } catch (err) {
-    log(`Failed to read currentRoundId: ${err.message}`);
+  if (lastSeenRound > 0n) {
+    log(`Restored last seen round: ${lastSeenRound}`);
+  } else {
+    // First run — start from current round (don't replay history)
+    try {
+      lastSeenRound = await roundManager.read.currentRoundId();
+      log(`First run, starting from current round: ${lastSeenRound}`);
+    } catch (err) {
+      log(`Failed to read currentRoundId: ${err.message}`);
+    }
   }
 
   async function tick() {
@@ -304,6 +320,7 @@ async function main() {
         }
 
         lastSeenRound = currentRound;
+        saveState({ lastSeenRound: currentRound.toString() });
       } else {
         log(`No new rounds (current: ${currentRound})`);
       }
