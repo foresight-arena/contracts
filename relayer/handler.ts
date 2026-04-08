@@ -14,11 +14,13 @@ function rateLimitKey(agent: string, roundId: number, action: string): string {
   return `${agent.toLowerCase()}-${roundId}-${action}`;
 }
 
-function checkRateLimit(key: string): boolean {
+function isRateLimited(key: string): boolean {
   const ts = seen.get(key);
-  if (ts && Date.now() - ts < RATE_LIMIT_TTL) return false;
+  return !!(ts && Date.now() - ts < RATE_LIMIT_TTL);
+}
+
+function markSeen(key: string): void {
   seen.set(key, Date.now());
-  return true;
 }
 
 // Clean stale entries periodically
@@ -57,7 +59,8 @@ async function handleCommit(body: CommitRequest): Promise<RelayerResponse> {
   }
 
   // Rate limit
-  if (!checkRateLimit(rateLimitKey(agent, roundId, 'commit'))) {
+  const commitKey = rateLimitKey(agent, roundId, 'commit');
+  if (isRateLimited(commitKey)) {
     return { success: false, error: 'Already submitted commit for this round' };
   }
 
@@ -70,6 +73,7 @@ async function handleCommit(body: CommitRequest): Promise<RelayerResponse> {
 
   // Simulate and submit
   const txHash = await submitCommit(body);
+  markSeen(commitKey);
   return { success: true, txHash };
 }
 
@@ -85,7 +89,8 @@ async function handleReveal(body: RevealRequest): Promise<RelayerResponse> {
     return { success: false, error: 'Deadline too close or expired' };
   }
 
-  if (!checkRateLimit(rateLimitKey(agent, roundId, 'reveal'))) {
+  const revealKey = rateLimitKey(agent, roundId, 'reveal');
+  if (isRateLimited(revealKey)) {
     return { success: false, error: 'Already submitted reveal for this round' };
   }
 
@@ -96,6 +101,7 @@ async function handleReveal(body: RevealRequest): Promise<RelayerResponse> {
   }
 
   const txHash = await submitReveal(body);
+  markSeen(revealKey);
   return { success: true, txHash };
 }
 

@@ -200,7 +200,7 @@ export default function RoundDetailPage() {
                             {meta.title}
                           </a>
                         ) : (
-                          <span>{meta?.title || truncConditionId(cid)}</span>
+                          <span style={!meta ? { color: 'var(--text-muted)', fontStyle: 'italic' } : undefined}>{meta?.title || 'Delisted'}</span>
                         )}
                       </div>
                       <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }} title={cid}>
