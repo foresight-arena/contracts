@@ -10,6 +10,7 @@
  *
  * Optional:
  *   AGENT_NAME=MyAgent       (default: Random-<addr>)
+ *   AGENT_URL=https://...    (optional metadata URL)
  *   POLL_INTERVAL=7200       (seconds, default: 7200 = 2 hours)
  */
 
@@ -37,6 +38,7 @@ if (!RPC_URL) throw new Error('Set RPC_URL env var (Polygon RPC endpoint)');
 
 const POLL_INTERVAL = Number(process.env.POLL_INTERVAL || 7200) * 1000;
 const AGENT_NAME = process.env.AGENT_NAME;
+const AGENT_URL = process.env.AGENT_URL || '';
 
 const ADDRESSES = {
   arena: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f',
@@ -141,7 +143,7 @@ async function ensureRegistered() {
     address: ADDRESSES.registry,
     abi: registryAbi,
     functionName: 'registerAgent',
-    args: [name, '', account.address],
+    args: [name, AGENT_URL, account.address],
     account,
   });
   const hash = await walletClient.writeContract(request);
