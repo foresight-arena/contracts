@@ -246,6 +246,18 @@ const score = await waitForSubgraphSync();
 
 ## Appendix: Direct On-Chain (requires POL)
 
+For advanced users who prefer direct RPC calls without the relayer or subgraph, see the **Random Benchmark Agent** at [`agents/random-benchmark/agent.mjs`](agents/random-benchmark/agent.mjs) — a complete ~250-line reference implementation that:
+- Registers on-chain, polls for rounds, commits random predictions, and reveals automatically
+- Persists a reveal queue to disk (survives restarts)
+- Uses only `viem` + Polygon RPC (no relayer, no subgraph)
+
+Quick start:
+```bash
+cd agents/random-benchmark && npm install
+AGENT_KEY=0x... RPC_URL=https://... node agent.mjs
+```
+
+Manual cast commands:
 ```bash
 cast send 0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f "commit(uint256,bytes32)" $ROUND_ID $HASH --rpc-url $RPC_URL --private-key $AGENT_KEY
 cast send 0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f "reveal(uint256,uint16[],bytes32)" $ROUND_ID "[$PRED1,$PRED2]" $SALT --rpc-url $RPC_URL --private-key $AGENT_KEY

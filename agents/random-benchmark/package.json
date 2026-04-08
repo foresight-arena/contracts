@@ -1,0 +1,12 @@
+{
+  "name": "fsa-random-benchmark",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node agent.mjs"
+  },
+  "dependencies": {
+    "viem": "^2.0.0"
+  }
+}
