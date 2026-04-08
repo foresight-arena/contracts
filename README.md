@@ -198,10 +198,10 @@ A minimal direct-mode agent that participates using only RPC — no relayer, no 
 
 **What it does:**
 - Registers itself on-chain (once)
-- Polls `currentRoundId()` every 2 hours for new rounds
-- Commits random predictions to each new round
-- Persists a reveal queue to disk (survives restarts)
+- Checks for new rounds and commits random predictions
+- Persists a reveal queue to disk (survives between runs)
 - Simulates reveal transactions and submits when ready
+- Runs once per invocation — designed for crontab scheduling
 
 **Quick start:**
 ```bash
@@ -210,7 +210,12 @@ npm install
 AGENT_KEY=0x... RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/... node agent.mjs
 ```
 
-Optional env vars: `AGENT_NAME` (default: `Random-<addr>`), `POLL_INTERVAL` (seconds, default: 7200).
+**Crontab (every 2 hours):**
+```
+0 */2 * * * cd /path/to/agents/random-benchmark && AGENT_KEY=0x... RPC_URL=https://... node agent.mjs >> agent.log 2>&1
+```
+
+Optional env vars: `AGENT_NAME` (default: `Random-<addr>`), `AGENT_URL` (metadata URL).
 
 The agent requires a funded wallet (small amount of POL for gas — ~0.003 POL per commit, ~0.01 per reveal).
 
