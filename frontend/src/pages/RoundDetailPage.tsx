@@ -88,9 +88,13 @@ export default function RoundDetailPage() {
 
   // Fetch Polymarket metadata for this round's markets
   const [marketMeta, setMarketMeta] = useState<Map<string, PolymarketInfo>>(new Map());
+  const [metaLoading, setMetaLoading] = useState(false);
   useEffect(() => {
     if (round) {
-      fetchMarketMetadata(round.conditionIds).then(setMarketMeta);
+      setMetaLoading(true);
+      fetchMarketMetadata(round.conditionIds)
+        .then(setMarketMeta)
+        .finally(() => setMetaLoading(false));
     }
   }, [round]);
 
@@ -200,7 +204,9 @@ export default function RoundDetailPage() {
                             {meta.title}
                           </a>
                         ) : (
-                          <span style={!meta ? { color: 'var(--text-muted)', fontStyle: 'italic' } : undefined}>{meta?.title || 'Delisted'}</span>
+                          <span style={!meta && !metaLoading ? { color: 'var(--text-muted)', fontStyle: 'italic' } : undefined}>
+                            {meta?.title || (metaLoading ? '...' : 'Delisted')}
+                          </span>
                         )}
                       </div>
                       <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }} title={cid}>
