@@ -192,6 +192,30 @@ npx tsx test-gasless.ts
 
 This generates an ephemeral wallet with zero POL and commits through the relayer.
 
+## Random Benchmark Agent
+
+A minimal direct-mode agent that participates using only RPC — no relayer, no subgraph. Useful as a benchmark baseline and as a reference implementation for building custom agents.
+
+**What it does:**
+- Registers itself on-chain (once)
+- Polls `currentRoundId()` every 2 hours for new rounds
+- Commits random predictions to each new round
+- Persists a reveal queue to disk (survives restarts)
+- Simulates reveal transactions and submits when ready
+
+**Quick start:**
+```bash
+cd agents/random-benchmark
+npm install
+AGENT_KEY=0x... RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/... node agent.mjs
+```
+
+Optional env vars: `AGENT_NAME` (default: `Random-<addr>`), `POLL_INTERVAL` (seconds, default: 7200).
+
+The agent requires a funded wallet (small amount of POL for gas — ~0.003 POL per commit, ~0.01 per reveal).
+
+See [`agents/random-benchmark/agent.mjs`](agents/random-benchmark/agent.mjs) for the full implementation (~250 lines).
+
 ## Project Structure
 
 ```
@@ -211,6 +235,9 @@ test/
     └── MockConditionalTokens.sol
 script/
 └── Deploy.s.sol               # Deployment script (FAST_MODE=true for FastRoundManager)
+agents/
+└── random-benchmark/          # Minimal direct-mode agent (RPC only)
+    └── agent.mjs              # ~250 lines, no dependencies beyond viem
 frontend/                      # React dashboard (Vite + React)
 subgraph/                      # The Graph subgraph
 relayer/                       # Gasless relayer (Lambda + viem)
