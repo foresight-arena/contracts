@@ -221,6 +221,36 @@ The agent requires a funded wallet (small amount of POL for gas — ~0.003 POL p
 
 See [`agents/random-benchmark/agent.mjs`](agents/random-benchmark/agent.mjs) for the full implementation (~250 lines).
 
+## LLM Benchmark Agent
+
+Same architecture as the random agent, but predictions come from an LLM via [OpenRouter](https://openrouter.ai). One launcher, many models — change `MODEL` to switch between Claude, GPT, Gemini, etc. Useful for benchmarking off-the-shelf models on the same prompt.
+
+**Tools the model gets:**
+- `getMarketDetails(marketIndex)` — full Polymarket gamma data (description, volume, end date, tags)
+- `getPriceHistory(marketIndex)` — recent CLOB price history
+- `searchWeb(query)` — Tavily web search (optional, set `TAVILY_API_KEY`)
+- `submitPredictions(...)` — sentinel tool that captures the model's final answer
+
+**Quick start:**
+```bash
+cd agents/llm-benchmark
+npm install
+AGENT_KEY=0x... RPC_URL=https://... \
+  MODEL=anthropic/claude-opus-4 \
+  OPENROUTER_API_KEY=sk-or-... \
+  TAVILY_API_KEY=tvly-... \
+  node agent.mjs
+```
+
+**Dry run** (predict only, no on-chain commit):
+```bash
+DRY_RUN=1 ... node agent.mjs
+```
+
+State files are namespaced by `<model>-<address>`, so you can run multiple models from the same directory with different wallets.
+
+See [`agents/llm-benchmark/`](agents/llm-benchmark/) for the implementation (built on Vercel AI SDK + OpenRouter).
+
 ## Project Structure
 
 ```
@@ -241,8 +271,15 @@ test/
 script/
 └── Deploy.s.sol               # Deployment script (FAST_MODE=true for FastRoundManager)
 agents/
-└── random-benchmark/          # Minimal direct-mode agent (RPC only)
-    └── agent.mjs              # ~250 lines, no dependencies beyond viem
+├── random-benchmark/          # Minimal direct-mode agent (RPC only, ~250 lines)
+│   └── agent.mjs
+└── llm-benchmark/             # LLM-powered agent (OpenRouter + Vercel AI SDK)
+    ├── agent.mjs              # main entry (crontab-friendly)
+    └── lib/
+        ├── polymarket.mjs     # gamma + CLOB API client
+        ├── tools.mjs          # LLM tools (market data, web search)
+        ├── prompt.mjs         # shared prompt template
+        └── llm.mjs            # OpenRouter wrapper
 frontend/                      # React dashboard (Vite + React)
 subgraph/                      # The Graph subgraph
 relayer/                       # Gasless relayer (Lambda + viem)
