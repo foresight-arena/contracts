@@ -91,6 +91,7 @@ const registryAbi = parseAbi([
 
 const ctfAbi = parseAbi([
   'function payoutDenominator(bytes32 conditionId) view returns (uint256)',
+  'function payoutNumerators(bytes32 conditionId, uint256 index) view returns (uint256)',
 ]);
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -194,34 +195,131 @@ async function ensureRegistered() {
 
 // ─── LLM Prediction Pipeline ──────────────────────────────────────────────────
 
+/**
+ * Check the CTF for which markets in this round are already resolved.
+ * Returns an array of 'YES' | 'NO' | null (one per condition ID).
+ */
+async function checkResolutions(conditionIds) {
+  return Promise.all(
+    conditionIds.map(async (cid) => {
+      try {
+        const denom = await ctf.read.payoutDenominator([cid]);
+        if (denom === 0n) return null;
+        const payout0 = await ctf.read.payoutNumerators([cid, 0n]);
+        return payout0 > 0n ? 'YES' : 'NO';
+      } catch {
+        return null;
+      }
+    }),
+  );
+}
+
 async function predictRound(roundId, round) {
   log(`Fetching market metadata for round ${roundId} (${round.conditionIds.length} markets)...`);
   const marketsRaw = await getMarkets(round.conditionIds);
   const summaries = marketsRaw.map((m, i) => summarizeMarket(m, i));
 
-  const tools = createTools({ markets: summaries, marketsRaw, tavilyKey: TAVILY_KEY });
-  const prompt = buildPrompt({ roundId, round, summaries, hasWebSearch: !!TAVILY_KEY });
+  // Check which markets are already resolved on the CTF
+  log(`Checking resolution status...`);
+  const resolutions = await checkResolutions(round.conditionIds);
+  const unresolvedIndices = [];
+  const finalPredictions = new Array(round.conditionIds.length).fill(null);
+  const autoResolved = [];
 
-  log(`Calling ${MODEL}...`);
+  for (let i = 0; i < resolutions.length; i++) {
+    if (resolutions[i] === 'YES') {
+      finalPredictions[i] = 10000;
+      autoResolved.push({ index: i, outcome: 'YES' });
+    } else if (resolutions[i] === 'NO') {
+      finalPredictions[i] = 0;
+      autoResolved.push({ index: i, outcome: 'NO' });
+    } else {
+      unresolvedIndices.push(i);
+    }
+  }
+
+  if (autoResolved.length > 0) {
+    log(`${autoResolved.length}/${round.conditionIds.length} markets already resolved — auto-filled`);
+  }
+
+  // If everything is resolved, skip the LLM entirely
+  if (unresolvedIndices.length === 0) {
+    log(`All markets resolved — skipping LLM call`);
+    return {
+      predictions: finalPredictions,
+      summaries,
+      result: {
+        predictions: finalPredictions,
+        reasoning: 'All markets pre-resolved',
+        perMarketReasoning: autoResolved.map((a) => ({
+          marketIndex: a.index,
+          probabilityBps: a.outcome === 'YES' ? 10000 : 0,
+          reasoning: `Auto-filled: market resolved ${a.outcome} on CTF`,
+        })),
+        trace: [],
+        usage: null,
+      },
+      autoResolved,
+    };
+  }
+
+  // Build a filtered subset for the LLM — only unresolved markets
+  const subsetMarketsRaw = unresolvedIndices.map((i) => marketsRaw[i]);
+  const subsetSummaries = unresolvedIndices.map((origIdx, newIdx) => ({
+    ...summarizeMarket(marketsRaw[origIdx], newIdx),
+    originalIndex: origIdx,
+  }));
+
+  const tools = createTools({ markets: subsetSummaries, marketsRaw: subsetMarketsRaw, tavilyKey: TAVILY_KEY });
+  const prompt = buildPrompt({ roundId, round, summaries: subsetSummaries, hasWebSearch: !!TAVILY_KEY });
+
+  log(`Calling ${MODEL} for ${unresolvedIndices.length} unresolved market(s)...`);
   const result = await getPredictions({
     model: MODEL,
     prompt,
     baseTools: tools,
-    marketCount: round.conditionIds.length,
+    marketCount: unresolvedIndices.length,
   });
 
-  log(`Predictions: [${result.predictions.join(',')}]`);
+  // Map LLM's subset predictions back to original indices
+  for (let newIdx = 0; newIdx < unresolvedIndices.length; newIdx++) {
+    const origIdx = unresolvedIndices[newIdx];
+    finalPredictions[origIdx] = result.predictions[newIdx];
+  }
+
+  // Map per-market reasoning back to original indices
+  const fullPerMarketReasoning = autoResolved
+    .map((a) => ({
+      marketIndex: a.index,
+      probabilityBps: a.outcome === 'YES' ? 10000 : 0,
+      reasoning: `Auto-filled: market resolved ${a.outcome} on CTF`,
+    }))
+    .concat(
+      result.perMarketReasoning.map((p) => ({
+        ...p,
+        marketIndex: unresolvedIndices[p.marketIndex],
+      })),
+    )
+    .sort((a, b) => a.marketIndex - b.marketIndex);
+
+  log(`Predictions: [${finalPredictions.join(',')}]`);
   if (result.usage) {
     log(`Token usage: ${result.usage.promptTokens || '?'} prompt + ${result.usage.completionTokens || '?'} completion`);
   }
-  if (result.reasoning) {
-    log(`Reasoning:\n${result.reasoning}`);
-  }
 
-  return { predictions: result.predictions, summaries, result };
+  return {
+    predictions: finalPredictions,
+    summaries,
+    result: {
+      ...result,
+      predictions: finalPredictions,
+      perMarketReasoning: fullPerMarketReasoning,
+    },
+    autoResolved,
+  };
 }
 
-function buildReasoningPayload({ roundId, summaries, result }) {
+function buildReasoningPayload({ roundId, summaries, result, autoResolved }) {
   return {
     roundId,
     agent: account.address,
@@ -230,6 +328,7 @@ function buildReasoningPayload({ roundId, summaries, result }) {
     markets: summaries,
     predictions: result.predictions,
     perMarketReasoning: result.perMarketReasoning,
+    autoResolved: autoResolved || [],
     trace: result.trace,
     usage: result.usage || null,
   };
@@ -248,9 +347,9 @@ async function tryCommit(roundId, round) {
     return;
   }
 
-  let predictions, summaries, result;
+  let predictions, summaries, result, autoResolved;
   try {
-    ({ predictions, summaries, result } = await predictRound(roundId, round));
+    ({ predictions, summaries, result, autoResolved } = await predictRound(roundId, round));
   } catch (err) {
     log(`Round ${roundId}: prediction failed (${err.message})`);
     return;
@@ -291,7 +390,7 @@ async function tryCommit(roundId, round) {
     // Optionally post reasoning to relayer
     if (RELAYER_URL) {
       try {
-        const payload = buildReasoningPayload({ roundId, summaries, result });
+        const payload = buildReasoningPayload({ roundId, summaries, result, autoResolved });
         const resp = await postReasoning({
           relayerUrl: RELAYER_URL,
           account,
