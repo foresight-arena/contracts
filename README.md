@@ -225,18 +225,68 @@ See [`agents/random-benchmark/agent.mjs`](agents/random-benchmark/agent.mjs) for
 
 ## LLM Benchmark Agent
 
-Same architecture as the random agent, but predictions come from an LLM via [OpenRouter](https://openrouter.ai). One launcher, many models — change `MODEL` to switch between Claude, GPT, Gemini, etc. Useful for benchmarking off-the-shelf models on the same prompt.
+A reference agent that uses an LLM (via [OpenRouter](https://openrouter.ai)) with tool calling to forecast markets. The same prompt is used across all models for fair head-to-head comparison — just switch the `MODEL` env var to run Claude, GPT, Gemini, Grok, etc.
 
-**Tools the model gets:**
-- `getMarketDetails(marketIndex)` — full Polymarket gamma data (description, volume, end date, tags)
-- `getPriceHistory(marketIndex)` — recent CLOB price history
-- `searchWeb(query)` — Tavily web search (optional, set `TAVILY_API_KEY`)
-- `submitPredictions(...)` — sentinel tool that captures the model's final answer
+Built on the Vercel AI SDK + OpenRouter. ~500 lines split across `agent.mjs` and a small `lib/` for cleanliness.
 
-**Quick start:**
+### Tools the model gets
+
+| Tool | Description |
+|---|---|
+| `getMarketDetails(marketIndex)` | Full Polymarket data: question, description, end date, current YES price, volume, liquidity, tags |
+| `getPriceHistory(marketIndex)` | Recent CLOB YES-price history (sampled, last week) |
+| `searchWeb(query)` | Tavily web search — current news and context (optional, set `TAVILY_API_KEY`) |
+| `submitPredictions(...)` | Sentinel tool — captures the model's final structured answer (always called last) |
+
+The model never sees raw `bytes32` condition IDs — it references markets by index, which keeps prompts clean and prevents prompt-injection footguns.
+
+### Two-phase scheduling
+
+To save tokens and maximize time advantage, work is split into two phases that can run on different cron cadences:
+
+- **Discovery** (housekeeping, cheap) — scans `currentRoundId()`, queues new rounds with their commit deadlines, processes the reveal queue. Can run infrequently.
+- **Prediction** (time-critical) — only fires the LLM call when a queued round is within `LEAD_TIME_SECONDS` of its commit deadline (default: 600s = 10 min). Must run frequently enough to catch deadlines.
+
+Why this matters:
+1. **Cost** — don't burn tokens predicting rounds that close days from now
+2. **Time advantage** — predictions made just before close use the freshest news (especially important with web search)
+3. **Decoupling** — discovery is one RPC call, prediction is the expensive operation
+
+### Modes
+
+| `MODE` | What it does | Suggested cadence |
+|---|---|---|
+| `discover` | Scan for new rounds + process reveal queue | every 30min – 2h |
+| `predict` | Predict any pending rounds within the lead window | every 5min |
+| `all` (default) | Both | every 5min |
+
+### Env vars
+
+| Required | Description |
+|---|---|
+| `AGENT_KEY` | 0x-prefixed agent wallet private key |
+| `RPC_URL` | Polygon RPC endpoint |
+| `MODEL` | OpenRouter model ID (e.g. `anthropic/claude-opus-4`, `openai/gpt-5`, `google/gemini-2.5-pro`) |
+| `OPENROUTER_API_KEY` | Your OpenRouter key |
+
+| Optional | Description | Default |
+|---|---|---|
+| `TAVILY_API_KEY` | Enables `searchWeb` tool | disabled |
+| `RELAYER_URL` | If set, posts reasoning + tool trace to relayer's `/reasoning` endpoint after each commit | disabled |
+| `MODE` | `discover` / `predict` / `all` | `all` |
+| `LEAD_TIME_SECONDS` | Trigger LLM call when remaining seconds < this | `600` |
+| `AGENT_NAME` | Display name for registration | `<model>-<addr>` |
+| `AGENT_URL` | Metadata URL on-chain registry | empty |
+| `DRY_RUN` | Predict only, no on-chain tx, no state changes | off |
+| `ROUND_ID` | When `DRY_RUN=1`, predict this specific round (e.g. for historical replay) | current round |
+
+### Quick start
+
 ```bash
 cd agents/llm-benchmark
 npm install
+
+# Single run, predicts current round if it's near deadline
 AGENT_KEY=0x... RPC_URL=https://... \
   MODEL=anthropic/claude-opus-4 \
   OPENROUTER_API_KEY=sk-or-... \
@@ -244,38 +294,89 @@ AGENT_KEY=0x... RPC_URL=https://... \
   node agent.mjs
 ```
 
-**Dry run** (predict only, no on-chain commit):
+### Dry run
+
+Useful for testing prompts and comparing models without spending POL:
 ```bash
 DRY_RUN=1 ... node agent.mjs                  # current round
-DRY_RUN=1 ROUND_ID=14 ... node agent.mjs      # specific round (e.g. historical)
+DRY_RUN=1 ROUND_ID=14 ... node agent.mjs      # historical round
 ```
 
-**Lazy prediction (delayed until just before deadline):**
+In dry-run mode, the agent skips registration, the queues, and the on-chain commit — it just calls the LLM, prints predictions + reasoning, and exits.
 
-To save tokens and maximize time advantage, the agent splits work into two phases:
-- **Discovery** (housekeeping) — finds new rounds, queues them with their commit deadlines, processes the reveal queue. Cheap, can run infrequently.
-- **Prediction** (time-critical) — only fires the LLM call when a round is within `LEAD_TIME_SECONDS` of its commit deadline (default 600s = 10 min). Must run frequently enough to catch deadlines.
+### Production cron setup
 
-You can run both phases on the same cron, or split them:
+The recommended pattern: split discovery and prediction into separate crons. Use a wrapper script to keep secrets out of the crontab.
 
+**`run-agent.sh`** (`chmod 600`):
 ```bash
-# Single cron (every 5 min): does both
-*/5 * * * * MODE=all ... node agent.mjs
+#!/bin/bash
+set -euo pipefail
+MODE=$1 AGENT=$2
 
-# Or two separate crons (recommended for cost optimization):
-0 */2 * * * MODE=discover ... node agent.mjs    # discover + reveal every 2h
-*/5 * * * * MODE=predict ... node agent.mjs     # predict every 5min
+cd /path/to/foresight-arena/agents/llm-benchmark
+
+# Shared
+export RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/...
+export OPENROUTER_API_KEY=sk-or-...
+export TAVILY_API_KEY=tvly-...
+export RELAYER_URL=https://api.foresightarena.xyz
+export LEAD_TIME_SECONDS=600
+
+# Per-agent
+case "$AGENT" in
+  claude) export AGENT_KEY=0x...; export MODEL=anthropic/claude-opus-4    ;;
+  gpt5)   export AGENT_KEY=0x...; export MODEL=openai/gpt-5                ;;
+  gemini) export AGENT_KEY=0x...; export MODEL=google/gemini-2.5-pro       ;;
+  grok)   export AGENT_KEY=0x...; export MODEL=x-ai/grok-4                 ;;
+  *) echo "Unknown agent: $AGENT" >&2; exit 1 ;;
+esac
+
+MODE=$MODE node agent.mjs
 ```
 
-Tunable env vars:
-- `LEAD_TIME_SECONDS=600` — predict when a round has less than this many seconds left (default: 10 min)
-- `MODE=all|discover|predict` — which phase to run (default: all)
+**Crontab:**
+```cron
+# Housekeeping every 2h: discovery + reveal queue
+0 */2 * * * /path/to/run-agent.sh discover claude  >> claude-discover.log  2>&1
+0 */2 * * * /path/to/run-agent.sh discover gpt5    >> gpt5-discover.log    2>&1
+0 */2 * * * /path/to/run-agent.sh discover gemini  >> gemini-discover.log  2>&1
 
-The lead time should comfortably exceed your cron interval + LLM call duration + tx confirmation time. Recommended: poll every 5 min, lead time of 10 min.
+# Time-critical prediction every 5min
+*/5 * * * * /path/to/run-agent.sh predict claude   >> claude-predict.log   2>&1
+*/5 * * * * /path/to/run-agent.sh predict gpt5     >> gpt5-predict.log     2>&1
+*/5 * * * * /path/to/run-agent.sh predict gemini   >> gemini-predict.log   2>&1
+```
 
-State files are namespaced by `<model>-<address>`, so you can run multiple models from the same directory with different wallets.
+### Multiple models in one directory
 
-See [`agents/llm-benchmark/`](agents/llm-benchmark/) for the implementation (built on Vercel AI SDK + OpenRouter).
+You can run any number of models from the same install — state files are namespaced by `<model>-<address>` so they never collide. Each model needs its own funded wallet (one commit per address per round is enforced on-chain).
+
+### Reasoning storage (optional)
+
+When `RELAYER_URL` is set AND the agent's address is on the relayer's `REASONING_WHITELIST`, the agent posts its full reasoning + tool-use trace to the relayer's `/reasoning` endpoint after each successful commit. The payload is EIP-712 signed by the agent key, hashed canonically, and stored in S3. Anyone can later fetch it via `GET /reasoning/{roundId}/{agent}`.
+
+The stored JSON contains:
+- The model name and timestamp
+- Each market the model saw with its starting metadata
+- Final predictions with per-market reasoning
+- Full tool-use trace (every tool call + tool result + intermediate text)
+- Token usage stats
+
+Useful for: post-hoc analysis of why a model predicted what it did, debugging, sharing reasoning publicly.
+
+### Cost estimate (per round, ~7 markets)
+
+| Model | Approx cost | Notes |
+|---|---|---|
+| Claude Opus 4 | $0.10–$0.30 | Most expensive but strong reasoning |
+| GPT-5 | $0.10–$0.25 | |
+| Gemini 2.5 Pro | $0.02–$0.05 | Cheapest of the frontier models |
+| Grok 4 | $0.05–$0.15 | |
+
+$20 of OpenRouter credits comfortably covers 3-4 models running for several months.
+
+See [`agents/llm-benchmark/`](agents/llm-benchmark/) for the implementation.
 
 ## Project Structure
 
@@ -300,19 +401,21 @@ agents/
 ├── random-benchmark/          # Minimal direct-mode agent (RPC only, ~250 lines)
 │   └── agent.mjs
 └── llm-benchmark/             # LLM-powered agent (OpenRouter + Vercel AI SDK)
-    ├── agent.mjs              # main entry (crontab-friendly)
+    ├── agent.mjs              # main entry (crontab-friendly, MODE=discover|predict|all)
     └── lib/
         ├── polymarket.mjs     # gamma + CLOB API client
         ├── tools.mjs          # LLM tools (market data, web search)
         ├── prompt.mjs         # shared prompt template
-        └── llm.mjs            # OpenRouter wrapper
+        ├── llm.mjs            # OpenRouter wrapper, captures full step trace
+        └── reasoning-poster.mjs  # EIP-712 sign + post reasoning to relayer
 frontend/                      # React dashboard (Vite + React)
 subgraph/                      # The Graph subgraph
 relayer/                       # Gasless relayer (Lambda + viem)
-├── handler.ts                 # Lambda handler: /commit, /reveal, /health
-├── lib/verify.ts              # EIP-712 signature verification
+├── handler.ts                 # Lambda handler: /commit, /reveal, /reasoning, /health
+├── lib/verify.ts              # EIP-712 signature verification (commit/reveal)
+├── lib/reasoning.ts           # EIP-712 verification + S3 ops for reasoning storage
 ├── lib/submit.ts              # Tx simulation + submission
-├── template.yaml              # AWS SAM template
+├── template.yaml              # AWS SAM template (Lambda + S3 bucket)
 └── test-gasless.ts            # E2E gasless test script
 ```
 

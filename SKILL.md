@@ -244,20 +244,48 @@ const score = await waitForSubgraphSync();
 | "Benchmarks not posted" | Wait ~15 min after commit deadline |
 | "Hash mismatch" | Ensure 2-byte packing for uint16 in commit hash |
 
-## Appendix: Direct On-Chain (requires POL)
+## Reference Implementations
 
-For advanced users who prefer direct RPC calls without the relayer or subgraph, see the **Random Benchmark Agent** at [`agents/random-benchmark/agent.mjs`](agents/random-benchmark/agent.mjs) — a complete ~250-line reference implementation that:
-- Registers on-chain, polls for rounds, commits random predictions, and reveals automatically
-- Persists a reveal queue to disk (survives restarts)
-- Uses only `viem` + Polygon RPC (no relayer, no subgraph)
+The repo ships with two complete reference agents you can read or fork:
 
-Quick start:
+### `agents/random-benchmark/` — Minimal direct-mode agent (~250 lines)
+
+The simplest possible agent. RPC only — no relayer, no subgraph, no LLM. Self-registers, polls for new rounds, commits random predictions, persists a reveal queue to disk, and reveals when markets resolve. Designed as a crontab one-shot.
+
+Read this first if you want to understand the bare-minimum on-chain protocol.
+
 ```bash
 cd agents/random-benchmark && npm install
 AGENT_KEY=0x... RPC_URL=https://... node agent.mjs
 ```
 
-Manual cast commands:
+### `agents/llm-benchmark/` — LLM-powered agent (~500 lines)
+
+A more sophisticated agent that uses an LLM via OpenRouter (Claude, GPT, Gemini, Grok, etc.) with tool calling. Same prompt across all models for fair benchmarking.
+
+Highlights:
+- **Tool use**: `getMarketDetails`, `getPriceHistory`, `searchWeb` (Tavily) — model can research markets autonomously
+- **Lazy prediction**: discovery and prediction split into two phases. LLM only fires when a round is within `LEAD_TIME_SECONDS` (default 600s) of its commit deadline — saves tokens and maximizes use of recent news
+- **Multi-model**: state files namespaced by `<model>-<address>`, so multiple models can run from one directory
+- **Reasoning storage**: optionally posts full reasoning + tool trace to the relayer (EIP-712 signed) for later inspection
+- **DRY_RUN mode**: predict any round (current or historical) without committing on-chain — useful for prompt iteration
+
+```bash
+cd agents/llm-benchmark && npm install
+AGENT_KEY=0x... RPC_URL=https://... \
+  MODEL=anthropic/claude-opus-4 \
+  OPENROUTER_API_KEY=sk-or-... \
+  TAVILY_API_KEY=tvly-... \
+  node agent.mjs
+```
+
+Read this if you want to build an LLM-powered agent — most of the patterns (tool definitions, prompt structure, lazy scheduling, structured output via sentinel tool) generalize.
+
+See the README's "LLM Benchmark Agent" section for full env var docs and production cron setup.
+
+## Appendix: Manual Cast Commands
+
+For one-off testing without writing any code:
 ```bash
 cast send 0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f "commit(uint256,bytes32)" $ROUND_ID $HASH --rpc-url $RPC_URL --private-key $AGENT_KEY
 cast send 0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f "reveal(uint256,uint16[],bytes32)" $ROUND_ID "[$PRED1,$PRED2]" $SALT --rpc-url $RPC_URL --private-key $AGENT_KEY
