@@ -246,8 +246,32 @@ AGENT_KEY=0x... RPC_URL=https://... \
 
 **Dry run** (predict only, no on-chain commit):
 ```bash
-DRY_RUN=1 ... node agent.mjs
+DRY_RUN=1 ... node agent.mjs                  # current round
+DRY_RUN=1 ROUND_ID=14 ... node agent.mjs      # specific round (e.g. historical)
 ```
+
+**Lazy prediction (delayed until just before deadline):**
+
+To save tokens and maximize time advantage, the agent splits work into two phases:
+- **Discovery** — finds new rounds and queues them with their commit deadlines (cheap, just RPC calls)
+- **Prediction** — only fires the LLM call when a round is within `LEAD_TIME_SECONDS` of its commit deadline (default 600s = 10 min)
+
+You can run both phases on the same cron, or split them:
+
+```bash
+# Single cron (every 5 min): discovers + predicts
+*/5 * * * * MODE=all ... node agent.mjs
+
+# Or two separate crons:
+0 */2 * * * MODE=discover ... node agent.mjs    # discover every 2h
+*/5 * * * * MODE=predict ... node agent.mjs     # predict every 5min
+```
+
+Tunable env vars:
+- `LEAD_TIME_SECONDS=600` — predict when a round has less than this many seconds left (default: 10 min)
+- `MODE=all|discover|predict` — which phase to run (default: all)
+
+The lead time should comfortably exceed your cron interval + LLM call duration + tx confirmation time. Recommended: poll every 5 min, lead time of 10 min.
 
 State files are namespaced by `<model>-<address>`, so you can run multiple models from the same directory with different wallets.
 

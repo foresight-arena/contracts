@@ -15,6 +15,8 @@
  *   DRY_RUN=1                (predict only, do not commit on-chain)
  *   ROUND_ID=42              (only used in DRY_RUN; default: current round)
  *   RELAYER_URL=https://...  (if set, posts reasoning JSON to /reasoning endpoint)
+ *   MODE=all                 (discover|predict|all — default: all)
+ *   LEAD_TIME_SECONDS=600    (predict when remaining < this many seconds; default 600 = 10m)
  *
  * Crontab example (every 2 hours):
  *   0 *\/2 * * * cd /path/to/agents/llm-benchmark && AGENT_KEY=... RPC_URL=... MODEL=... OPENROUTER_API_KEY=... node agent.mjs >> agent.log 2>&1
@@ -57,6 +59,11 @@ const AGENT_URL = process.env.AGENT_URL || '';
 const TAVILY_KEY = process.env.TAVILY_API_KEY || '';
 const ROUND_ID_OVERRIDE = process.env.ROUND_ID ? BigInt(process.env.ROUND_ID) : null;
 const RELAYER_URL = process.env.RELAYER_URL || '';
+const MODE = (process.env.MODE || 'all').toLowerCase();
+const LEAD_TIME_SECONDS = Number(process.env.LEAD_TIME_SECONDS || 600);
+if (!['discover', 'predict', 'all'].includes(MODE)) {
+  throw new Error(`Invalid MODE: ${MODE} (must be discover|predict|all)`);
+}
 
 const ADDRESSES = {
   arena: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f',
@@ -105,6 +112,7 @@ if (!existsSync(STATE_DIR)) mkdirSync(STATE_DIR, { recursive: true });
 
 const slug = `${MODEL.replace(/[\/:]/g, '_')}-${account.address.toLowerCase()}`;
 const QUEUE_PATH = join(STATE_DIR, `reveal-queue-${slug}.json`);
+const PENDING_PATH = join(STATE_DIR, `pending-predictions-${slug}.json`);
 const STATE_PATH = join(STATE_DIR, `state-${slug}.json`);
 
 function loadQueue() {
@@ -115,6 +123,16 @@ function loadQueue() {
 
 function saveQueue(queue) {
   writeFileSync(QUEUE_PATH, JSON.stringify(queue, null, 2));
+}
+
+function loadPending() {
+  if (!existsSync(PENDING_PATH)) return [];
+  try { return JSON.parse(readFileSync(PENDING_PATH, 'utf-8')); }
+  catch { return []; }
+}
+
+function savePending(pending) {
+  writeFileSync(PENDING_PATH, JSON.stringify(pending, null, 2));
 }
 
 function loadState() {
@@ -361,32 +379,111 @@ async function processRevealQueue() {
   saveQueue(remaining);
 }
 
+// ─── Discovery & Pending Predictions ──────────────────────────────────────────
+
+async function discoverNewRounds() {
+  const state = loadState();
+  let lastSeenRound = BigInt(state.lastSeenRound || 0);
+  const currentRound = await roundManager.read.currentRoundId();
+
+  if (lastSeenRound === 0n) {
+    log(`First run, starting from round ${currentRound}`);
+    lastSeenRound = currentRound - 1n; // include current round in scan
+  }
+
+  if (currentRound <= lastSeenRound) {
+    log(`No new rounds (current: ${currentRound})`);
+    return;
+  }
+
+  const pending = loadPending();
+  const known = new Set(pending.map((p) => p.roundId));
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  let added = 0;
+
+  for (let id = lastSeenRound + 1n; id <= currentRound; id++) {
+    if (known.has(Number(id))) continue;
+    const round = await roundManager.read.getRound([id]);
+
+    if (round.invalidated) {
+      log(`Round ${id}: invalidated, skipping`);
+      continue;
+    }
+    if (round.conditionIds.length === 0) {
+      log(`Round ${id}: empty, skipping`);
+      continue;
+    }
+    if (now >= round.commitDeadline) {
+      log(`Round ${id}: commit deadline already passed, skipping`);
+      continue;
+    }
+
+    pending.push({
+      roundId: Number(id),
+      commitDeadline: Number(round.commitDeadline),
+      discoveredAt: new Date().toISOString(),
+    });
+    added++;
+    log(`Discovered round ${id} (commit deadline ${new Date(Number(round.commitDeadline) * 1000).toISOString()})`);
+  }
+
+  savePending(pending);
+  saveState({ lastSeenRound: currentRound.toString() });
+  if (added > 0) log(`Added ${added} round(s) to pending queue (total pending: ${pending.length})`);
+}
+
+async function processPendingPredictions() {
+  const pending = loadPending();
+  if (pending.length === 0) return;
+
+  const now = Math.floor(Date.now() / 1000);
+  const remaining = [];
+
+  for (const entry of pending) {
+    const { roundId, commitDeadline } = entry;
+    const remainingSec = commitDeadline - now;
+
+    // Drop expired rounds
+    if (remainingSec <= 0) {
+      log(`Round ${roundId}: commit deadline passed, dropping from pending`);
+      continue;
+    }
+
+    // Not yet within lead window — leave in queue
+    if (remainingSec > LEAD_TIME_SECONDS) {
+      log(`Round ${roundId}: ${remainingSec}s until commit deadline (>${LEAD_TIME_SECONDS}s lead), waiting`);
+      remaining.push(entry);
+      continue;
+    }
+
+    // Within lead window — fetch fresh round and commit
+    log(`Round ${roundId}: ${remainingSec}s until deadline, predicting now`);
+    const round = await roundManager.read.getRound([BigInt(roundId)]);
+    if (round.invalidated) {
+      log(`Round ${roundId}: invalidated since discovery, dropping`);
+      continue;
+    }
+    await tryCommit(roundId, round);
+    // Always drop from pending after attempt — if commit failed, we don't retry
+    // (deadline is too close to risk hitting it again)
+  }
+
+  savePending(remaining);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
   log(`Agent: ${account.address}`);
   log(`Model: ${MODEL}`);
+  log(`Mode: ${MODE}`);
+  log(`Lead time: ${LEAD_TIME_SECONDS}s`);
   log(`Web search: ${TAVILY_KEY ? 'enabled' : 'disabled'}`);
   if (DRY_RUN) log(`DRY RUN — no on-chain transactions will be sent`);
 
-  if (!DRY_RUN) {
-    await ensureRegistered();
-  }
-
-  // 1. Process reveal queue
-  await processRevealQueue();
-
-  // 2. Check for new rounds
-  const state = loadState();
-  let lastSeenRound = BigInt(state.lastSeenRound || 0);
-  const currentRound = await roundManager.read.currentRoundId();
-
-  if (lastSeenRound === 0n && !DRY_RUN) {
-    log(`First run, starting from round ${currentRound}`);
-    lastSeenRound = currentRound;
-  }
-
+  // DRY_RUN bypasses all queue logic and predicts a single round directly
   if (DRY_RUN) {
+    const currentRound = await roundManager.read.currentRoundId();
     const targetRound = ROUND_ID_OVERRIDE ?? currentRound;
     log(`Predicting round ${targetRound}${ROUND_ID_OVERRIDE ? ' (override)' : ''}...`);
     const round = await roundManager.read.getRound([targetRound]);
@@ -395,18 +492,23 @@ async function main() {
       return;
     }
     await tryCommit(Number(targetRound), round);
-  } else if (currentRound > lastSeenRound) {
-    for (let id = lastSeenRound + 1n; id <= currentRound; id++) {
-      const round = await roundManager.read.getRound([id]);
-      await tryCommit(Number(id), round);
-    }
-  } else {
-    log(`No new rounds (current: ${currentRound})`);
+    log('Done.');
+    return;
   }
 
-  if (!DRY_RUN) {
-    saveState({ lastSeenRound: currentRound.toString() });
+  await ensureRegistered();
+
+  // predict mode: process pending predictions queue + reveal queue
+  if (MODE === 'predict' || MODE === 'all') {
+    await processRevealQueue();
+    await processPendingPredictions();
   }
+
+  // discover mode: scan for new rounds and add them to pending queue
+  if (MODE === 'discover' || MODE === 'all') {
+    await discoverNewRounds();
+  }
+
   log('Done.');
 }
 
