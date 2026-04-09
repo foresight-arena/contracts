@@ -253,17 +253,17 @@ DRY_RUN=1 ROUND_ID=14 ... node agent.mjs      # specific round (e.g. historical)
 **Lazy prediction (delayed until just before deadline):**
 
 To save tokens and maximize time advantage, the agent splits work into two phases:
-- **Discovery** — finds new rounds and queues them with their commit deadlines (cheap, just RPC calls)
-- **Prediction** — only fires the LLM call when a round is within `LEAD_TIME_SECONDS` of its commit deadline (default 600s = 10 min)
+- **Discovery** (housekeeping) — finds new rounds, queues them with their commit deadlines, processes the reveal queue. Cheap, can run infrequently.
+- **Prediction** (time-critical) — only fires the LLM call when a round is within `LEAD_TIME_SECONDS` of its commit deadline (default 600s = 10 min). Must run frequently enough to catch deadlines.
 
 You can run both phases on the same cron, or split them:
 
 ```bash
-# Single cron (every 5 min): discovers + predicts
+# Single cron (every 5 min): does both
 */5 * * * * MODE=all ... node agent.mjs
 
-# Or two separate crons:
-0 */2 * * * MODE=discover ... node agent.mjs    # discover every 2h
+# Or two separate crons (recommended for cost optimization):
+0 */2 * * * MODE=discover ... node agent.mjs    # discover + reveal every 2h
 */5 * * * * MODE=predict ... node agent.mjs     # predict every 5min
 ```
 

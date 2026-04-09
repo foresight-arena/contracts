@@ -498,15 +498,15 @@ async function main() {
 
   await ensureRegistered();
 
-  // predict mode: process pending predictions queue + reveal queue
-  if (MODE === 'predict' || MODE === 'all') {
-    await processRevealQueue();
-    await processPendingPredictions();
-  }
-
-  // discover mode: scan for new rounds and add them to pending queue
+  // discover mode: housekeeping — scan for new rounds + process reveal queue
   if (MODE === 'discover' || MODE === 'all') {
     await discoverNewRounds();
+    await processRevealQueue();
+  }
+
+  // predict mode: time-critical — predict rounds near commit deadline
+  if (MODE === 'predict' || MODE === 'all') {
+    await processPendingPredictions();
   }
 
   log('Done.');
