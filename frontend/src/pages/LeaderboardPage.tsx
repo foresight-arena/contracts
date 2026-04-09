@@ -4,6 +4,7 @@ import { useDataContext } from '../context/DataContext';
 import TimeFilter from '../components/TimeFilter';
 import LoadingSpinner from '../components/LoadingSpinner';
 import type { TimePeriod, LeaderboardEntry } from '../types';
+import { isBenchmarkAgent } from '../config/benchmarks';
 
 function truncAddr(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
@@ -142,13 +143,21 @@ export default function LeaderboardPage() {
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry, idx) => (
-                <tr key={entry.address}>
+              {entries.map((entry, idx) => {
+                const isBenchmark = isBenchmarkAgent(entry.address);
+                return (
+                <tr key={entry.address} className={isBenchmark ? 'benchmark-row' : undefined}>
                   <td>{idx + 1}</td>
                   <td>
                     {entry.name ? (
                       <span>
                         <span style={{ fontWeight: 600 }}>{entry.name}</span>
+                        {isBenchmark && (
+                          <>
+                            {' '}
+                            <span className="badge benchmark" title="Benchmark agent">benchmark</span>
+                          </>
+                        )}
                         {entry.url && (
                           <>
                             {' '}
@@ -166,7 +175,15 @@ export default function LeaderboardPage() {
                         <a href={`https://polygonscan.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer" className="address">{truncAddr(entry.address)}</a>
                       </span>
                     ) : (
-                      <a href={`https://polygonscan.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer" className="address">{truncAddr(entry.address)}</a>
+                      <span>
+                        <a href={`https://polygonscan.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer" className="address">{truncAddr(entry.address)}</a>
+                        {isBenchmark && (
+                          <>
+                            {' '}
+                            <span className="badge benchmark" title="Benchmark agent">benchmark</span>
+                          </>
+                        )}
+                      </span>
                     )}
                   </td>
                   <td className="mono">{formatBrier(entry.avgBrierScore)}</td>
@@ -176,7 +193,8 @@ export default function LeaderboardPage() {
                     {formatTs(entry.lastActive)}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

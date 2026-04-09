@@ -5,6 +5,7 @@ import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { fetchMarketMetadata, type PolymarketInfo } from '../services/polymarket';
 import type { AgentRoundData } from '../types';
+import { isBenchmarkAgent } from '../config/benchmarks';
 
 function formatCountdown(endDate: string | null): { text: string; isCountdown: boolean } {
   if (!endDate) return { text: '--', isCountdown: false };
@@ -263,12 +264,19 @@ export default function RoundDetailPage() {
               <tbody>
                 {agentEntries.map((agent: AgentRoundData) => {
                   const info = agentMap.get(agent.address.toLowerCase());
+                  const isBenchmark = isBenchmarkAgent(agent.address);
                   return (
-                    <tr key={agent.address}>
+                    <tr key={agent.address} className={isBenchmark ? 'benchmark-row' : undefined}>
                       <td>
                         {info?.name ? (
                           <span>
                             <span style={{ fontWeight: 600 }}>{info.name}</span>
+                            {isBenchmark && (
+                              <>
+                                {' '}
+                                <span className="badge benchmark" title="Benchmark agent">benchmark</span>
+                              </>
+                            )}
                             {info.url && (
                               <>
                                 {' '}
@@ -293,14 +301,22 @@ export default function RoundDetailPage() {
                             </a>
                           </span>
                         ) : (
-                          <a
-                            href={`https://polygonscan.com/address/${agent.address}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="address"
-                          >
-                            {truncAddr(agent.address)}
-                          </a>
+                          <span>
+                            <a
+                              href={`https://polygonscan.com/address/${agent.address}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="address"
+                            >
+                              {truncAddr(agent.address)}
+                            </a>
+                            {isBenchmark && (
+                              <>
+                                {' '}
+                                <span className="badge benchmark" title="Benchmark agent">benchmark</span>
+                              </>
+                            )}
+                          </span>
                         )}
                       </td>
                       <td>
