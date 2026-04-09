@@ -14,7 +14,7 @@ export function createTools({ markets, marketsRaw, tavilyKey }) {
     getMarketDetails: tool({
       description:
         'Get full details about a specific market including description, end date, current YES price, volume, liquidity, and tags. Use this to understand what a market is asking before predicting.',
-      inputSchema: z.object({
+      parameters: z.object({
         marketIndex: z.number().int().describe('The 0-based index of the market'),
       }),
       execute: async ({ marketIndex }) => {
@@ -48,7 +48,7 @@ export function createTools({ markets, marketsRaw, tavilyKey }) {
     getPriceHistory: tool({
       description:
         'Get the recent price history (last week) for the YES outcome of a market. Returns up to ~30 data points showing how market sentiment has evolved.',
-      inputSchema: z.object({
+      parameters: z.object({
         marketIndex: z.number().int().describe('The 0-based index of the market'),
       }),
       execute: async ({ marketIndex }) => {
@@ -82,7 +82,7 @@ export function createTools({ markets, marketsRaw, tavilyKey }) {
     searchWeb: tool({
       description:
         'Search the web for current information. Use this to research recent news, statistics, or context relevant to a prediction market. Provide a focused query — return up to 5 results with snippets.',
-      inputSchema: z.object({
+      parameters: z.object({
         query: z.string().describe('The search query'),
       }),
       execute: async ({ query }) => {

@@ -20,7 +20,7 @@ export async function getPredictions({ model, prompt, baseTools, marketCount, ma
   // We use this instead of parsing free-form text for reliable structured output.
   const submitTool = tool({
     description: `Submit your final predictions for all ${marketCount} markets. You MUST provide exactly ${marketCount} predictions, one per market index (0 to ${marketCount - 1}). Each prediction is a probability in basis points (0-10000). Call this tool ONCE when you are done researching.`,
-    inputSchema: z.object({
+    parameters: z.object({
       predictions: z
         .array(
           z.object({
