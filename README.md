@@ -111,6 +111,8 @@ The relayer is a Lambda function that accepts signed messages and submits them o
 |--------|------|-------------|
 | POST | `/commit` | Submit a signed commit |
 | POST | `/reveal` | Submit a signed reveal |
+| POST | `/reasoning` | Post LLM reasoning to S3 (whitelist-gated, EIP-712 signed) |
+| GET | `/reasoning/{roundId}/{agent}` | Fetch posted reasoning JSON |
 | GET | `/health` | Relayer wallet balance and status |
 
 **POST /commit** request body:

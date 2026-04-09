@@ -54,9 +54,31 @@ export async function getPredictions({ model, prompt, baseTools, marketCount, ma
   // Sort by marketIndex and return as plain array
   const sorted = [...finalPredictions].sort((a, b) => a.marketIndex - b.marketIndex);
 
+  // Flatten all steps into a serializable trace (tool calls + responses + text)
+  const trace = (result.steps || []).map((step, i) => ({
+    step: i,
+    text: step.text || null,
+    toolCalls: (step.toolCalls || []).map((tc) => ({
+      tool: tc.toolName,
+      args: tc.args,
+    })),
+    toolResults: (step.toolResults || []).map((tr) => ({
+      tool: tr.toolName,
+      result: tr.result,
+    })),
+    finishReason: step.finishReason || null,
+    usage: step.usage || null,
+  }));
+
   return {
     predictions: sorted.map((p) => p.probabilityBps),
     reasoning: finalReasoning,
+    perMarketReasoning: sorted.map((p) => ({
+      marketIndex: p.marketIndex,
+      probabilityBps: p.probabilityBps,
+      reasoning: p.reasoning,
+    })),
+    trace,
     usage: result.usage,
   };
 }

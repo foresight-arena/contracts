@@ -14,6 +14,7 @@
  *   AGENT_URL=https://...    (optional metadata URL)
  *   DRY_RUN=1                (predict only, do not commit on-chain)
  *   ROUND_ID=42              (only used in DRY_RUN; default: current round)
+ *   RELAYER_URL=https://...  (if set, posts reasoning JSON to /reasoning endpoint)
  *
  * Crontab example (every 2 hours):
  *   0 *\/2 * * * cd /path/to/agents/llm-benchmark && AGENT_KEY=... RPC_URL=... MODEL=... OPENROUTER_API_KEY=... node agent.mjs >> agent.log 2>&1
@@ -38,6 +39,7 @@ import { getMarkets, summarizeMarket } from './lib/polymarket.mjs';
 import { createTools } from './lib/tools.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { getPredictions } from './lib/llm.mjs';
+import { postReasoning } from './lib/reasoning-poster.mjs';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -54,6 +56,7 @@ const AGENT_NAME = process.env.AGENT_NAME;
 const AGENT_URL = process.env.AGENT_URL || '';
 const TAVILY_KEY = process.env.TAVILY_API_KEY || '';
 const ROUND_ID_OVERRIDE = process.env.ROUND_ID ? BigInt(process.env.ROUND_ID) : null;
+const RELAYER_URL = process.env.RELAYER_URL || '';
 
 const ADDRESSES = {
   arena: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f',
@@ -197,7 +200,21 @@ async function predictRound(roundId, round) {
     log(`Reasoning:\n${result.reasoning}`);
   }
 
-  return result.predictions;
+  return { predictions: result.predictions, summaries, result };
+}
+
+function buildReasoningPayload({ roundId, summaries, result }) {
+  return {
+    roundId,
+    agent: account.address,
+    model: MODEL,
+    timestamp: new Date().toISOString(),
+    markets: summaries,
+    predictions: result.predictions,
+    perMarketReasoning: result.perMarketReasoning,
+    trace: result.trace,
+    usage: result.usage || null,
+  };
 }
 
 // ─── Commit ───────────────────────────────────────────────────────────────────
@@ -213,9 +230,9 @@ async function tryCommit(roundId, round) {
     return;
   }
 
-  let predictions;
+  let predictions, summaries, result;
   try {
-    predictions = await predictRound(roundId, round);
+    ({ predictions, summaries, result } = await predictRound(roundId, round));
   } catch (err) {
     log(`Round ${roundId}: prediction failed (${err.message})`);
     return;
@@ -252,6 +269,23 @@ async function tryCommit(roundId, round) {
     queue.push({ roundId, predictions, salt, commitHash, committedAt: new Date().toISOString() });
     saveQueue(queue);
     log(`Queued reveal for round ${roundId}`);
+
+    // Optionally post reasoning to relayer
+    if (RELAYER_URL) {
+      try {
+        const payload = buildReasoningPayload({ roundId, summaries, result });
+        const resp = await postReasoning({
+          relayerUrl: RELAYER_URL,
+          account,
+          arenaAddress: ADDRESSES.arena,
+          roundId,
+          content: payload,
+        });
+        log(`Reasoning posted: ${resp.key} (${resp.size} bytes)`);
+      } catch (err) {
+        log(`Reasoning post failed: ${err.message}`);
+      }
+    }
   } catch (err) {
     log(`Commit failed: ${err.message}`);
   }

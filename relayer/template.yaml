@@ -23,8 +23,27 @@ Parameters:
   AgentRegistryAddress:
     Type: String
     Default: '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637'
+  ReasoningWhitelist:
+    Type: String
+    Default: ''
+    Description: Comma-separated list of agent addresses allowed to post reasoning
 
 Resources:
+  ReasoningBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'foresight-arena-reasoning-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireAfter1Year
+            Status: Enabled
+            ExpirationInDays: 365
+
   RelayerFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -43,6 +62,11 @@ Resources:
           PREDICTION_ARENA_ADDRESS: !Ref PredictionArenaAddress
           ROUND_MANAGER_ADDRESS: !Ref RoundManagerAddress
           AGENT_REGISTRY_ADDRESS: !Ref AgentRegistryAddress
+          REASONING_BUCKET: !Ref ReasoningBucket
+          REASONING_WHITELIST: !Ref ReasoningWhitelist
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref ReasoningBucket
       FunctionUrlConfig:
         AuthType: NONE
       Events:
