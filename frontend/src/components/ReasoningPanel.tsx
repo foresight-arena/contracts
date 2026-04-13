@@ -124,7 +124,7 @@ export default function ReasoningPanel({ roundId, agent }: Props) {
   }, [open, fetched, roundId, agent]);
 
   return (
-    <div>
+    <span>
       <button
         onClick={() => setOpen(!open)}
         style={{
@@ -134,9 +134,10 @@ export default function ReasoningPanel({ roundId, agent }: Props) {
           border: 'none',
           cursor: 'pointer',
           padding: 0,
+          verticalAlign: 'baseline',
         }}
       >
-        {open ? '[-] hide reasoning' : '[+] show reasoning'}
+        {open ? '[-] hide reasoning' : '[+] reasoning'}
       </button>
 
       {open && (
@@ -184,6 +185,6 @@ export default function ReasoningPanel({ roundId, agent }: Props) {
           </div>
         )
       )}
-    </div>
+    </span>
   );
 }

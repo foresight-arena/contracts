@@ -348,15 +348,16 @@ export default function RoundDetailPage() {
                       </td>
                       <td className="mono">{agent.brierScore ? formatBrier(agent.brierScore) : '--'}</td>
                       <td className="mono">{agent.alphaScore != null && agent.scoredMarkets > 0 ? formatAlpha(agent.alphaScore) : '--'}</td>
-                      <td>{agent.revealed ? agent.scoredMarkets : '--'}</td>
+                      <td>
+                        {agent.revealed ? agent.scoredMarkets : '--'}
+                        {isBenchmark && agent.revealed && (
+                          <>
+                            {' '}
+                            <ReasoningPanel roundId={round.roundId} agent={agent.address} />
+                          </>
+                        )}
+                      </td>
                     </tr>
-                    {isBenchmark && agent.revealed && (
-                      <tr className="benchmark-row">
-                        <td colSpan={6} style={{ padding: '0 var(--space-md) var(--space-sm)' }}>
-                          <ReasoningPanel roundId={round.roundId} agent={agent.address} />
-                        </td>
-                      </tr>
-                    )}
                   </React.Fragment>
                   );
                 })}
