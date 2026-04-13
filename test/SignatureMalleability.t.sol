@@ -102,8 +102,13 @@ contract SignatureMalleabilityTest is Test {
         conditionIds[0] = keccak256("market_0");
         conditionIds[1] = keccak256("market_1");
         vm.prank(curator);
-        uint256 roundId =
-            roundManager.createRound(conditionIds, uint64(block.timestamp) + 2 hours, uint64(block.timestamp) + 4 hours, uint64(block.timestamp) + 17 hours, 1);
+        uint256 roundId = roundManager.createRound(
+            conditionIds,
+            uint64(block.timestamp) + 2 hours,
+            uint64(block.timestamp) + 4 hours,
+            uint64(block.timestamp) + 17 hours,
+            1
+        );
 
         bytes32 commitHash = keccak256("commit_data");
         uint256 deadline = block.timestamp + 1 hours;
