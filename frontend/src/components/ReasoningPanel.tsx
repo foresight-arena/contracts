@@ -160,14 +160,14 @@ export default function ReasoningPanel({ roundId, agent }: Props) {
               </span>
             </div>
 
-            {data.autoResolved.length > 0 && (
+            {data.autoResolved?.length > 0 && (
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
                 Auto-resolved: {data.autoResolved.map((a) => `Market ${a.index} = ${a.outcome}`).join(', ')}
               </div>
             )}
 
             <div style={sectionTitleStyle}>Per-Market Reasoning</div>
-            {data.perMarketReasoning.map((r) => (
+            {(data.perMarketReasoning || []).map((r) => (
               <div key={r.marketIndex} style={reasoningItemStyle}>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                   [{r.marketIndex}] {formatBps(r.probabilityBps)}
