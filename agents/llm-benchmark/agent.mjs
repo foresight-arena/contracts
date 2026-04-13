@@ -382,27 +382,14 @@ async function tryCommit(roundId, round) {
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     log(`Committed in tx ${receipt.transactionHash}`);
 
+    const reasoningPayload = RELAYER_URL
+      ? buildReasoningPayload({ roundId, summaries, result, autoResolved })
+      : undefined;
+
     const queue = loadQueue();
-    queue.push({ roundId, predictions, salt, commitHash, committedAt: new Date().toISOString() });
+    queue.push({ roundId, predictions, salt, commitHash, committedAt: new Date().toISOString(), reasoningPayload });
     saveQueue(queue);
     log(`Queued reveal for round ${roundId}`);
-
-    // Optionally post reasoning to relayer
-    if (RELAYER_URL) {
-      try {
-        const payload = buildReasoningPayload({ roundId, summaries, result, autoResolved });
-        const resp = await postReasoning({
-          relayerUrl: RELAYER_URL,
-          account,
-          arenaAddress: ADDRESSES.arena,
-          roundId,
-          content: payload,
-        });
-        log(`Reasoning posted: ${resp.key} (${resp.size} bytes)`);
-      } catch (err) {
-        log(`Reasoning post failed: ${err.message}`);
-      }
-    }
   } catch (err) {
     log(`Commit failed: ${err.message}`);
   }
@@ -465,6 +452,22 @@ async function processRevealQueue() {
       const hash = await walletClient.writeContract(request);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       log(`Revealed round ${roundId} in tx ${receipt.transactionHash}`);
+
+      // Post reasoning after reveal (not before — don't leak predictions)
+      if (RELAYER_URL && entry.reasoningPayload) {
+        try {
+          const resp = await postReasoning({
+            relayerUrl: RELAYER_URL,
+            account,
+            arenaAddress: ADDRESSES.arena,
+            roundId,
+            content: entry.reasoningPayload,
+          });
+          log(`Reasoning posted: ${resp.key} (${resp.size} bytes)`);
+        } catch (err) {
+          log(`Reasoning post failed: ${err.message}`);
+        }
+      }
     } catch (err) {
       if (err.message.includes('Already revealed')) {
         log(`Round ${roundId}: already revealed, dropping`);
