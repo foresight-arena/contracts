@@ -90,7 +90,7 @@ function ToolCallTrace({ trace }: { trace: TraceStep[] }) {
             {JSON.stringify(tc.args)}
           </span>
           <span style={{ color: 'var(--text-muted)' }}>)</span>
-          {tc.result && (
+          {tc.result != null && (
             <details style={{ marginTop: 2 }}>
               <summary style={{ color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.6875rem' }}>
                 result
