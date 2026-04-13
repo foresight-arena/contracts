@@ -1,10 +1,12 @@
-import { useState, useEffect, type CSSProperties } from 'react';
+import React, { useState, useEffect, type CSSProperties } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDataContext } from '../context/DataContext';
 import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { fetchMarketMetadata, type PolymarketInfo } from '../services/polymarket';
-import type { AgentRoundData } from '../types';
+import type { AgentRoundData, AgentInfo, Round } from '../types';
+import { isBenchmarkAgent } from '../config/benchmarks';
+import { useReasoning, ReasoningToggle, ReasoningContent } from '../components/ReasoningPanel';
 
 function formatCountdown(endDate: string | null): { text: string; isCountdown: boolean } {
   if (!endDate) return { text: '--', isCountdown: false };
@@ -79,6 +81,98 @@ const metaValueStyle: CSSProperties = {
   fontWeight: 600,
   color: 'var(--text-primary)',
 };
+
+function AgentRow({ agent, info, round }: { agent: AgentRoundData; info?: AgentInfo; round: Round }) {
+  const isBenchmark = isBenchmarkAgent(agent.address);
+  const reasoning = useReasoning(round.roundId, agent.address);
+  const showReasoning = isBenchmark && agent.revealed;
+
+  return (
+    <React.Fragment>
+      <tr className={isBenchmark ? 'benchmark-row' : undefined}>
+        <td>
+          {info?.name ? (
+            <span>
+              <span style={{ fontWeight: 600 }}>{info.name}</span>
+              {isBenchmark && (
+                <>
+                  {' '}
+                  <span className="badge benchmark" title="Benchmark agent">benchmark</span>
+                </>
+              )}
+              {info.url && (
+                <>
+                  {' '}
+                  <a href={info.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.75rem' }}>
+                    [link]
+                  </a>
+                </>
+              )}
+              <br />
+              <a href={`https://polygonscan.com/address/${agent.address}`} target="_blank" rel="noopener noreferrer" className="address">
+                {truncAddr(agent.address)}
+              </a>
+            </span>
+          ) : (
+            <span>
+              <a href={`https://polygonscan.com/address/${agent.address}`} target="_blank" rel="noopener noreferrer" className="address">
+                {truncAddr(agent.address)}
+              </a>
+              {isBenchmark && (
+                <>
+                  {' '}
+                  <span className="badge benchmark" title="Benchmark agent">benchmark</span>
+                </>
+              )}
+            </span>
+          )}
+        </td>
+        <td>
+          <span className={`badge ${agent.revealed ? 'success' : 'warning'}`}>
+            {agent.revealed ? 'Revealed' : 'Committed'}
+          </span>
+        </td>
+        <td className="mono" style={{ maxWidth: 400 }}>
+          {agent.predictions.length > 0
+            ? agent.predictions.map((p, i) => {
+                const outcome = round.outcomes?.[i];
+                let color = 'var(--text-primary)';
+                if (outcome === 'YES') {
+                  color = p >= 5000 ? '#4ade80' : '#f87171';
+                } else if (outcome === 'NO') {
+                  color = p <= 5000 ? '#4ade80' : '#f87171';
+                }
+                return (
+                  <span key={i}>
+                    {i > 0 && ', '}
+                    <span style={{ color }}>{formatPct(p)}</span>
+                  </span>
+                );
+              })
+            : '--'}
+        </td>
+        <td className="mono">{agent.brierScore ? formatBrier(agent.brierScore) : '--'}</td>
+        <td className="mono">{agent.alphaScore != null && agent.scoredMarkets > 0 ? formatAlpha(agent.alphaScore) : '--'}</td>
+        <td>
+          {agent.revealed ? agent.scoredMarkets : '--'}
+          {showReasoning && (
+            <>
+              {' '}
+              <ReasoningToggle open={reasoning.open} setOpen={reasoning.setOpen} />
+            </>
+          )}
+        </td>
+      </tr>
+      {showReasoning && reasoning.open && (
+        <tr className="benchmark-row">
+          <td colSpan={6} style={{ padding: 'var(--space-xs) var(--space-md) var(--space-md)' }}>
+            <ReasoningContent data={reasoning.data} loading={reasoning.loading} />
+          </td>
+        </tr>
+      )}
+    </React.Fragment>
+  );
+}
 
 export default function RoundDetailPage() {
   const { roundId } = useParams<{ roundId: string }>();
@@ -261,80 +355,14 @@ export default function RoundDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {agentEntries.map((agent: AgentRoundData) => {
-                  const info = agentMap.get(agent.address.toLowerCase());
-                  return (
-                    <tr key={agent.address}>
-                      <td>
-                        {info?.name ? (
-                          <span>
-                            <span style={{ fontWeight: 600 }}>{info.name}</span>
-                            {info.url && (
-                              <>
-                                {' '}
-                                <a
-                                  href={info.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ fontSize: '0.75rem' }}
-                                >
-                                  [link]
-                                </a>
-                              </>
-                            )}
-                            <br />
-                            <a
-                              href={`https://polygonscan.com/address/${agent.address}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="address"
-                            >
-                              {truncAddr(agent.address)}
-                            </a>
-                          </span>
-                        ) : (
-                          <a
-                            href={`https://polygonscan.com/address/${agent.address}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="address"
-                          >
-                            {truncAddr(agent.address)}
-                          </a>
-                        )}
-                      </td>
-                      <td>
-                        <span
-                          className={`badge ${agent.revealed ? 'success' : 'warning'}`}
-                        >
-                          {agent.revealed ? 'Revealed' : 'Committed'}
-                        </span>
-                      </td>
-                      <td className="mono" style={{ maxWidth: 400 }}>
-                        {agent.predictions.length > 0
-                          ? agent.predictions.map((p, i) => {
-                              const outcome = round.outcomes?.[i];
-                              let color = 'var(--text-primary)';
-                              if (outcome === 'YES') {
-                                color = p >= 5000 ? '#4ade80' : '#f87171'; // green if predicted up, red if predicted down
-                              } else if (outcome === 'NO') {
-                                color = p <= 5000 ? '#4ade80' : '#f87171'; // green if predicted down, red if predicted up
-                              }
-                              return (
-                                <span key={i}>
-                                  {i > 0 && ', '}
-                                  <span style={{ color }}>{formatPct(p)}</span>
-                                </span>
-                              );
-                            })
-                          : '--'}
-                      </td>
-                      <td className="mono">{agent.brierScore ? formatBrier(agent.brierScore) : '--'}</td>
-                      <td className="mono">{agent.alphaScore != null && agent.scoredMarkets > 0 ? formatAlpha(agent.alphaScore) : '--'}</td>
-                      <td>{agent.revealed ? agent.scoredMarkets : '--'}</td>
-                    </tr>
-                  );
-                })}
+                {agentEntries.map((agent: AgentRoundData) => (
+                  <AgentRow
+                    key={agent.address}
+                    agent={agent}
+                    info={agentMap.get(agent.address.toLowerCase())}
+                    round={round}
+                  />
+                ))}
               </tbody>
             </table>
           </div>

@@ -1,7 +1,8 @@
-import type { CommitRequest, RevealRequest, RelayerResponse, HealthResponse } from './lib/types.js';
+import type { CommitRequest, RevealRequest, RelayerResponse, HealthResponse, ReasoningRequest } from './lib/types.js';
 import { verifyCommitSignature, verifyRevealSignature } from './lib/verify.js';
 import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister } from './lib/submit.js';
 import { checkAndPostBenchmarks } from './lib/benchmarks.js';
+import { verifyReasoningSignature, uploadReasoning, getReasoning, isWhitelisted } from './lib/reasoning.js';
 
 // Lazy init on first request
 let initialized = false;
@@ -105,6 +106,35 @@ async function handleReveal(body: RevealRequest): Promise<RelayerResponse> {
   return { success: true, txHash };
 }
 
+async function handleReasoning(body: ReasoningRequest): Promise<RelayerResponse & { key?: string; size?: number }> {
+  const { roundId, agent, content, deadline, signature } = body;
+
+  if (roundId == null || !agent || content == null || !deadline || !signature) {
+    return { success: false, error: 'Missing required fields' };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (deadline < now + 30) {
+    return { success: false, error: 'Deadline too close or expired' };
+  }
+
+  if (!isWhitelisted(agent)) {
+    return { success: false, error: 'Agent not whitelisted for reasoning posts' };
+  }
+
+  const valid = await verifyReasoningSignature(body);
+  if (!valid) {
+    return { success: false, error: 'Invalid signature' };
+  }
+
+  try {
+    const { key, size } = await uploadReasoning(roundId, agent, content);
+    return { success: true, key, size };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 async function handleHealth(): Promise<HealthResponse> {
   return {
     status: 'ok',
@@ -180,6 +210,20 @@ export async function handler(event: {
       return json(200, { results });
     }
 
+    // Reasoning lookup — fetch posted reasoning JSON for a (round, agent) pair
+    if (method === 'GET' && path.startsWith('/reasoning/')) {
+      const parts = path.replace('/reasoning/', '').split('/');
+      if (parts.length !== 2) return json(400, { error: 'Expected /reasoning/{roundId}/{agent}' });
+      const [roundIdStr, agent] = parts;
+      const roundId = Number(roundIdStr);
+      if (!Number.isInteger(roundId) || roundId < 0) return json(400, { error: 'Invalid roundId' });
+      if (!/^0x[0-9a-fA-F]{40}$/.test(agent)) return json(400, { error: 'Invalid agent address' });
+
+      const content = await getReasoning(roundId, agent);
+      if (content == null) return json(404, { error: 'Not found' });
+      return json(200, content);
+    }
+
     // Polymarket API proxy (avoids CORS for frontend)
     if (method === 'GET' && path.startsWith('/polymarket/')) {
       const subpath = path.replace('/polymarket/', '');
@@ -210,6 +254,11 @@ export async function handler(event: {
 
       if (path === '/reveal') {
         const result = await handleReveal(body as RevealRequest);
+        return json(result.success ? 200 : 400, result);
+      }
+
+      if (path === '/reasoning') {
+        const result = await handleReasoning(body as ReasoningRequest);
         return json(result.success ? 200 : 400, result);
       }
     }

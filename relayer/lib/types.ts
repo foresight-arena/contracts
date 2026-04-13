@@ -27,3 +27,11 @@ export interface HealthResponse {
   balance: string;
   chain: string;
 }
+
+export interface ReasoningRequest {
+  roundId: number;
+  agent: `0x${string}`;
+  content: unknown; // arbitrary JSON
+  deadline: number;
+  signature: `0x${string}`;
+}
