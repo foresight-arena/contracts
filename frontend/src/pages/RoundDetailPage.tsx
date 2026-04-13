@@ -1,4 +1,4 @@
-import { useState, useEffect, type CSSProperties } from 'react';
+import React, { useState, useEffect, type CSSProperties } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDataContext } from '../context/DataContext';
 import StatusBadge from '../components/StatusBadge';
@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { fetchMarketMetadata, type PolymarketInfo } from '../services/polymarket';
 import type { AgentRoundData } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
+import ReasoningPanel from '../components/ReasoningPanel';
 
 function formatCountdown(endDate: string | null): { text: string; isCountdown: boolean } {
   if (!endDate) return { text: '--', isCountdown: false };
@@ -265,8 +266,8 @@ export default function RoundDetailPage() {
                 {agentEntries.map((agent: AgentRoundData) => {
                   const info = agentMap.get(agent.address.toLowerCase());
                   const isBenchmark = isBenchmarkAgent(agent.address);
-                  return (
-                    <tr key={agent.address} className={isBenchmark ? 'benchmark-row' : undefined}>
+                  return (<React.Fragment key={agent.address}>
+                    <tr className={isBenchmark ? 'benchmark-row' : undefined}>
                       <td>
                         {info?.name ? (
                           <span>
@@ -349,6 +350,14 @@ export default function RoundDetailPage() {
                       <td className="mono">{agent.alphaScore != null && agent.scoredMarkets > 0 ? formatAlpha(agent.alphaScore) : '--'}</td>
                       <td>{agent.revealed ? agent.scoredMarkets : '--'}</td>
                     </tr>
+                    {isBenchmark && agent.revealed && (
+                      <tr className="benchmark-row">
+                        <td colSpan={6} style={{ padding: '0 var(--space-md) var(--space-sm)' }}>
+                          <ReasoningPanel roundId={round.roundId} agent={agent.address} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                   );
                 })}
               </tbody>
