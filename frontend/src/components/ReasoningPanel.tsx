@@ -106,7 +106,7 @@ function ToolCallTrace({ trace }: { trace: TraceStep[] }) {
   );
 }
 
-export default function ReasoningPanel({ roundId, agent }: Props) {
+export function useReasoning(roundId: number, agent: string) {
   const [data, setData] = useState<ReasoningData | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -123,68 +123,85 @@ export default function ReasoningPanel({ roundId, agent }: Props) {
       });
   }, [open, fetched, roundId, agent]);
 
+  return { data, loading, open, setOpen };
+}
+
+/** Inline toggle button — renders as a <span> so it sits next to text */
+export function ReasoningToggle({ open, setOpen }: { open: boolean; setOpen: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => setOpen(!open)}
+      style={{
+        fontSize: '0.6875rem',
+        color: 'var(--accent)',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: 0,
+        verticalAlign: 'baseline',
+      }}
+    >
+      {open ? '[-] hide reasoning' : '[+] reasoning'}
+    </button>
+  );
+}
+
+/** Expanded reasoning content — meant to be placed in a full-width row below */
+export function ReasoningContent({ data, loading }: { data: ReasoningData | null; loading: boolean }) {
+  if (loading) {
+    return <div style={{ ...panelStyle, color: 'var(--text-muted)' }}>Loading...</div>;
+  }
+  if (!data) {
+    return <div style={{ ...panelStyle, color: 'var(--text-muted)', fontStyle: 'italic' }}>No reasoning data available</div>;
+  }
+  return (
+    <div style={panelStyle}>
+      <div style={headerStyle}>
+        <span>
+          <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{data.model}</span>
+          {data.usage && (
+            <span style={{ marginLeft: 'var(--space-sm)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+              {(data.usage.totalTokens || ((data.usage.promptTokens || 0) + (data.usage.completionTokens || 0))).toLocaleString()} tokens
+            </span>
+          )}
+        </span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+          {new Date(data.timestamp).toLocaleString()}
+        </span>
+      </div>
+
+      {data.autoResolved?.length > 0 && (
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
+          Auto-resolved: {data.autoResolved.map((a) => `Market ${a.index} = ${a.outcome}`).join(', ')}
+        </div>
+      )}
+
+      <div style={sectionTitleStyle}>Per-Market Reasoning</div>
+      {(data.perMarketReasoning || []).map((r) => (
+        <div key={r.marketIndex} style={reasoningItemStyle}>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+            [{r.marketIndex}] {formatBps(r.probabilityBps)}
+          </span>
+          <span style={{ marginLeft: 'var(--space-sm)', color: 'var(--text-secondary)' }}>
+            {r.reasoning}
+          </span>
+        </div>
+      ))}
+
+      {data.trace && data.trace.length > 0 && (
+        <ToolCallTrace trace={data.trace} />
+      )}
+    </div>
+  );
+}
+
+/** Combined single-component version for backward compat */
+export default function ReasoningPanel({ roundId, agent }: Props) {
+  const { data, loading, open, setOpen } = useReasoning(roundId, agent);
   return (
     <span>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          fontSize: '0.6875rem',
-          color: 'var(--accent)',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: 0,
-          verticalAlign: 'baseline',
-        }}
-      >
-        {open ? '[-] hide reasoning' : '[+] reasoning'}
-      </button>
-
-      {open && (
-        loading ? (
-          <div style={{ ...panelStyle, color: 'var(--text-muted)' }}>Loading...</div>
-        ) : !data ? (
-          <div style={{ ...panelStyle, color: 'var(--text-muted)', fontStyle: 'italic' }}>No reasoning data available</div>
-        ) : (
-          <div style={panelStyle}>
-            <div style={headerStyle}>
-              <span>
-                <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{data.model}</span>
-                {data.usage && (
-                  <span style={{ marginLeft: 'var(--space-sm)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                    {(data.usage.totalTokens || ((data.usage.promptTokens || 0) + (data.usage.completionTokens || 0))).toLocaleString()} tokens
-                  </span>
-                )}
-              </span>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                {new Date(data.timestamp).toLocaleString()}
-              </span>
-            </div>
-
-            {data.autoResolved?.length > 0 && (
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
-                Auto-resolved: {data.autoResolved.map((a) => `Market ${a.index} = ${a.outcome}`).join(', ')}
-              </div>
-            )}
-
-            <div style={sectionTitleStyle}>Per-Market Reasoning</div>
-            {(data.perMarketReasoning || []).map((r) => (
-              <div key={r.marketIndex} style={reasoningItemStyle}>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                  [{r.marketIndex}] {formatBps(r.probabilityBps)}
-                </span>
-                <span style={{ marginLeft: 'var(--space-sm)', color: 'var(--text-secondary)' }}>
-                  {r.reasoning}
-                </span>
-              </div>
-            ))}
-
-            {data.trace && data.trace.length > 0 && (
-              <ToolCallTrace trace={data.trace} />
-            )}
-          </div>
-        )
-      )}
+      <ReasoningToggle open={open} setOpen={setOpen} />
+      {open && <ReasoningContent data={data} loading={loading} />}
     </span>
   );
 }
