@@ -188,32 +188,39 @@ contract PredictionArena is IPredictionArena {
     ) internal {
         uint256 totalBrier;
         int256 totalAlpha;
+        uint16 resolvedMarkets;
         uint16 scoredMarkets;
 
         for (uint256 i = 0; i < r.conditionIds.length; i++) {
             bytes32 conditionId = r.conditionIds[i];
 
             uint256 denom = ctf.payoutDenominator(conditionId);
-            if (denom == 0) continue;
+            if (denom == 0) continue; // not resolved
+
+            resolvedMarkets++;
 
             uint256 payout0 = ctf.payoutNumerators(conditionId, 0);
-            int256 outcome = (payout0 > 0) ? int256(10000) : int256(0);
-            int256 prediction = int256(uint256(predictions[i]));
-            int256 benchmark = int256(uint256(r.benchmarkPrices[i]));
+            // Skip non-binary resolutions (e.g. void/split 50/50)
+            if (payout0 != 0 && payout0 != denom) continue;
 
-            int256 diff = prediction - outcome;
-            uint256 brierComponent = uint256(diff * diff);
+            {
+                int256 outcome = (payout0 > 0) ? int256(10000) : int256(0);
+                int256 prediction = int256(uint256(predictions[i]));
+                int256 benchmark = int256(uint256(r.benchmarkPrices[i]));
 
-            int256 benchDiff = benchmark - outcome;
-            int256 baselineBrier = benchDiff * benchDiff;
-            int256 alphaComponent = baselineBrier - int256(brierComponent);
+                int256 diff = prediction - outcome;
+                uint256 brierComponent = uint256(diff * diff);
 
-            totalBrier += brierComponent;
-            totalAlpha += alphaComponent;
+                int256 benchDiff = benchmark - outcome;
+                int256 alphaComponent = (benchDiff * benchDiff) - int256(brierComponent);
+
+                totalBrier += brierComponent;
+                totalAlpha += alphaComponent;
+            }
             scoredMarkets++;
         }
 
-        require(scoredMarkets >= r.minResolvedMarkets, "Not enough markets resolved");
+        require(resolvedMarkets >= r.minResolvedMarkets, "Not enough markets resolved");
 
         Score storage s = _scores[roundId][agent];
         s.totalMarkets = uint16(r.conditionIds.length);
