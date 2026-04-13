@@ -120,6 +120,12 @@ contract PredictionArena is IPredictionArena {
             v := byte(0, calldataload(add(signature.offset, 64)))
         }
 
+        // Reject malleable signatures: require s in lower half of secp256k1 order
+        require(
+            uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0,
+            "Invalid signature"
+        );
+
         address recovered = ecrecover(digest, v, r, s);
         require(recovered != address(0) && recovered == expected, "Invalid signature");
     }
