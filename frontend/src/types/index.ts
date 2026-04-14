@@ -8,6 +8,7 @@ export interface Round {
   revealDeadline: number;
   benchmarksPosted: boolean;
   invalidated: boolean;
+  outcomesTriggered: boolean;
   agents: Map<string, AgentRoundData>;
 }
 

@@ -16,6 +16,11 @@ const abi = parseAbi([
   'function commitWithSignature(uint256 roundId, bytes32 commitHash, address agent, uint256 deadline, bytes signature) external',
   'function revealWithSignature(uint256 roundId, uint16[] predictions, bytes32 salt, address agent, uint256 deadline, bytes signature) external',
   'function nonces(address) view returns (uint256)',
+  'function triggerOutcomes(uint256 roundId) external',
+  'function triggerOutcomesAndScore(uint256 roundId) external',
+  'function calculateScoresForPendingReveals(uint256 roundId, uint256 batchSize) external',
+  'function getRoundOutcomes(uint256 roundId) view returns (bool triggered, uint256 bitmask, int256[] outcomes)',
+  'function getPendingScoringCount(uint256 roundId) view returns (uint256 total, uint256 processed)',
 ]);
 
 const registryAbi = parseAbi([
@@ -102,6 +107,48 @@ export async function submitReveal(req: RevealRequest): Promise<string> {
 
   const txHash = await walletClient!.writeContract(request);
   return txHash;
+}
+
+export async function submitTriggerOutcomesAndScore(roundId: number): Promise<string> {
+  const { request } = await publicClient!.simulateContract({
+    address: config.predictionArena,
+    abi,
+    functionName: 'triggerOutcomesAndScore',
+    args: [BigInt(roundId)],
+    account: walletClient!.account!,
+  });
+  return walletClient!.writeContract(request);
+}
+
+export async function submitCalculateScores(roundId: number, batchSize: number): Promise<string> {
+  const { request } = await publicClient!.simulateContract({
+    address: config.predictionArena,
+    abi,
+    functionName: 'calculateScoresForPendingReveals',
+    args: [BigInt(roundId), BigInt(batchSize)],
+    account: walletClient!.account!,
+  });
+  return walletClient!.writeContract(request);
+}
+
+export async function isOutcomesTriggered(roundId: number): Promise<boolean> {
+  const [triggered] = await publicClient!.readContract({
+    address: config.predictionArena,
+    abi,
+    functionName: 'getRoundOutcomes',
+    args: [BigInt(roundId)],
+  }) as [boolean, bigint, bigint[]];
+  return triggered;
+}
+
+export async function getPendingCount(roundId: number): Promise<{ total: bigint; processed: bigint }> {
+  const [total, processed] = await publicClient!.readContract({
+    address: config.predictionArena,
+    abi,
+    functionName: 'getPendingScoringCount',
+    args: [BigInt(roundId)],
+  }) as [bigint, bigint];
+  return { total, processed };
 }
 
 const REGISTRY = (process.env.AGENT_REGISTRY_ADDRESS || '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637') as `0x${string}`;

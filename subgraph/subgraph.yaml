@@ -57,6 +57,8 @@ dataSources:
           handler: handleRevealed
         - event: ScoreComputed(indexed uint256,indexed address,uint256,int256,uint16)
           handler: handleScoreComputed
+        - event: OutcomesTriggered(indexed uint256,uint256,uint16)
+          handler: handleOutcomesTriggered
       file: ./src/prediction-arena.ts
 
   - kind: ethereum

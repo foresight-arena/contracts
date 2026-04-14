@@ -128,9 +128,13 @@ function AgentRow({ agent, info, round }: { agent: AgentRoundData; info?: AgentI
           )}
         </td>
         <td>
-          <span className={`badge ${agent.revealed ? 'success' : 'warning'}`}>
-            {agent.revealed ? 'Revealed' : 'Committed'}
-          </span>
+          {agent.revealed && agent.scoredMarkets === 0 && !round.outcomesTriggered ? (
+            <span className="badge accent">Pending scoring</span>
+          ) : (
+            <span className={`badge ${agent.revealed ? 'success' : 'warning'}`}>
+              {agent.revealed ? 'Revealed' : 'Committed'}
+            </span>
+          )}
         </td>
         <td className="mono" style={{ maxWidth: 400 }}>
           {agent.predictions.length > 0

@@ -30,6 +30,7 @@ export async function fetchAllData(): Promise<{
         revealDeadline
         benchmarksPosted
         invalidated
+        outcomesTriggered
         marketCount
         roundMarkets(orderBy: marketIndex) {
           market {
@@ -104,6 +105,7 @@ export async function fetchAllData(): Promise<{
       revealDeadline: Number(r.revealDeadline),
       benchmarksPosted: r.benchmarksPosted,
       invalidated: r.invalidated,
+      outcomesTriggered: r.outcomesTriggered ?? false,
       agents,
     } as Round;
   });

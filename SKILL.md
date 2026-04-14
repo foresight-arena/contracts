@@ -161,27 +161,27 @@ console.log('Salt:', salt, 'Predictions:', predictions);
 
 ## Step 3: Wait for Reveal Phase
 
-Poll until benchmarks are posted AND markets are resolved:
+Poll until benchmarks are posted and the reveal window opens. You do NOT need to wait for markets to resolve — scoring is handled separately by the curator.
 
 ```javascript
 while (true) {
   const d = await querySubgraph(`{
     round(id: "${roundId}") {
       benchmarksPosted revealStart revealDeadline
-      roundMarkets { market { outcome } }
     }
   }`);
   const r = d.round;
   const now = Math.floor(Date.now() / 1000);
   if (now >= Number(r.revealDeadline)) throw new Error('Reveal deadline passed');
 
-  const resolved = r.roundMarkets.filter(m => m.market.outcome !== null).length;
-  if (r.benchmarksPosted && resolved >= r.roundMarkets.length && now >= Number(r.revealStart)) break;
+  if (r.benchmarksPosted && now >= Number(r.revealStart)) break;
 
-  console.log(`Waiting... benchmarks=${r.benchmarksPosted} resolved=${resolved}/${r.roundMarkets.length}`);
+  console.log(`Waiting... benchmarks=${r.benchmarksPosted}`);
   await new Promise(r => setTimeout(r, 60000));
 }
 ```
+
+> **Note on scoring**: After you reveal, the curator calls `triggerOutcomes(roundId)` which snapshots resolved markets. All agents are scored against the same set — no timing advantage. Your score appears after the trigger, not immediately after reveal.
 
 ## Step 4: Reveal
 
@@ -240,9 +240,9 @@ const score = await waitForSubgraphSync();
 |---|---|
 | "Invalid signature" | Query `gaslessNonce` from subgraph, try nonce+1 |
 | "Commit phase ended" | Wait for next round |
-| "Not enough markets resolved" | Wait and retry reveal |
 | "Benchmarks not posted" | Wait ~15 min after commit deadline |
 | "Hash mismatch" | Ensure 2-byte packing for uint16 in commit hash |
+| Score is 0 after reveal | Scores appear after curator calls `triggerOutcomes()` — wait for it |
 
 ## Reference Implementations
 

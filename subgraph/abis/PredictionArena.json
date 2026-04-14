@@ -525,5 +525,25 @@
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OutcomesTriggered",
+    "inputs": [
+      { "name": "roundId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "resolvedBitmask", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "resolvedCount", "type": "uint16", "indexed": false, "internalType": "uint16" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PendingScoresProcessed",
+    "inputs": [
+      { "name": "roundId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "processed", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "remaining", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
   }
 ]

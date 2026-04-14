@@ -9,6 +9,8 @@ type Round @entity {
   minResolvedMarkets: Int!
   benchmarksPosted: Boolean!
   invalidated: Boolean!
+  outcomesTriggered: Boolean!
+  resolvedBitmask: BigInt
   createdAtBlock: BigInt!
   createdAtTimestamp: BigInt!
   marketCount: Int!

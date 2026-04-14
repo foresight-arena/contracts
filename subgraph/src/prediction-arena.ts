@@ -3,6 +3,7 @@ import {
   Committed,
   Revealed,
   ScoreComputed,
+  OutcomesTriggered,
 } from "../generated/PredictionArena/PredictionArena"
 import { ConditionalTokens } from "../generated/PredictionArena/ConditionalTokens"
 import { AgentRound, Agent, Round, Market } from "../generated/schema"
@@ -119,23 +120,31 @@ export function handleScoreComputed(event: ScoreComputed): void {
     }
   }
 
-  // Resolve market outcomes via CTF contract call (handles pre-resolved markets)
+}
+
+export function handleOutcomesTriggered(event: OutcomesTriggered): void {
+  let roundId = event.params.roundId
   let round = Round.load(roundId.toString())
-  if (round != null) {
-    let ctf = ConditionalTokens.bind(CTF_ADDRESS)
-    let conditionIds = round.conditionIds
-    for (let i = 0; i < conditionIds.length; i++) {
-      let marketId = conditionIds[i].toHexString()
-      let market = Market.load(marketId)
-      if (market != null && market.outcome == null) {
-        let denomResult = ctf.try_payoutDenominator(conditionIds[i])
-        if (!denomResult.reverted && denomResult.value.gt(BigInt.zero())) {
-          let payout0Result = ctf.try_payoutNumerators(conditionIds[i], BigInt.zero())
-          if (!payout0Result.reverted) {
-            market.outcome = payout0Result.value.gt(BigInt.zero()) ? "YES" : "NO"
-            market.resolvedAtTimestamp = event.block.timestamp
-            market.save()
-          }
+  if (round == null) return
+
+  round.outcomesTriggered = true
+  round.resolvedBitmask = event.params.resolvedBitmask
+  round.save()
+
+  // Also resolve individual market outcomes via CTF calls
+  let ctf = ConditionalTokens.bind(CTF_ADDRESS)
+  let conditionIds = round.conditionIds
+  for (let i = 0; i < conditionIds.length; i++) {
+    let marketId = conditionIds[i].toHexString()
+    let market = Market.load(marketId)
+    if (market != null && market.outcome == null) {
+      let denomResult = ctf.try_payoutDenominator(conditionIds[i])
+      if (!denomResult.reverted && denomResult.value.gt(BigInt.zero())) {
+        let payout0Result = ctf.try_payoutNumerators(conditionIds[i], BigInt.zero())
+        if (!payout0Result.reverted) {
+          market.outcome = payout0Result.value.gt(BigInt.zero()) ? "YES" : "NO"
+          market.resolvedAtTimestamp = event.block.timestamp
+          market.save()
         }
       }
     }

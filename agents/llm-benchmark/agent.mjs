@@ -428,19 +428,8 @@ async function processRevealQueue() {
         continue;
       }
 
-      let resolvedCount = 0;
-      for (const cid of round.conditionIds) {
-        const denom = await ctf.read.payoutDenominator([cid]);
-        if (denom > 0n) resolvedCount++;
-      }
-
-      if (resolvedCount < round.minResolvedMarkets) {
-        log(`Round ${roundId}: ${resolvedCount}/${round.minResolvedMarkets} markets resolved, waiting`);
-        remaining.push(entry);
-        continue;
-      }
-
-      log(`Round ${roundId}: simulating reveal (${resolvedCount} markets resolved)...`);
+      // Scoring is deferred until curator triggers outcomes — just reveal
+      log(`Round ${roundId}: simulating reveal...`);
       const { request } = await publicClient.simulateContract({
         address: ADDRESSES.arena,
         abi: arenaAbi,

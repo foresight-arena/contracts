@@ -45,7 +45,6 @@ const ADDRESSES = {
   arena: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f',
   roundManager: '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0',
   registry: '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637',
-  ctf: '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045',
 };
 
 // ─── ABIs (minimal) ───────────────────────────────────────────────────────────
@@ -65,11 +64,6 @@ const registryAbi = parseAbi([
   'function registerAgent(string name, string url, address owner)',
 ]);
 
-const ctfAbi = parseAbi([
-  'function payoutDenominator(bytes32 conditionId) view returns (uint256)',
-  'function payoutNumerators(bytes32 conditionId, uint256 index) view returns (uint256)',
-]);
-
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
 const account = privateKeyToAccount(AGENT_KEY);
@@ -80,7 +74,6 @@ const walletClient = createWalletClient({ chain: polygon, transport, account });
 
 const roundManager = getContract({ address: ADDRESSES.roundManager, abi: roundManagerAbi, client: publicClient });
 const registry = getContract({ address: ADDRESSES.registry, abi: registryAbi, client: publicClient });
-const ctf = getContract({ address: ADDRESSES.ctf, abi: ctfAbi, client: publicClient });
 
 // ─── Persistent State (survives between cron runs) ────────────────────────────
 
@@ -229,21 +222,8 @@ async function processRevealQueue() {
         continue;
       }
 
-      // Check if enough markets are resolved
-      let resolvedCount = 0;
-      for (const cid of round.conditionIds) {
-        const denom = await ctf.read.payoutDenominator([cid]);
-        if (denom > 0n) resolvedCount++;
-      }
-
-      if (resolvedCount < round.minResolvedMarkets) {
-        log(`Round ${roundId}: ${resolvedCount}/${round.minResolvedMarkets} markets resolved, waiting`);
-        remaining.push(entry);
-        continue;
-      }
-
-      // Simulate reveal
-      log(`Round ${roundId}: simulating reveal (${resolvedCount} markets resolved)...`);
+      // Simulate reveal — scoring is deferred until curator triggers outcomes
+      log(`Round ${roundId}: simulating reveal...`);
       const { request } = await publicClient.simulateContract({
         address: ADDRESSES.arena,
         abi: arenaAbi,

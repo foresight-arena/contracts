@@ -1,7 +1,7 @@
 import type { CommitRequest, RevealRequest, RelayerResponse, HealthResponse, ReasoningRequest } from './lib/types.js';
 import { verifyCommitSignature, verifyRevealSignature } from './lib/verify.js';
 import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister } from './lib/submit.js';
-import { checkAndPostBenchmarks } from './lib/benchmarks.js';
+import { checkAndPostBenchmarks, checkAndTriggerOutcomes } from './lib/benchmarks.js';
 import { verifyReasoningSignature, uploadReasoning, getReasoning, isWhitelisted } from './lib/reasoning.js';
 
 // Lazy init on first request
@@ -158,8 +158,10 @@ export async function handler(event: {
 }) {
   // EventBridge cron trigger — run benchmark poster
   if (event.source === 'aws.events' || event['detail-type'] === 'Scheduled Event') {
-    console.log('Cron trigger: checking for pending benchmarks');
-    const results = await checkAndPostBenchmarks();
+    console.log('Cron trigger: checking for pending benchmarks + outcomes');
+    const benchmarkResults = await checkAndPostBenchmarks();
+    const outcomeResults = await checkAndTriggerOutcomes();
+    const results = [...benchmarkResults, ...outcomeResults];
     console.log(results.join('\n'));
     return { statusCode: 200, body: JSON.stringify({ results }) };
   }

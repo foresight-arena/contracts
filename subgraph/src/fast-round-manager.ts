@@ -18,6 +18,8 @@ export function handleRoundCreated(event: RoundCreated): void {
   round.minResolvedMarkets = event.params.minResolvedMarkets
   round.benchmarksPosted = false
   round.invalidated = false
+  round.outcomesTriggered = false
+  round.resolvedBitmask = null
   round.createdAtBlock = event.block.number
   round.createdAtTimestamp = event.block.timestamp
   round.marketCount = event.params.conditionIds.length
