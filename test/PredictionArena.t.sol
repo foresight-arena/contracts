@@ -30,6 +30,8 @@ contract PredictionArenaTest is Test {
     event ScoreComputed(
         uint256 indexed roundId, address indexed agent, uint256 brierScore, int256 alphaScore, uint16 scoredMarkets
     );
+    event OutcomesTriggered(uint256 indexed roundId, uint256 resolvedBitmask, uint16 resolvedCount);
+    event PendingScoresProcessed(uint256 indexed roundId, uint256 processed, uint256 remaining);
 
     uint256 constant REBATE_PER_REVEAL = 0.001 ether;
 
@@ -300,6 +302,9 @@ contract PredictionArenaTest is Test {
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.expectEmit(true, true, false, true);
         emit Revealed(roundId, agent1, preds, 5, type(uint256).max);
 
@@ -345,6 +350,9 @@ contract PredictionArenaTest is Test {
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
 
@@ -363,13 +371,18 @@ contract PredictionArenaTest is Test {
 
         _postBenchmarks(roundId, 5, 5000);
 
-        // No markets resolved — should revert because minResolvedMarkets = 1
+        // No markets resolved — reveal should succeed (scoring deferred)
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 
         vm.prank(agent1);
-        vm.expectRevert("Not enough markets resolved");
         arena.reveal(roundId, preds, SALT);
+
+        assertTrue(arena.hasRevealed(roundId, agent1));
+
+        // No outcomes triggered, so scoredMarkets should be 0
+        IPredictionArena.Score memory s = arena.getScore(roundId, agent1);
+        assertEq(s.scoredMarkets, 0);
     }
 
     function test_reveal_hashMismatch() public {
@@ -453,6 +466,9 @@ contract PredictionArenaTest is Test {
 
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
 
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
@@ -560,6 +576,9 @@ contract PredictionArenaTest is Test {
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
 
@@ -581,6 +600,9 @@ contract PredictionArenaTest is Test {
 
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
 
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
@@ -604,6 +626,9 @@ contract PredictionArenaTest is Test {
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
 
@@ -626,6 +651,9 @@ contract PredictionArenaTest is Test {
 
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
 
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
@@ -653,6 +681,9 @@ contract PredictionArenaTest is Test {
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
 
@@ -674,6 +705,9 @@ contract PredictionArenaTest is Test {
 
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
 
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
@@ -712,6 +746,9 @@ contract PredictionArenaTest is Test {
 
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
 
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
@@ -756,6 +793,9 @@ contract PredictionArenaTest is Test {
 
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
 
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
@@ -807,6 +847,9 @@ contract PredictionArenaTest is Test {
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds, SALT);
 
@@ -839,5 +882,193 @@ contract PredictionArenaTest is Test {
         bytes32 h1 = _computeCommitHash(1, preds, SALT);
         bytes32 h2 = _computeCommitHash(2, preds, SALT);
         assertTrue(h1 != h2);
+    }
+
+    // ===============================================================
+    // TWO-PHASE SCORING TESTS
+    // ===============================================================
+
+    function test_triggerOutcomes_curatorOnly() public {
+        (uint256 roundId, bytes32[] memory cIds) = _createStandardRound();
+        _postBenchmarks(roundId, 5, 5000);
+        for (uint256 i = 0; i < 5; i++) {
+            _resolveYes(cIds[i]);
+        }
+
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        vm.warp(r.revealStart);
+
+        // Non-curator should revert during reveal window
+        vm.prank(agent1);
+        vm.expectRevert("Only curator during reveal window");
+        arena.triggerOutcomes(roundId);
+    }
+
+    function test_triggerOutcomes_permissionlessAfterDeadline() public {
+        (uint256 roundId, bytes32[] memory cIds) = _createStandardRound();
+        _postBenchmarks(roundId, 5, 5000);
+        for (uint256 i = 0; i < 5; i++) {
+            _resolveYes(cIds[i]);
+        }
+
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        vm.warp(r.revealDeadline); // at or after deadline
+
+        // Anyone can call after revealDeadline
+        vm.prank(agent1);
+        arena.triggerOutcomes(roundId);
+
+        (bool triggered,,) = arena.getRoundOutcomes(roundId);
+        assertTrue(triggered);
+    }
+
+    function test_triggerOutcomes_onlyOnce() public {
+        (uint256 roundId, bytes32[] memory cIds) = _createStandardRound();
+        _postBenchmarks(roundId, 5, 5000);
+        for (uint256 i = 0; i < 5; i++) {
+            _resolveYes(cIds[i]);
+        }
+
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        vm.warp(r.revealStart);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
+        // Second call should revert
+        vm.prank(curator);
+        vm.expectRevert("Outcomes already triggered");
+        arena.triggerOutcomes(roundId);
+    }
+
+    function test_reveal_beforeTrigger_pendingScoring() public {
+        (uint256 roundId, bytes32[] memory cIds) = _createStandardRound();
+        uint16[] memory preds = _uniformPredictions(5, 7000);
+        bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
+
+        vm.prank(agent1);
+        arena.commit(roundId, commitHash);
+
+        _postBenchmarks(roundId, 5, 5000);
+        for (uint256 i = 0; i < 5; i++) {
+            _resolveYes(cIds[i]);
+        }
+
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        vm.warp(r.revealStart);
+
+        // Reveal BEFORE triggerOutcomes — should succeed but scoring deferred
+        vm.prank(agent1);
+        arena.reveal(roundId, preds, SALT);
+
+        assertTrue(arena.hasRevealed(roundId, agent1));
+
+        // Score should be zero (pending)
+        IPredictionArena.Score memory s = arena.getScore(roundId, agent1);
+        assertEq(s.scoredMarkets, 0);
+
+        // Now trigger outcomes
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
+        // Score pending reveals
+        arena.calculateScoresForPendingReveals(roundId, 10);
+
+        // Now score should be computed
+        s = arena.getScore(roundId, agent1);
+        assertEq(s.scoredMarkets, 5);
+        assertEq(s.totalMarkets, 5);
+        // (7000 - 10000)^2 = 9000000
+        assertEq(s.brierScore, 9000000);
+    }
+
+    function test_triggerOutcomesAndScore() public {
+        (uint256 roundId, bytes32[] memory cIds) = _createStandardRound();
+        uint16[] memory preds = _uniformPredictions(5, 8000);
+        bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
+
+        vm.prank(agent1);
+        arena.commit(roundId, commitHash);
+
+        _postBenchmarks(roundId, 5, 5000);
+        for (uint256 i = 0; i < 5; i++) {
+            _resolveYes(cIds[i]);
+        }
+
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        vm.warp(r.revealStart);
+
+        // Reveal before trigger (deferred)
+        vm.prank(agent1);
+        arena.reveal(roundId, preds, SALT);
+
+        // Use convenience function to trigger + score all
+        vm.prank(curator);
+        arena.triggerOutcomesAndScore(roundId);
+
+        IPredictionArena.Score memory s = arena.getScore(roundId, agent1);
+        assertEq(s.scoredMarkets, 5);
+        assertEq(s.totalMarkets, 5);
+        // (8000 - 10000)^2 = 4000000
+        assertEq(s.brierScore, 4000000);
+    }
+
+    function test_calculateScoresForPendingReveals_pagination() public {
+        (uint256 roundId, bytes32[] memory cIds) = _createStandardRound();
+
+        // Commit for 3 agents
+        uint16[] memory preds1 = _uniformPredictions(5, 7000);
+        uint16[] memory preds2 = _uniformPredictions(5, 8000);
+        uint16[] memory preds3 = _uniformPredictions(5, 9000);
+
+        _commitAs(agent1, roundId, _computeCommitHash(roundId, preds1, SALT));
+        _commitAs(agent2, roundId, _computeCommitHash(roundId, preds2, SALT2));
+        _commitAs(agent3, roundId, _computeCommitHash(roundId, preds3, keccak256("salt3")));
+
+        _postBenchmarks(roundId, 5, 5000);
+        for (uint256 i = 0; i < 5; i++) {
+            _resolveYes(cIds[i]);
+        }
+
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        vm.warp(r.revealStart);
+
+        // All 3 reveal before trigger (all go to pending)
+        vm.prank(agent1);
+        arena.reveal(roundId, preds1, SALT);
+        vm.prank(agent2);
+        arena.reveal(roundId, preds2, SALT2);
+        vm.prank(agent3);
+        arena.reveal(roundId, preds3, keccak256("salt3"));
+
+        // Trigger outcomes
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
+        // Process in batches of 2
+        arena.calculateScoresForPendingReveals(roundId, 2);
+
+        // First 2 should be scored, third still pending
+        (uint256 total, uint256 processed) = arena.getPendingScoringCount(roundId);
+        assertEq(total, 3);
+        assertEq(processed, 2);
+
+        IPredictionArena.Score memory s1 = arena.getScore(roundId, agent1);
+        IPredictionArena.Score memory s2 = arena.getScore(roundId, agent2);
+        IPredictionArena.Score memory s3 = arena.getScore(roundId, agent3);
+
+        assertEq(s1.scoredMarkets, 5);
+        assertEq(s2.scoredMarkets, 5);
+        assertEq(s3.scoredMarkets, 0); // not yet scored
+
+        // Process remaining
+        arena.calculateScoresForPendingReveals(roundId, 10);
+
+        s3 = arena.getScore(roundId, agent3);
+        assertEq(s3.scoredMarkets, 5);
+
+        (total, processed) = arena.getPendingScoringCount(roundId);
+        assertEq(total, 3);
+        assertEq(processed, 3);
     }
 }

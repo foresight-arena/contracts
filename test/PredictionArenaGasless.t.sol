@@ -243,6 +243,10 @@ contract PredictionArenaGaslessTest is Test {
         // Warp to reveal phase
         vm.warp(block.timestamp + 2 hours + 1);
 
+        // Trigger outcomes before revealing
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         // Agent reveals via signature (nonce 1)
         uint256 revealDeadline = block.timestamp + 1 hours;
         bytes memory revealSig = _signReveal(agentPk, roundId, preds, salt, agent, 1, revealDeadline);
@@ -304,6 +308,9 @@ contract PredictionArenaGaslessTest is Test {
 
         vm.warp(block.timestamp + 2 hours + 1);
 
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         // Reveal with nonce 0 — succeeds
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory sig = _signReveal(agentPk, roundId, preds, salt, agent, 0, deadline);
@@ -351,6 +358,9 @@ contract PredictionArenaGaslessTest is Test {
 
         vm.warp(block.timestamp + 2 hours + 1);
 
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         // Agent reveals via relayer (gasless) — nonce is still 0 since commit was direct
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory sig = _signReveal(agentPk, roundId, preds, salt, agent, 0, deadline);
@@ -392,6 +402,9 @@ contract PredictionArenaGaslessTest is Test {
         mockCtf.setPayouts(keccak256(abi.encodePacked("gasless_market_", uint256(0))), yesPayouts);
 
         vm.warp(block.timestamp + 2 hours + 1);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
 
         // Agent reveals directly (pays gas)
         vm.prank(agent);

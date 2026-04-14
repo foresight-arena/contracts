@@ -229,6 +229,10 @@ contract IntegrationTest is Test {
         // 7. Warp past revealStart
         vm.warp(revealStart + 1);
 
+        // 7b. Trigger outcomes before reveals
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         // 8. All 3 agents reveal
         vm.prank(agent1);
         arena.reveal(roundId, preds1, salt1);
@@ -294,6 +298,10 @@ contract IntegrationTest is Test {
 
         // Warp past revealStart and reveal
         vm.warp(revealStart + 1);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds, salt);
 
@@ -378,6 +386,10 @@ contract IntegrationTest is Test {
 
         // Warp to reveal phase — only agent1 and agent2 reveal
         vm.warp(revealStart + 1);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds1, salt1);
         vm.prank(agent2);
@@ -500,6 +512,10 @@ contract IntegrationTest is Test {
         _setDefaultPayouts();
 
         vm.warp(revealStart + 1);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds1, salt1);
         vm.prank(agent2);
@@ -566,6 +582,10 @@ contract IntegrationTest is Test {
         }
 
         vm.warp(revealStart2 + 1);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId2);
+
         vm.prank(agent1);
         arena.reveal(roundId2, preds1, salt1);
         vm.prank(agent2);
@@ -639,6 +659,12 @@ contract IntegrationTest is Test {
 
         // Warp past both revealStarts (B's revealStart is later)
         vm.warp(revealStartB + 1);
+
+        // Trigger outcomes for both rounds
+        vm.prank(curator);
+        arena.triggerOutcomes(roundA);
+        vm.prank(curator);
+        arena.triggerOutcomes(roundB);
 
         // Agent reveals in both rounds
         vm.prank(agent1);

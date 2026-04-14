@@ -21,6 +21,8 @@ interface IPredictionArena {
     event ScoreComputed(
         uint256 indexed roundId, address indexed agent, uint256 brierScore, int256 alphaScore, uint16 scoredMarkets
     );
+    event OutcomesTriggered(uint256 indexed roundId, uint256 resolvedBitmask, uint16 resolvedCount);
+    event PendingScoresProcessed(uint256 indexed roundId, uint256 processed, uint256 remaining);
 
     function commit(uint256 roundId, bytes32 commitHash) external;
     function reveal(uint256 roundId, uint16[] calldata predictions, bytes32 salt) external;
@@ -50,4 +52,13 @@ interface IPredictionArena {
     function getCommitCount(uint256 roundId) external view returns (uint256);
     function hasCommitted(uint256 roundId, address agent) external view returns (bool);
     function hasRevealed(uint256 roundId, address agent) external view returns (bool);
+
+    function triggerOutcomes(uint256 roundId) external;
+    function triggerOutcomesAndScore(uint256 roundId) external;
+    function calculateScoresForPendingReveals(uint256 roundId, uint256 batchSize) external;
+    function getRoundOutcomes(uint256 roundId)
+        external
+        view
+        returns (bool triggered, uint256 bitmask, int256[] memory outcomes);
+    function getPendingScoringCount(uint256 roundId) external view returns (uint256 total, uint256 processed);
 }

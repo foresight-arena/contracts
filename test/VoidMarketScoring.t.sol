@@ -27,6 +27,8 @@ contract VoidMarketScoringTest is Test {
     event ScoreComputed(
         uint256 indexed roundId, address indexed agent, uint256 brierScore, int256 alphaScore, uint16 scoredMarkets
     );
+    event OutcomesTriggered(uint256 indexed roundId, uint256 resolvedBitmask, uint16 resolvedCount);
+    event PendingScoresProcessed(uint256 indexed roundId, uint256 processed, uint256 remaining);
 
     function setUp() public {
         vm.warp(1000000);
@@ -105,6 +107,9 @@ contract VoidMarketScoringTest is Test {
 
         // All 3 markets are resolved (denom > 0), minResolvedMarkets=2 is satisfied.
         // But only 2 should be scored (void market excluded).
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds, salt);
 
@@ -177,6 +182,9 @@ contract VoidMarketScoringTest is Test {
         mockCtf.setPayouts(cid2, no);
 
         // Should not revert — all 3 are resolved (void counts)
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds, salt);
 
@@ -226,6 +234,9 @@ contract VoidMarketScoringTest is Test {
         void_[1] = 1;
         mockCtf.setPayouts(cid0, void_);
         mockCtf.setPayouts(cid1, void_);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
 
         vm.prank(agent1);
         arena.reveal(roundId, preds, salt);

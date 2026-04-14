@@ -42,4 +42,5 @@ interface IRoundManager {
     function getMarketCount(uint256 roundId) external view returns (uint256);
     function isCommitPhase(uint256 roundId) external view returns (bool);
     function isRevealPhase(uint256 roundId) external view returns (bool);
+    function curator() external view returns (address);
 }

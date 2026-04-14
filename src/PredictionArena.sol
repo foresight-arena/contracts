@@ -15,6 +15,17 @@ contract PredictionArena is IPredictionArena {
     mapping(uint256 => mapping(address => Score)) internal _scores;
     mapping(uint256 => uint256) public commitCount;
 
+    // Two-phase outcome resolution
+    struct RoundOutcomes {
+        uint256 resolvedBitmask; // bit i set = market i resolved + binary
+        int256[] cachedOutcomes; // 10000 or 0 per market (valid where bit set)
+        bool outcomesTriggered; // single-trigger guard
+        address[] pendingScoring; // agents revealed before outcomes triggered
+        uint256 pendingScoringProcessed; // pagination cursor
+    }
+
+    mapping(uint256 => RoundOutcomes) internal _roundOutcomes;
+
     // EIP-712 gasless support
     bytes32 public immutable DOMAIN_SEPARATOR;
     mapping(address => uint256) public nonces;
@@ -103,6 +114,80 @@ contract PredictionArena is IPredictionArena {
     }
 
     // ---------------------------------------------------------------
+    // Outcome triggering (two-phase scoring)
+    // ---------------------------------------------------------------
+
+    function triggerOutcomes(uint256 roundId) external {
+        _triggerOutcomes(roundId);
+    }
+
+    function triggerOutcomesAndScore(uint256 roundId) external {
+        _triggerOutcomes(roundId);
+        _scorePendingBatch(roundId, type(uint256).max);
+    }
+
+    function calculateScoresForPendingReveals(uint256 roundId, uint256 batchSize) external {
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        require(o.outcomesTriggered, "Outcomes not triggered");
+        _scorePendingBatch(roundId, batchSize);
+    }
+
+    function _triggerOutcomes(uint256 roundId) internal {
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        require(r.conditionIds.length > 0, "Round does not exist");
+        require(!r.invalidated, "Round invalidated");
+
+        // Curator-only during reveal window, permissionless after revealDeadline
+        if (uint64(block.timestamp) < r.revealDeadline) {
+            require(msg.sender == roundManager.curator() || msg.sender == admin, "Only curator during reveal window");
+        }
+
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        require(!o.outcomesTriggered, "Outcomes already triggered");
+
+        uint256 len = r.conditionIds.length;
+        o.cachedOutcomes = new int256[](len);
+        uint256 bitmask;
+        uint16 resolvedCount;
+
+        for (uint256 i = 0; i < len; i++) {
+            bytes32 conditionId = r.conditionIds[i];
+            uint256 denom = ctf.payoutDenominator(conditionId);
+            if (denom == 0) continue;
+
+            uint256 payout0 = ctf.payoutNumerators(conditionId, 0);
+            // Skip non-binary resolutions (e.g. void/split 50/50)
+            if (payout0 != 0 && payout0 != denom) continue;
+
+            bitmask |= (1 << i);
+            o.cachedOutcomes[i] = (payout0 > 0) ? int256(10000) : int256(0);
+            resolvedCount++;
+        }
+
+        o.resolvedBitmask = bitmask;
+        o.outcomesTriggered = true;
+
+        emit OutcomesTriggered(roundId, bitmask, resolvedCount);
+    }
+
+    function _scorePendingBatch(uint256 roundId, uint256 batchSize) internal {
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+
+        uint256 start = o.pendingScoringProcessed;
+        uint256 end = start + batchSize;
+        if (end > o.pendingScoring.length) end = o.pendingScoring.length;
+
+        for (uint256 i = start; i < end; i++) {
+            address agent = o.pendingScoring[i];
+            _scoreAgent(roundId, agent, r);
+        }
+
+        o.pendingScoringProcessed = end;
+        emit PendingScoresProcessed(roundId, end - start, o.pendingScoring.length - end);
+    }
+
+    // ---------------------------------------------------------------
     // Internal logic
     // ---------------------------------------------------------------
 
@@ -175,36 +260,33 @@ contract PredictionArena is IPredictionArena {
         c.revealed = true;
         _revealedPredictions[roundId][agent] = predictions;
 
-        // Compute and store scores
-        _computeScores(roundId, agent, predictions, r, eventNonce);
+        // If outcomes are already triggered, score inline. Otherwise, defer.
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        if (o.outcomesTriggered) {
+            _scoreAgent(roundId, agent, r);
+        } else {
+            o.pendingScoring.push(agent);
+            emit Revealed(roundId, agent, predictions, 0, eventNonce);
+        }
     }
 
-    function _computeScores(
-        uint256 roundId,
-        address agent,
-        uint16[] calldata predictions,
-        IRoundManager.Round memory r,
-        uint256 eventNonce
-    ) internal {
+    function _scoreAgent(uint256 roundId, address agent, IRoundManager.Round memory r) internal {
+        // Guard: don't double-score
+        Score storage s = _scores[roundId][agent];
+        if (s.totalMarkets > 0) return;
+
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        uint16[] memory predictions = _revealedPredictions[roundId][agent];
+
         uint256 totalBrier;
         int256 totalAlpha;
-        uint16 resolvedMarkets;
         uint16 scoredMarkets;
 
         for (uint256 i = 0; i < r.conditionIds.length; i++) {
-            bytes32 conditionId = r.conditionIds[i];
-
-            uint256 denom = ctf.payoutDenominator(conditionId);
-            if (denom == 0) continue; // not resolved
-
-            resolvedMarkets++;
-
-            uint256 payout0 = ctf.payoutNumerators(conditionId, 0);
-            // Skip non-binary resolutions (e.g. void/split 50/50)
-            if (payout0 != 0 && payout0 != denom) continue;
+            if (o.resolvedBitmask & (1 << i) == 0) continue;
 
             {
-                int256 outcome = (payout0 > 0) ? int256(10000) : int256(0);
+                int256 outcome = o.cachedOutcomes[i];
                 int256 prediction = int256(uint256(predictions[i]));
                 int256 benchmark = int256(uint256(r.benchmarkPrices[i]));
 
@@ -220,9 +302,6 @@ contract PredictionArena is IPredictionArena {
             scoredMarkets++;
         }
 
-        require(resolvedMarkets >= r.minResolvedMarkets, "Not enough markets resolved");
-
-        Score storage s = _scores[roundId][agent];
         s.totalMarkets = uint16(r.conditionIds.length);
         s.scoredMarkets = scoredMarkets;
 
@@ -231,7 +310,7 @@ contract PredictionArena is IPredictionArena {
             s.alphaScore = totalAlpha / int256(uint256(scoredMarkets));
         }
 
-        emit Revealed(roundId, agent, predictions, scoredMarkets, eventNonce);
+        emit Revealed(roundId, agent, predictions, scoredMarkets, DIRECT_CALL_NONCE);
         emit ScoreComputed(roundId, agent, s.brierScore, s.alphaScore, scoredMarkets);
     }
 
@@ -261,5 +340,19 @@ contract PredictionArena is IPredictionArena {
 
     function hasRevealed(uint256 roundId, address agent) external view returns (bool) {
         return _commitments[roundId][agent].revealed;
+    }
+
+    function getRoundOutcomes(uint256 roundId)
+        external
+        view
+        returns (bool triggered, uint256 bitmask, int256[] memory outcomes)
+    {
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        return (o.outcomesTriggered, o.resolvedBitmask, o.cachedOutcomes);
+    }
+
+    function getPendingScoringCount(uint256 roundId) external view returns (uint256 total, uint256 processed) {
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        return (o.pendingScoring.length, o.pendingScoringProcessed);
     }
 }
