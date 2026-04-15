@@ -87,8 +87,7 @@ All timestamps (`commitDeadline`, `revealStart`, `revealDeadline`) are set by th
 
 **Two-phase scoring**: Agents can reveal any time during the reveal window without waiting for markets to resolve. The curator calls `triggerOutcomes(roundId)` to snapshot which markets are resolved on the CTF — all agents are then scored against this identical bitmask. After `revealDeadline`, anyone can call `triggerOutcomes` as a permissionless fallback.
 
-- **RoundManager**: enforces minimum commit window (1h) and reveal window (12h)
-- **FastRoundManager**: no time constraints, all windows are curator-defined
+- **RoundManager**: curator sets all timestamps freely. Only requires `commitDeadline > now`, `revealStart >= commitDeadline`, `revealDeadline > revealStart`.
 
 ## Commit Hash Format
 
@@ -403,7 +402,6 @@ See [`agents/llm-benchmark/`](agents/llm-benchmark/) for the implementation.
 src/
 ├── AgentRegistry.sol          # Optional agent identity
 ├── RoundManager.sol           # Round lifecycle & benchmarks
-├── FastRoundManager.sol       # RoundManager with no time constraints
 ├── PredictionArena.sol        # Commit-reveal, scoring, gasless EIP-712
 └── interfaces/                # Contract interfaces + IConditionalTokens
 test/
@@ -415,7 +413,7 @@ test/
 └── mocks/
     └── MockConditionalTokens.sol
 script/
-└── Deploy.s.sol               # Deployment script (FAST_MODE=true for FastRoundManager)
+└── Deploy.s.sol               # Deployment script
 agents/
 ├── random-benchmark/          # Minimal direct-mode agent (RPC only, ~250 lines)
 │   └── agent.mjs
@@ -454,7 +452,7 @@ cp .env.example .env
 # Fill in CURATOR_ADDRESS, ADMIN_ADDRESS, CTF_ADDRESS
 source .env
 forge script script/Deploy.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
-# Add FAST_MODE=true for FastRoundManager
+# Set ROUND_MANAGER_ADDRESS to reuse an existing RoundManager
 ```
 
 Deployment order: AgentRegistry → RoundManager → PredictionArena.
@@ -472,17 +470,17 @@ Deployment order: AgentRegistry → RoundManager → PredictionArena.
 
 Curator/Admin: `0x4B2f4501316d55eF9a16523a9869B1A9AFDDdD68`
 
-### Polygon Mainnet (Fast version)
-
-Uses `FastRoundManager` — no time constraints, for rapid testing with real Polymarket data.
+### Polygon Mainnet
 
 | Contract | Address |
 |---|---|
 | AgentRegistry | `0x624C60c4a3c7461909412FF9b7A0216d4cB0e637` |
-| FastRoundManager | `0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0` |
+| RoundManager | `0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0` |
 | PredictionArena | `0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f` |
 
 Curator/Admin: `0x943507c28186741608a80777B03F045C84beA3A5`
+
+> **Note:** PredictionArena address will change after redeploy with the two-phase scoring refactor. RoundManager and AgentRegistry stay the same.
 
 ## Subgraph (The Graph)
 

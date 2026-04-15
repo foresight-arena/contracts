@@ -4,9 +4,6 @@ pragma solidity ^0.8.20;
 import {IRoundManager} from "./interfaces/IRoundManager.sol";
 
 contract RoundManager is IRoundManager {
-    uint64 public constant MIN_COMMIT_WINDOW = 1 hours;
-    uint64 public constant MIN_REVEAL_WINDOW = 12 hours;
-
     mapping(uint256 => Round) internal _rounds;
     uint256 public currentRoundId;
     address public curator;
@@ -37,9 +34,9 @@ contract RoundManager is IRoundManager {
         uint16 minResolvedMarkets
     ) external virtual onlyCurator returns (uint256 roundId) {
         require(conditionIds.length >= 1 && conditionIds.length <= 20, "Invalid market count");
-        require(commitDeadline > uint64(block.timestamp) + MIN_COMMIT_WINDOW, "Commit deadline too soon");
-        require(revealStart > commitDeadline, "Reveal start must be after commit deadline");
-        require(revealDeadline > revealStart + MIN_REVEAL_WINDOW, "Reveal deadline too soon");
+        require(commitDeadline > uint64(block.timestamp), "Commit deadline must be in the future");
+        require(revealStart >= commitDeadline, "Reveal start must be >= commit deadline");
+        require(revealDeadline > revealStart, "Reveal deadline must be after reveal start");
         require(minResolvedMarkets <= conditionIds.length, "Min resolved exceeds market count");
 
         roundId = ++currentRoundId;

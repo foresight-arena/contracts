@@ -5,7 +5,7 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum
-    name: FastRoundManager
+    name: RoundManager
     network: matic
     source:
       address: "0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0"
@@ -29,7 +29,7 @@ dataSources:
           handler: handleBenchmarksPosted
         - event: RoundInvalidated(indexed uint256)
           handler: handleRoundInvalidated
-      file: ./src/fast-round-manager.ts
+      file: ./src/round-manager.ts
 
   - kind: ethereum
     name: PredictionArena

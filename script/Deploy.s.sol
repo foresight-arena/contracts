@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {RoundManager} from "../src/RoundManager.sol";
-import {FastRoundManager} from "../src/FastRoundManager.sol";
 import {PredictionArena} from "../src/PredictionArena.sol";
 
 contract Deploy is Script {
@@ -12,8 +11,8 @@ contract Deploy is Script {
         address curator = vm.envAddress("CURATOR_ADDRESS");
         address admin = vm.envAddress("ADMIN_ADDRESS");
         address ctf = vm.envAddress("CTF_ADDRESS");
-        bool fastMode = vm.envOr("FAST_MODE", false);
         address existingRegistry = vm.envOr("AGENT_REGISTRY_ADDRESS", address(0));
+        address existingRoundManager = vm.envOr("ROUND_MANAGER_ADDRESS", address(0));
 
         vm.startBroadcast();
 
@@ -27,9 +26,9 @@ contract Deploy is Script {
         }
 
         address roundManagerAddr;
-        if (fastMode) {
-            FastRoundManager fastRm = new FastRoundManager(curator, admin);
-            roundManagerAddr = address(fastRm);
+        if (existingRoundManager != address(0)) {
+            roundManagerAddr = existingRoundManager;
+            console.log("  Using existing RoundManager:", roundManagerAddr);
         } else {
             RoundManager rm = new RoundManager(curator, admin);
             roundManagerAddr = address(rm);
@@ -43,12 +42,6 @@ contract Deploy is Script {
         console.log("==========================================================");
         console.log("  DEPLOYMENT COMPLETE");
         console.log("==========================================================");
-        console.log("");
-        if (fastMode) {
-            console.log("  Mode:              FAST (no time constraints)");
-        } else {
-            console.log("  Mode:              PRODUCTION");
-        }
         console.log("");
         console.log("  AgentRegistry:     ", registryAddr);
         console.log("  RoundManager:      ", roundManagerAddr);

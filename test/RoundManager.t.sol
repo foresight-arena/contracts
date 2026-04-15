@@ -12,9 +12,9 @@ contract RoundManagerTest is Test {
     address admin = address(0xAD);
     address alice = address(0xA1);
 
-    uint64 constant MIN_COMMIT_WINDOW = 1 hours;
-    uint64 constant REVEAL_START_BUFFER = 2 hours;
-    uint64 constant MIN_REVEAL_WINDOW = 12 hours;
+    uint64 constant COMMIT_BUFFER = 60; // 1 minute ahead for valid tests
+    uint64 constant REVEAL_GAP = 2 hours;
+    uint64 constant REVEAL_WINDOW = 12 hours;
 
     event RoundCreated(
         uint256 indexed roundId,
@@ -45,15 +45,15 @@ contract RoundManagerTest is Test {
     }
 
     function _validCommitDeadline() internal view returns (uint64) {
-        return uint64(block.timestamp) + MIN_COMMIT_WINDOW + 1;
+        return uint64(block.timestamp) + COMMIT_BUFFER;
     }
 
     function _validRevealStart(uint64 commitDeadline) internal pure returns (uint64) {
-        return commitDeadline + REVEAL_START_BUFFER;
+        return commitDeadline + REVEAL_GAP;
     }
 
     function _validRevealDeadline(uint64 revealStart) internal pure returns (uint64) {
-        return revealStart + MIN_REVEAL_WINDOW + 1;
+        return revealStart + REVEAL_WINDOW;
     }
 
     function _createDefaultRound() internal returns (uint256 roundId) {
@@ -124,26 +124,43 @@ contract RoundManagerTest is Test {
         rm.createRound(_conditionIds(21), commit, rStart, reveal, 1);
     }
 
-    function test_createRound_commitDeadlineTooSoon() public {
-        // commitDeadline <= block.timestamp + MIN_COMMIT_WINDOW
-        uint64 commit = uint64(block.timestamp) + MIN_COMMIT_WINDOW; // exactly at boundary, not >
-        uint64 rStart = _validRevealStart(commit);
-        uint64 reveal = _validRevealDeadline(rStart);
+    function test_createRound_commitDeadlineInPast() public {
+        uint64 commit = uint64(block.timestamp); // not in the future
+        uint64 rStart = commit + 1;
+        uint64 reveal = rStart + 1;
 
         vm.prank(curator);
-        vm.expectRevert("Commit deadline too soon");
+        vm.expectRevert("Commit deadline must be in the future");
         rm.createRound(_conditionIds(3), commit, rStart, reveal, 1);
     }
 
-    function test_createRound_revealDeadlineTooSoon() public {
+    function test_createRound_revealStartBeforeCommit() public {
         uint64 commit = _validCommitDeadline();
-        uint64 rStart = _validRevealStart(commit);
-        // revealDeadline <= revealStart + MIN_REVEAL_WINDOW
-        uint64 reveal = rStart + MIN_REVEAL_WINDOW; // exactly at boundary, not >
+        uint64 rStart = commit - 1; // before commit deadline
 
         vm.prank(curator);
-        vm.expectRevert("Reveal deadline too soon");
-        rm.createRound(_conditionIds(3), commit, rStart, reveal, 1);
+        vm.expectRevert("Reveal start must be >= commit deadline");
+        rm.createRound(_conditionIds(3), commit, rStart, rStart + 1, 1);
+    }
+
+    function test_createRound_revealDeadlineNotAfterStart() public {
+        uint64 commit = _validCommitDeadline();
+        uint64 rStart = commit;
+
+        vm.prank(curator);
+        vm.expectRevert("Reveal deadline must be after reveal start");
+        rm.createRound(_conditionIds(3), commit, rStart, rStart, 1); // deadline == start
+    }
+
+    function test_createRound_tightTimestamps() public {
+        // Minimal valid round: commit 1s ahead, revealStart == commitDeadline, reveal 1s after
+        uint64 commit = uint64(block.timestamp) + 1;
+        uint64 rStart = commit;
+        uint64 reveal = rStart + 1;
+
+        vm.prank(curator);
+        uint256 roundId = rm.createRound(_conditionIds(2), commit, rStart, reveal, 0);
+        assertEq(roundId, 1);
     }
 
     function test_createRound_multipleRounds() public {
