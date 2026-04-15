@@ -474,13 +474,13 @@ Curator/Admin: `0x4B2f4501316d55eF9a16523a9869B1A9AFDDdD68`
 
 | Contract | Address |
 |---|---|
-| AgentNFT | `0x624C60c4a3c7461909412FF9b7A0216d4cB0e637` |
-| RoundManager | `0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0` |
-| PredictionArena | `0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f` |
+| AgentNFT | `0xB515aE5EA8AAF13b34D2C065a253630bAf83Fc19` |
+| RoundManager | `0x31861F5E8540257AFd98C4F4693Aa67ac7462909` |
+| PredictionArena | `0x95899D57cF8A74dC3892B93F221763a4547e394c` |
 
 Curator/Admin: `0x943507c28186741608a80777B03F045C84beA3A5`
 
-> **Note:** All addresses will change after redeploy with the ERC-8004 + two-phase scoring refactor.
+> Deployed with two-phase scoring, ERC-8004 reputation, soulbound AgentNFT.
 
 ## Subgraph (The Graph)
 

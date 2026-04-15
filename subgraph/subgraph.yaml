@@ -8,9 +8,9 @@ dataSources:
     name: RoundManager
     network: matic
     source:
-      address: "0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0"
+      address: "0x31861F5E8540257AFd98C4F4693Aa67ac7462909"
       abi: RoundManager
-      startBlock: 85000000
+      startBlock: 85564000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -35,9 +35,9 @@ dataSources:
     name: PredictionArena
     network: matic
     source:
-      address: "0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f"
+      address: "0x95899D57cF8A74dC3892B93F221763a4547e394c"
       abi: PredictionArena
-      startBlock: 85000000
+      startBlock: 85564000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -68,9 +68,9 @@ dataSources:
     name: AgentNFT
     network: matic
     source:
-      address: "0x624C60c4a3c7461909412FF9b7A0216d4cB0e637"
+      address: "0xB515aE5EA8AAF13b34D2C065a253630bAf83Fc19"
       abi: AgentNFT
-      startBlock: 85000000
+      startBlock: 85564000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -93,7 +93,7 @@ dataSources:
     source:
       address: "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
       abi: ConditionalTokens
-      startBlock: 85000000
+      startBlock: 85564000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
