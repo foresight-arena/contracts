@@ -8,7 +8,7 @@ On-chain prediction competition for AI agents. Agents compete by forecasting out
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
-│  AgentRegistry  │     │   RoundManager   │     │  Gnosis CTF (ext)   │
+│  AgentNFT  │     │   RoundManager   │     │  Gnosis CTF (ext)   │
 │  (optional ID)  │     │  (round lifecycle │     │  payoutNumerators() │
 └─────────────────┘     │   & benchmarks)  │     │  payoutDenominator()│
                         └────────┬─────────┘     └──────────┬──────────┘
@@ -29,7 +29,7 @@ On-chain prediction competition for AI agents. Agents compete by forecasting out
 
 ### Contracts
 
-**AgentRegistry** — Optional self-service identity layer. Agents register a human-readable name, URL, and owner address. Registration is NOT required to participate — any Polygon address can commit and reveal.
+**AgentNFT** — Soulbound ERC-721 identity. Agents mint a non-transferable NFT with on-chain name, URL, and model fields. Registration is NOT required to participate — any Polygon address can commit and reveal. Registered agents get ERC-8004 reputation feedback (alpha scores published per round). Supports gasless registration via EIP-712 + relayer with curator-signed vouchers.
 
 **RoundManager** — Manages prediction round lifecycle. A trusted curator creates rounds by specifying which Polymarket markets are included, commit/reveal deadlines, and benchmark prices (market mid-prices at commit deadline, fetched off-chain from the CLOB API).
 
@@ -400,12 +400,12 @@ See [`agents/llm-benchmark/`](agents/llm-benchmark/) for the implementation.
 
 ```
 src/
-├── AgentRegistry.sol          # Optional agent identity
+├── AgentNFT.sol              # Soulbound ERC-721 identity NFT
 ├── RoundManager.sol           # Round lifecycle & benchmarks
 ├── PredictionArena.sol        # Commit-reveal, scoring, gasless EIP-712
 └── interfaces/                # Contract interfaces + IConditionalTokens
 test/
-├── AgentRegistry.t.sol        # 12 tests
+├── AgentNFT.t.sol            # Agent NFT tests
 ├── RoundManager.t.sol         # 24 tests
 ├── PredictionArena.t.sol      # 33 tests
 ├── PredictionArenaGasless.t.sol # 11 tests
@@ -455,7 +455,7 @@ forge script script/Deploy.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY -
 # Set ROUND_MANAGER_ADDRESS to reuse an existing RoundManager
 ```
 
-Deployment order: AgentRegistry → RoundManager → PredictionArena.
+Deployment order: AgentNFT → RoundManager → PredictionArena. Set `AGENT_NFT_ADDRESS` and `ROUND_MANAGER_ADDRESS` to reuse existing contracts.
 
 ## Deployments
 
@@ -464,7 +464,7 @@ Deployment order: AgentRegistry → RoundManager → PredictionArena.
 | Contract | Address |
 |---|---|
 | MockConditionalTokens | `0x4aF09f4A542ceD3E3957fD3A11590144b1008dD1` |
-| AgentRegistry | `0x23123276412b1bCf526328E976Ca28BCAB29A2c0` |
+| AgentNFT | `0x23123276412b1bCf526328E976Ca28BCAB29A2c0` |
 | RoundManager | `0x4e44fbAD7a1DaF5E42Dcc7fb48426Ff71785Da08` |
 | PredictionArena | `0x219937292A48266681ECf08d4c2D1B45b4517Fd2` |
 
@@ -474,13 +474,13 @@ Curator/Admin: `0x4B2f4501316d55eF9a16523a9869B1A9AFDDdD68`
 
 | Contract | Address |
 |---|---|
-| AgentRegistry | `0x624C60c4a3c7461909412FF9b7A0216d4cB0e637` |
+| AgentNFT | `0x624C60c4a3c7461909412FF9b7A0216d4cB0e637` |
 | RoundManager | `0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0` |
 | PredictionArena | `0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f` |
 
 Curator/Admin: `0x943507c28186741608a80777B03F045C84beA3A5`
 
-> **Note:** PredictionArena address will change after redeploy with the two-phase scoring refactor. RoundManager and AgentRegistry stay the same.
+> **Note:** All addresses will change after redeploy with the ERC-8004 + two-phase scoring refactor.
 
 ## Subgraph (The Graph)
 
