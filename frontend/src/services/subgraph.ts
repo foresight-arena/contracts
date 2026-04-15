@@ -30,7 +30,6 @@ export async function fetchAllData(): Promise<{
         revealDeadline
         benchmarksPosted
         invalidated
-        outcomesTriggered
         marketCount
         roundMarkets(orderBy: marketIndex) {
           market {
