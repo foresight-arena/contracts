@@ -22,9 +22,10 @@ Parameters:
     Default: '0x31861F5E8540257AFd98C4F4693Aa67ac7462909'
   AgentNFTAddress:
     Type: String
-    Default: '0x0000000000000000000000000000000000000000'
+    Default: '0xB515aE5EA8AAF13b34D2C065a253630bAf83Fc19'
   CuratorAddress:
     Type: String
+    Default: '0x943507c28186741608a80777B03F045C84beA3A5'
     Description: Curator public address for voucher verification
 
 Resources:
