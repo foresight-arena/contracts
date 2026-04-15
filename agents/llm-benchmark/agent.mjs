@@ -384,7 +384,7 @@ async function tryCommit(roundId, round) {
 
   const reasoningHash = reasoningPayload
     ? keccak256(toBytes(canonicalize(reasoningPayload)))
-    : '0xB515aE5EA8AAF13b34D2C065a253630bAf83Fc19000000000000000000000000';
+    : '0x0000000000000000000000000000000000000000000000000000000000000000';
 
   log(`Round ${roundId}: committing on-chain...`);
 

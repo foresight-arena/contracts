@@ -53,16 +53,17 @@ export async function verifyReasoningHash(
   agent: string,
   content: unknown,
 ): Promise<boolean> {
+  const id = `${roundId}-${agent.toLowerCase()}`;
   const data = await querySubgraph(`{
-    commits(where: { roundId: "${roundId}", agent: "${agent.toLowerCase()}" }) {
+    agentRound(id: "${id}") {
       reasoningHash
     }
   }`);
 
-  const commits = data?.commits || [];
-  if (commits.length === 0) return false;
+  const ar = data?.agentRound;
+  if (!ar) return false;
 
-  const onChainHash = commits[0].reasoningHash as string;
+  const onChainHash = ar.reasoningHash as string;
   if (!onChainHash || onChainHash === '0x0000000000000000000000000000000000000000000000000000000000000000') {
     return false;
   }
@@ -76,15 +77,14 @@ export async function verifyReasoningHash(
  */
 export async function hasRevealStartPassed(roundId: number): Promise<boolean> {
   const data = await querySubgraph(`{
-    rounds(where: { roundId: "${roundId}" }) {
+    round(id: "${roundId}") {
       revealStart
     }
   }`);
 
-  const rounds = data?.rounds || [];
-  if (rounds.length === 0) return false;
+  if (!data?.round) return false;
 
-  const revealStart = Number(rounds[0].revealStart);
+  const revealStart = Number(data.round.revealStart);
   const now = Math.floor(Date.now() / 1000);
   return now >= revealStart;
 }
@@ -94,14 +94,12 @@ export async function hasRevealStartPassed(roundId: number): Promise<boolean> {
  */
 export async function isOutcomesTriggeredSubgraph(roundId: number): Promise<boolean> {
   const data = await querySubgraph(`{
-    rounds(where: { roundId: "${roundId}" }) {
+    round(id: "${roundId}") {
       outcomesTriggered
     }
   }`);
 
-  const rounds = data?.rounds || [];
-  if (rounds.length === 0) return false;
-  return rounds[0].outcomesTriggered === true;
+  return data?.round?.outcomesTriggered === true;
 }
 
 function s3Key(roundId: number, agent: string): string {
