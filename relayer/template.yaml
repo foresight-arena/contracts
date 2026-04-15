@@ -20,13 +20,12 @@ Parameters:
   RoundManagerAddress:
     Type: String
     Default: '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0'
-  AgentRegistryAddress:
+  AgentNFTAddress:
     Type: String
-    Default: '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637'
-  ReasoningWhitelist:
+    Default: '0x0000000000000000000000000000000000000000'
+  CuratorAddress:
     Type: String
-    Default: ''
-    Description: Comma-separated list of agent addresses allowed to post reasoning
+    Description: Curator public address for voucher verification
 
 Resources:
   ReasoningBucket:
@@ -61,9 +60,9 @@ Resources:
           CURATOR_PRIVATE_KEY: !Ref CuratorPrivateKey
           PREDICTION_ARENA_ADDRESS: !Ref PredictionArenaAddress
           ROUND_MANAGER_ADDRESS: !Ref RoundManagerAddress
-          AGENT_REGISTRY_ADDRESS: !Ref AgentRegistryAddress
+          AGENT_NFT_ADDRESS: !Ref AgentNFTAddress
+          CURATOR_ADDRESS: !Ref CuratorAddress
           REASONING_BUCKET: !Ref ReasoningBucket
-          REASONING_WHITELIST: !Ref ReasoningWhitelist
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref ReasoningBucket

@@ -6,6 +6,7 @@ const commitTypes = {
   Commit: [
     { name: 'roundId', type: 'uint256' },
     { name: 'commitHash', type: 'bytes32' },
+    { name: 'reasoningHash', type: 'bytes32' },
     { name: 'agent', type: 'address' },
     { name: 'nonce', type: 'uint256' },
     { name: 'deadline', type: 'uint256' },
@@ -27,6 +28,7 @@ export async function verifyCommitSignature(
   req: CommitRequest,
   nonce: bigint,
 ): Promise<boolean> {
+  const reasoningHash = req.reasoningHash || '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
   const valid = await verifyTypedData({
     address: req.agent,
     domain: config.eip712Domain,
@@ -35,6 +37,7 @@ export async function verifyCommitSignature(
     message: {
       roundId: BigInt(req.roundId),
       commitHash: req.commitHash,
+      reasoningHash,
       agent: req.agent,
       nonce,
       deadline: BigInt(req.deadline),
