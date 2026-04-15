@@ -39,6 +39,13 @@ contract RoundManager is IRoundManager {
         require(revealDeadline > revealStart, "Reveal deadline must be after reveal start");
         require(minResolvedMarkets <= conditionIds.length, "Min resolved exceeds market count");
 
+        // Reject duplicate conditionIds (max 20 markets, O(n^2) is cheap)
+        for (uint256 i = 0; i < conditionIds.length; i++) {
+            for (uint256 j = i + 1; j < conditionIds.length; j++) {
+                require(conditionIds[i] != conditionIds[j], "Duplicate conditionId");
+            }
+        }
+
         roundId = ++currentRoundId;
         Round storage r = _rounds[roundId];
         r.conditionIds = conditionIds;

@@ -124,6 +124,21 @@ contract RoundManagerTest is Test {
         rm.createRound(_conditionIds(21), commit, rStart, reveal, 1);
     }
 
+    function test_createRound_duplicateConditionIds() public {
+        uint64 commit = _validCommitDeadline();
+        uint64 rStart = _validRevealStart(commit);
+        uint64 reveal = _validRevealDeadline(rStart);
+
+        bytes32[] memory ids = new bytes32[](3);
+        ids[0] = bytes32(uint256(1));
+        ids[1] = bytes32(uint256(2));
+        ids[2] = bytes32(uint256(1)); // duplicate of ids[0]
+
+        vm.prank(curator);
+        vm.expectRevert("Duplicate conditionId");
+        rm.createRound(ids, commit, rStart, reveal, 1);
+    }
+
     function test_createRound_commitDeadlineInPast() public {
         uint64 commit = uint64(block.timestamp); // not in the future
         uint64 rStart = commit + 1;
