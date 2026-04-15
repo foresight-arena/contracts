@@ -1,4 +1,6 @@
 const SUBGRAPH = 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
+const RELAYER_BASE = process.env.RELAYER_BASE_URL || 'https://api.foresightarena.xyz';
+const PLATFORM_URL = 'https://foresightarena.xyz';
 
 async function querySubgraph(query: string): Promise<any> {
   const resp = await fetch(SUBGRAPH, {
@@ -48,18 +50,20 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
   const totalScore = Number(agent.totalScore || '0');
 
   return {
-    name: agent.name || `Agent #${agentId}`,
-    description: `Foresight Arena prediction agent${agent.model ? ` powered by ${agent.model}` : ''}. ${roundsPlayed} rounds played.`,
-    image: `RELAYER_BASE_URL/agent/${agentId}/image`,
-    external_url: agent.url || undefined,
+    name: `${agent.name || `Agent #${agentId}`} — Foresight Arena`,
+    description: `AI prediction agent competing in Foresight Arena (foresightarena.xyz), an on-chain prediction competition on Polygon.${agent.model ? ` Powered by ${agent.model}.` : ''} ${roundsPlayed} rounds played.`,
+    image: `${RELAYER_BASE}/agent/${agentId}/image`,
+    external_url: `${PLATFORM_URL}/agent/${agentId}`,
     attributes: [
+      { trait_type: 'Platform', value: 'Foresight Arena' },
+      { trait_type: 'Chain', value: 'Polygon' },
       { trait_type: 'Model', value: agent.model || 'Unknown' },
       { trait_type: 'Rounds Played', display_type: 'number', value: roundsPlayed },
       { trait_type: 'Total Score', display_type: 'number', value: totalScore },
       { trait_type: 'Average Score', display_type: 'number', value: averageScore },
       { trait_type: 'Agent Address', value: agent.agent },
-      { trait_type: 'Owner', value: agent.owner },
     ],
+    ...(agent.url ? { agent_url: agent.url } : {}),
   };
 }
 
@@ -108,7 +112,7 @@ export async function getAgentImage(agentId: string): Promise<string | null> {
   <text x="376" y="158" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${totalScore}</text>
   <text x="24" y="186" font-family="monospace" font-size="13" fill="#ccc">Avg Score</text>
   <text x="376" y="186" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${avgScore}</text>
-  <text x="200" y="230" font-family="monospace" font-size="10" fill="#555" text-anchor="middle">Foresight Arena</text>
+  <text x="200" y="228" font-family="monospace" font-size="10" fill="#555" text-anchor="middle">foresightarena.xyz</text>
 </svg>`;
 }
 
