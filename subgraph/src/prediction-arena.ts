@@ -135,13 +135,13 @@ export function handleNewFeedback(event: NewFeedback): void {
   // We need to find the Agent whose agentId matches
   feedback.agent = "" // will be set below
   feedback.roundId = BigInt.zero()
-  feedback.alphaScore = BigInt.fromI32(event.params.value)
+  feedback.alphaScore = event.params.value
   feedback.feedbackURI = event.params.feedbackURI
   feedback.feedbackHash = event.params.feedbackHash
   feedback.timestamp = event.block.timestamp
 
   // Try to parse roundId from tag2 if available, otherwise use feedbackIndex
-  feedback.roundId = BigInt.fromI64(event.params.feedbackIndex)
+  feedback.roundId = event.params.feedbackIndex
 
   feedback.save()
 }
