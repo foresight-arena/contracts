@@ -37,8 +37,10 @@ type RoundMarket @entity {
 type Agent @entity {
   id: ID!
   address: Bytes!
+  agentId: BigInt
   name: String!
   url: String!
+  model: String!
   owner: Bytes!
   registeredAt: BigInt!
   totalBrierScore: BigInt!
@@ -54,6 +56,7 @@ type AgentRound @entity {
   round: Round!
   agent: Agent!
   commitHash: Bytes!
+  reasoningHash: Bytes
   commitTimestamp: BigInt!
   revealed: Boolean!
   predictions: [Int!]!
@@ -61,4 +64,15 @@ type AgentRound @entity {
   alphaScore: BigInt!
   scoredMarkets: Int!
   totalMarkets: Int!
+}
+
+type ReputationFeedback @entity {
+  id: ID!
+  agentId: BigInt!
+  agent: Agent!
+  roundId: BigInt!
+  alphaScore: BigInt!
+  feedbackURI: String!
+  feedbackHash: Bytes!
+  timestamp: BigInt!
 }

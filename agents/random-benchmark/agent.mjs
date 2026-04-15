@@ -44,7 +44,7 @@ const AGENT_URL = process.env.AGENT_URL || '';
 const ADDRESSES = {
   arena: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f',
   roundManager: '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0',
-  registry: '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637',
+  agentNFT: '0x0000000000000000000000000000000000000000',
 };
 
 // ─── ABIs (minimal) ───────────────────────────────────────────────────────────
@@ -55,13 +55,13 @@ const roundManagerAbi = parseAbi([
 ]);
 
 const arenaAbi = parseAbi([
-  'function commit(uint256 roundId, bytes32 commitHash)',
+  'function commit(uint256 roundId, bytes32 commitHash, bytes32 reasoningHash)',
   'function reveal(uint256 roundId, uint16[] predictions, bytes32 salt)',
 ]);
 
-const registryAbi = parseAbi([
-  'function isRegistered(address agent) view returns (bool)',
-  'function registerAgent(string name, string url, address owner)',
+const agentNFTAbi = parseAbi([
+  'function agentIdOf(address agent) view returns (uint256)',
+  'function register(string name, string url, string model)',
 ]);
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ const publicClient = createPublicClient({ chain: polygon, transport });
 const walletClient = createWalletClient({ chain: polygon, transport, account });
 
 const roundManager = getContract({ address: ADDRESSES.roundManager, abi: roundManagerAbi, client: publicClient });
-const registry = getContract({ address: ADDRESSES.registry, abi: registryAbi, client: publicClient });
+const agentNFT = getContract({ address: ADDRESSES.agentNFT, abi: agentNFTAbi, client: publicClient });
 
 // ─── Persistent State (survives between cron runs) ────────────────────────────
 
@@ -134,17 +134,17 @@ function log(msg) {
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 async function ensureRegistered() {
-  const registered = await registry.read.isRegistered([account.address]);
-  if (registered) return;
+  const agentId = await agentNFT.read.agentIdOf([account.address]);
+  if (agentId > 0n) return;
 
   const name = AGENT_NAME || `Random-${account.address.slice(2, 8)}`;
   log(`Registering as "${name}"...`);
 
   const { request } = await publicClient.simulateContract({
-    address: ADDRESSES.registry,
-    abi: registryAbi,
-    functionName: 'registerAgent',
-    args: [name, AGENT_URL, account.address],
+    address: ADDRESSES.agentNFT,
+    abi: agentNFTAbi,
+    functionName: 'register',
+    args: [name, AGENT_URL, ''],
     account,
   });
   const hash = await walletClient.writeContract(request);
@@ -171,7 +171,7 @@ async function tryCommit(roundId, round) {
       address: ADDRESSES.arena,
       abi: arenaAbi,
       functionName: 'commit',
-      args: [BigInt(roundId), commitHash],
+      args: [BigInt(roundId), commitHash, '0x0000000000000000000000000000000000000000000000000000000000000000'],
       account,
     });
     const hash = await walletClient.writeContract(request);
