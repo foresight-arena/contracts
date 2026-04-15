@@ -21,7 +21,6 @@ contract PredictionArena is IPredictionArena {
         int256[] cachedOutcomes; // 10000 or 0 per market (valid where bit set)
         bool outcomesTriggered; // single-trigger guard
         address[] pendingScoring; // agents revealed before outcomes triggered
-        uint256 pendingScoringProcessed; // pagination cursor
     }
 
     mapping(uint256 => RoundOutcomes) internal _roundOutcomes;
@@ -123,13 +122,13 @@ contract PredictionArena is IPredictionArena {
 
     function triggerOutcomesAndScore(uint256 roundId) external {
         _triggerOutcomes(roundId);
-        _scorePendingBatch(roundId, type(uint256).max);
+        _scorePending(roundId);
     }
 
-    function calculateScoresForPendingReveals(uint256 roundId, uint256 batchSize) external {
+    function calculateScoresForPendingReveals(uint256 roundId) external {
         RoundOutcomes storage o = _roundOutcomes[roundId];
         require(o.outcomesTriggered, "Outcomes not triggered");
-        _scorePendingBatch(roundId, batchSize);
+        _scorePending(roundId);
     }
 
     function _triggerOutcomes(uint256 roundId) internal {
@@ -170,21 +169,19 @@ contract PredictionArena is IPredictionArena {
         emit OutcomesTriggered(roundId, bitmask, resolvedCount);
     }
 
-    function _scorePendingBatch(uint256 roundId, uint256 batchSize) internal {
+    function _scorePending(uint256 roundId) internal {
         RoundOutcomes storage o = _roundOutcomes[roundId];
         IRoundManager.Round memory r = roundManager.getRound(roundId);
 
-        uint256 start = o.pendingScoringProcessed;
-        uint256 end = start + batchSize;
-        if (end > o.pendingScoring.length) end = o.pendingScoring.length;
-
-        for (uint256 i = start; i < end; i++) {
-            address agent = o.pendingScoring[i];
-            _scoreAgent(roundId, agent, r);
+        uint256 count = o.pendingScoring.length;
+        for (uint256 i = 0; i < count; i++) {
+            _scoreAgent(roundId, o.pendingScoring[i], r);
         }
 
-        o.pendingScoringProcessed = end;
-        emit PendingScoresProcessed(roundId, end - start, o.pendingScoring.length - end);
+        // Clean up fully consumed array
+        delete o.pendingScoring;
+
+        emit PendingScoresProcessed(roundId, count, 0);
     }
 
     // ---------------------------------------------------------------
@@ -240,8 +237,8 @@ contract PredictionArena is IPredictionArena {
         require(r.benchmarksPosted, "Benchmarks not posted");
 
         Commitment storage c = _commitments[roundId][agent];
-        require(c.commitHash != bytes32(0), "No commitment");
         require(!c.revealed, "Already revealed");
+        require(c.commitHash != bytes32(0), "No commitment");
         require(predictions.length == r.conditionIds.length, "Wrong prediction count");
 
         // Verify hash — manually pack uint16[] as tight 2-byte elements
@@ -258,6 +255,7 @@ contract PredictionArena is IPredictionArena {
         }
 
         c.revealed = true;
+        c.commitHash = bytes32(0); // Gas refund: hash no longer needed after verification
         _revealedPredictions[roundId][agent] = predictions;
 
         // If outcomes are already triggered, score inline. Otherwise, defer.
@@ -351,8 +349,7 @@ contract PredictionArena is IPredictionArena {
         return (o.outcomesTriggered, o.resolvedBitmask, o.cachedOutcomes);
     }
 
-    function getPendingScoringCount(uint256 roundId) external view returns (uint256 total, uint256 processed) {
-        RoundOutcomes storage o = _roundOutcomes[roundId];
-        return (o.pendingScoring.length, o.pendingScoringProcessed);
+    function getPendingScoringCount(uint256 roundId) external view returns (uint256) {
+        return _roundOutcomes[roundId].pendingScoring.length;
     }
 }

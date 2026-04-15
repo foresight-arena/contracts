@@ -55,10 +55,10 @@ interface IPredictionArena {
 
     function triggerOutcomes(uint256 roundId) external;
     function triggerOutcomesAndScore(uint256 roundId) external;
-    function calculateScoresForPendingReveals(uint256 roundId, uint256 batchSize) external;
+    function calculateScoresForPendingReveals(uint256 roundId) external;
     function getRoundOutcomes(uint256 roundId)
         external
         view
         returns (bool triggered, uint256 bitmask, int256[] memory outcomes);
-    function getPendingScoringCount(uint256 roundId) external view returns (uint256 total, uint256 processed);
+    function getPendingScoringCount(uint256 roundId) external view returns (uint256);
 }

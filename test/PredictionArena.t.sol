@@ -972,7 +972,7 @@ contract PredictionArenaTest is Test {
         arena.triggerOutcomes(roundId);
 
         // Score pending reveals
-        arena.calculateScoresForPendingReveals(roundId, 10);
+        arena.calculateScoresForPendingReveals(roundId);
 
         // Now score should be computed
         s = arena.getScore(roundId, agent1);
@@ -1013,7 +1013,7 @@ contract PredictionArenaTest is Test {
         assertEq(s.brierScore, 4000000);
     }
 
-    function test_calculateScoresForPendingReveals_pagination() public {
+    function test_calculateScoresForPendingReveals_multiAgent() public {
         (uint256 roundId, bytes32[] memory cIds) = _createStandardRound();
 
         // Commit for 3 agents
@@ -1041,34 +1041,26 @@ contract PredictionArenaTest is Test {
         vm.prank(agent3);
         arena.reveal(roundId, preds3, keccak256("salt3"));
 
+        // 3 pending
+        assertEq(arena.getPendingScoringCount(roundId), 3);
+
         // Trigger outcomes
         vm.prank(curator);
         arena.triggerOutcomes(roundId);
 
-        // Process in batches of 2
-        arena.calculateScoresForPendingReveals(roundId, 2);
+        // Score all pending
+        arena.calculateScoresForPendingReveals(roundId);
 
-        // First 2 should be scored, third still pending
-        (uint256 total, uint256 processed) = arena.getPendingScoringCount(roundId);
-        assertEq(total, 3);
-        assertEq(processed, 2);
-
+        // All 3 should be scored
         IPredictionArena.Score memory s1 = arena.getScore(roundId, agent1);
         IPredictionArena.Score memory s2 = arena.getScore(roundId, agent2);
         IPredictionArena.Score memory s3 = arena.getScore(roundId, agent3);
 
         assertEq(s1.scoredMarkets, 5);
         assertEq(s2.scoredMarkets, 5);
-        assertEq(s3.scoredMarkets, 0); // not yet scored
-
-        // Process remaining
-        arena.calculateScoresForPendingReveals(roundId, 10);
-
-        s3 = arena.getScore(roundId, agent3);
         assertEq(s3.scoredMarkets, 5);
 
-        (total, processed) = arena.getPendingScoringCount(roundId);
-        assertEq(total, 3);
-        assertEq(processed, 3);
+        // Pending list cleaned up
+        assertEq(arena.getPendingScoringCount(roundId), 0);
     }
 }
