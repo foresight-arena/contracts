@@ -520,7 +520,7 @@ contract PredictionArenaTest is Test {
         arena.reveal(roundId, preds, SALT);
     }
 
-    function test_reveal_benchmarksNotPosted() public {
+    function test_reveal_withoutBenchmarks_succeeds() public {
         (uint256 roundId,) = _createStandardRound();
         uint16[] memory preds = _uniformPredictions(5, 5000);
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
@@ -528,13 +528,27 @@ contract PredictionArenaTest is Test {
         vm.prank(agent1);
         arena.commit(roundId, commitHash);
 
-        // Don't post benchmarks; warp past commit deadline + oracle buffer
+        // Don't post benchmarks; warp to reveal phase
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         vm.warp(r.revealStart);
 
+        // Reveal should succeed — scoring is deferred, benchmarks only needed at trigger time
         vm.prank(agent1);
-        vm.expectRevert("Benchmarks not posted");
         arena.reveal(roundId, preds, SALT);
+        assertTrue(arena.hasRevealed(roundId, agent1));
+    }
+
+    function test_triggerOutcomes_requiresBenchmarks() public {
+        (uint256 roundId, bytes32[] memory cIds) = _createStandardRound();
+
+        // Don't post benchmarks; warp to reveal phase
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        vm.warp(r.revealStart);
+
+        // triggerOutcomes should fail without benchmarks
+        vm.prank(curator);
+        vm.expectRevert("Benchmarks not posted");
+        arena.triggerOutcomes(roundId);
     }
 
     function test_reveal_invalidatedRound() public {

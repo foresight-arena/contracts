@@ -422,12 +422,6 @@ async function processRevealQueue() {
         continue;
       }
 
-      if (!round.benchmarksPosted) {
-        log(`Round ${roundId}: waiting for benchmarks`);
-        remaining.push(entry);
-        continue;
-      }
-
       // Scoring is deferred until curator triggers outcomes — just reveal
       log(`Round ${roundId}: simulating reveal...`);
       const { request } = await publicClient.simulateContract({

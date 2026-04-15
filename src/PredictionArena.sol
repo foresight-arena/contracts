@@ -135,6 +135,7 @@ contract PredictionArena is IPredictionArena {
         IRoundManager.Round memory r = roundManager.getRound(roundId);
         require(r.conditionIds.length > 0, "Round does not exist");
         require(!r.invalidated, "Round invalidated");
+        require(r.benchmarksPosted, "Benchmarks not posted");
 
         // Curator-only during reveal window, permissionless after revealDeadline
         if (uint64(block.timestamp) < r.revealDeadline) {
@@ -234,7 +235,6 @@ contract PredictionArena is IPredictionArena {
         require(!r.invalidated, "Round invalidated");
         require(uint64(block.timestamp) >= r.revealStart, "Reveal not started");
         require(uint64(block.timestamp) < r.revealDeadline, "Reveal phase ended");
-        require(r.benchmarksPosted, "Benchmarks not posted");
 
         Commitment storage c = _commitments[roundId][agent];
         require(!c.revealed, "Already revealed");
