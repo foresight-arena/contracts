@@ -14,14 +14,13 @@ async function querySubgraph(query: string): Promise<any> {
 
 interface AgentSubgraphData {
   agentId: string;
-  agent: string;
+  address: string;
   name: string;
   url: string;
   model: string;
-  owner: string;
-  totalScore: string;
-  roundsPlayed: string;
-  averageScore: string;
+  totalBrierScore: string;
+  totalAlphaScore: string;
+  scoredRoundCount: number;
 }
 
 /**
@@ -29,25 +28,27 @@ interface AgentSubgraphData {
  */
 export async function getAgentMetadata(agentId: string): Promise<object | null> {
   const data = await querySubgraph(`{
-    agentToken(id: "${agentId}") {
+    agents(where: { agentId: "${agentId}" }, first: 1) {
       agentId
-      agent
+      address
       name
       url
       model
-      owner
-      totalScore
-      roundsPlayed
-      averageScore
+      totalBrierScore
+      totalAlphaScore
+      scoredRoundCount
     }
   }`);
 
-  const agent: AgentSubgraphData | null = data?.agentToken || null;
+  const agents = data?.agents || [];
+  const agent = agents.length > 0 ? agents[0] : null;
   if (!agent) return null;
 
-  const roundsPlayed = Number(agent.roundsPlayed || '0');
-  const averageScore = Number(agent.averageScore || '0');
-  const totalScore = Number(agent.totalScore || '0');
+  const roundsPlayed = Number(agent.scoredRoundCount || 0);
+  const totalBrier = Number(agent.totalBrierScore || 0);
+  const totalAlpha = Number(agent.totalAlphaScore || 0);
+  const avgBrier = roundsPlayed > 0 ? ((totalBrier / roundsPlayed) / 1e8 * 100).toFixed(2) : '0';
+  const avgAlpha = roundsPlayed > 0 ? ((totalAlpha / roundsPlayed) / 1e8 * 100).toFixed(2) : '0';
 
   return {
     name: `${agent.name || `Agent #${agentId}`} — Foresight Arena`,
@@ -59,9 +60,9 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
       { trait_type: 'Chain', value: 'Polygon' },
       { trait_type: 'Model', value: agent.model || 'Unknown' },
       { trait_type: 'Rounds Played', display_type: 'number', value: roundsPlayed },
-      { trait_type: 'Total Score', display_type: 'number', value: totalScore },
-      { trait_type: 'Average Score', display_type: 'number', value: averageScore },
-      { trait_type: 'Agent Address', value: agent.agent },
+      { trait_type: 'Avg Brier Score', value: `${avgBrier}%` },
+      { trait_type: 'Avg Alpha Score', value: `${avgAlpha}%` },
+      { trait_type: 'Agent Address', value: agent.address },
     ],
     ...(agent.url ? { agent_url: agent.url } : {}),
   };
@@ -72,26 +73,28 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
  */
 export async function getAgentImage(agentId: string): Promise<string | null> {
   const data = await querySubgraph(`{
-    agentToken(id: "${agentId}") {
+    agents(where: { agentId: "${agentId}" }, first: 1) {
       agentId
-      agent
+      address
       name
       model
-      totalScore
-      roundsPlayed
-      averageScore
+      totalBrierScore
+      totalAlphaScore
+      scoredRoundCount
     }
   }`);
 
-  const agent: AgentSubgraphData | null = data?.agentToken || null;
+  const agents = data?.agents || [];
+  const agent = agents.length > 0 ? agents[0] : null;
   if (!agent) return null;
 
   const name = escapeXml(agent.name || `Agent #${agentId}`);
   const model = escapeXml(agent.model || 'Unknown');
-  const roundsPlayed = agent.roundsPlayed || '0';
-  const avgScore = Number(agent.averageScore || '0').toFixed(1);
-  const totalScore = agent.totalScore || '0';
-  const shortAddr = `${agent.agent.slice(0, 6)}...${agent.agent.slice(-4)}`;
+  const rounds = Number(agent.scoredRoundCount || 0);
+  const totalAlpha = Number(agent.totalAlphaScore || 0);
+  const avgAlpha = rounds > 0 ? ((totalAlpha / rounds) / 1e8 * 100).toFixed(1) : '0.0';
+  const addr = agent.address || '';
+  const shortAddr = addr.length >= 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="250" viewBox="0 0 400 250">
   <defs>
@@ -107,11 +110,9 @@ export async function getAgentImage(agentId: string): Promise<string | null> {
   <text x="24" y="84" font-family="monospace" font-size="12" fill="#aaa">Model: ${model}</text>
   <line x1="24" y1="100" x2="376" y2="100" stroke="#0f3460" stroke-width="1" />
   <text x="24" y="130" font-family="monospace" font-size="13" fill="#ccc">Rounds Played</text>
-  <text x="376" y="130" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${roundsPlayed}</text>
-  <text x="24" y="158" font-family="monospace" font-size="13" fill="#ccc">Total Score</text>
-  <text x="376" y="158" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${totalScore}</text>
-  <text x="24" y="186" font-family="monospace" font-size="13" fill="#ccc">Avg Score</text>
-  <text x="376" y="186" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${avgScore}</text>
+  <text x="376" y="130" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${rounds}</text>
+  <text x="24" y="158" font-family="monospace" font-size="13" fill="#ccc">Avg Alpha</text>
+  <text x="376" y="158" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${avgAlpha}%</text>
   <text x="200" y="228" font-family="monospace" font-size="10" fill="#555" text-anchor="middle">foresightarena.xyz</text>
 </svg>`;
 }
