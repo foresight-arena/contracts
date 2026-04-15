@@ -34,7 +34,7 @@ contract VoidMarketScoringTest is Test {
         vm.warp(1000000);
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), admin);
+        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin, "");
     }
 
     function _createRound() internal returns (uint256 roundId) {
@@ -59,7 +59,7 @@ contract VoidMarketScoringTest is Test {
 
         // Commit
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         // Warp past commit, post benchmarks
         vm.warp(block.timestamp + 2 hours + 1);
@@ -153,7 +153,7 @@ contract VoidMarketScoringTest is Test {
             packed = abi.encodePacked(packed, preds[i]);
         }
         vm.prank(agent1);
-        arena.commit(roundId, keccak256(abi.encodePacked(packed, salt)));
+        arena.commit(roundId, keccak256(abi.encodePacked(packed, salt)), bytes32(0));
 
         // Benchmarks + warp
         vm.warp(block.timestamp + 2 hours + 1);
@@ -218,7 +218,7 @@ contract VoidMarketScoringTest is Test {
             packed = abi.encodePacked(packed, preds[i]);
         }
         vm.prank(agent1);
-        arena.commit(roundId, keccak256(abi.encodePacked(packed, salt)));
+        arena.commit(roundId, keccak256(abi.encodePacked(packed, salt)), bytes32(0));
 
         vm.warp(block.timestamp + 2 hours + 1);
         uint16[] memory benchmarks = new uint16[](2);

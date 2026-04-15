@@ -52,7 +52,7 @@ contract E2EStep1 is Script {
         TestnetRoundManager rm = new TestnetRoundManager(deployer, deployer);
         console.log("TestnetRoundManager:", address(rm));
 
-        PredictionArena arena = new PredictionArena(address(rm), address(mockCtf), deployer);
+        PredictionArena arena = new PredictionArena(address(rm), address(mockCtf), address(0), deployer, "");
         console.log("PredictionArena:", address(arena));
 
         // Fund agent B for gas
@@ -85,7 +85,7 @@ contract E2EStep1 is Script {
             }
             hashA = keccak256(abi.encodePacked(packedA, saltA));
         }
-        arena.commit(roundId, hashA);
+        arena.commit(roundId, hashA, bytes32(0));
         console.log("Agent A committed");
 
         vm.stopBroadcast();
@@ -105,7 +105,7 @@ contract E2EStep1 is Script {
             bytes32 hashB = keccak256(abi.encodePacked(packedB, saltB));
 
             vm.startBroadcast(agentBKey);
-            arena.commit(roundId, hashB);
+            arena.commit(roundId, hashB, bytes32(0));
             console.log("Agent B committed");
             vm.stopBroadcast();
         }

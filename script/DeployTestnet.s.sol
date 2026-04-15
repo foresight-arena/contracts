@@ -26,7 +26,7 @@ contract DeployTestnet is Script {
         RoundManager roundManager = new RoundManager(deployer, deployer);
         console.log("RoundManager:", address(roundManager));
 
-        PredictionArena arena = new PredictionArena(address(roundManager), address(mockCtf), deployer);
+        PredictionArena arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), deployer, "");
         console.log("PredictionArena:", address(arena));
 
         vm.stopBroadcast();

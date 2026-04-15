@@ -23,7 +23,9 @@ contract PredictionArenaTest is Test {
     bytes32 constant SALT = keccak256("salt");
     bytes32 constant SALT2 = keccak256("salt2");
 
-    event Committed(uint256 indexed roundId, address indexed agent, bytes32 commitHash, uint256 nonce);
+    event Committed(
+        uint256 indexed roundId, address indexed agent, bytes32 commitHash, bytes32 reasoningHash, uint256 nonce
+    );
     event Revealed(
         uint256 indexed roundId, address indexed agent, uint16[] predictions, uint16 scoredMarkets, uint256 nonce
     );
@@ -45,7 +47,7 @@ contract PredictionArenaTest is Test {
 
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), admin);
+        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin, "");
     }
 
     // ---------------------------------------------------------------
@@ -135,7 +137,7 @@ contract PredictionArenaTest is Test {
     /// @dev Commit for an agent.
     function _commitAs(address agent, uint256 roundId, bytes32 commitHash) internal {
         vm.prank(agent);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
     }
 
     /// @dev Full commit+reveal flow helper. Returns the score.
@@ -166,10 +168,10 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.expectEmit(true, true, false, true);
-        emit Committed(roundId, agent1, commitHash, type(uint256).max);
+        emit Committed(roundId, agent1, commitHash, bytes32(0), type(uint256).max);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         IPredictionArena.Commitment memory c = arena.getCommitment(roundId, agent1);
         assertEq(c.commitHash, commitHash);
@@ -185,7 +187,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(unregistered);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         assertTrue(arena.hasCommitted(roundId, unregistered));
     }
@@ -199,7 +201,7 @@ contract PredictionArenaTest is Test {
 
         vm.prank(agent1);
         vm.expectRevert("Commit phase ended");
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
     }
 
     function test_commit_duplicateCommit() public {
@@ -207,11 +209,11 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = keccak256("hash");
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         vm.prank(agent1);
         vm.expectRevert("Already committed");
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
     }
 
     function test_commit_invalidRound() public {
@@ -219,7 +221,7 @@ contract PredictionArenaTest is Test {
 
         vm.prank(agent1);
         vm.expectRevert("Round does not exist");
-        arena.commit(999, commitHash);
+        arena.commit(999, commitHash, bytes32(0));
     }
 
     function test_commit_invalidatedRound() public {
@@ -231,7 +233,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = keccak256("hash");
         vm.prank(agent1);
         vm.expectRevert("Round invalidated");
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
     }
 
     function test_commit_zeroHash() public {
@@ -239,7 +241,7 @@ contract PredictionArenaTest is Test {
 
         vm.prank(agent1);
         vm.expectRevert("Empty hash");
-        arena.commit(roundId, bytes32(0));
+        arena.commit(roundId, bytes32(0), bytes32(0));
     }
 
     function test_commit_multipleAgents() public {
@@ -249,11 +251,11 @@ contract PredictionArenaTest is Test {
         bytes32 h3 = keccak256("h3");
 
         vm.prank(agent1);
-        arena.commit(roundId, h1);
+        arena.commit(roundId, h1, bytes32(0));
         vm.prank(agent2);
-        arena.commit(roundId, h2);
+        arena.commit(roundId, h2, bytes32(0));
         vm.prank(agent3);
-        arena.commit(roundId, h3);
+        arena.commit(roundId, h3, bytes32(0));
 
         assertTrue(arena.hasCommitted(roundId, agent1));
         assertTrue(arena.hasCommitted(roundId, agent2));
@@ -271,9 +273,9 @@ contract PredictionArenaTest is Test {
         bytes32 h3 = keccak256("h3");
 
         vm.startPrank(agent1);
-        arena.commit(r1, h1);
-        arena.commit(r2, h2);
-        arena.commit(r3, h3);
+        arena.commit(r1, h1, bytes32(0));
+        arena.commit(r2, h2, bytes32(0));
+        arena.commit(r3, h3, bytes32(0));
         vm.stopPrank();
 
         assertTrue(arena.hasCommitted(r1, agent1));
@@ -291,7 +293,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         // Post benchmarks and resolve all markets as YES
         _postBenchmarks(roundId, 5, 5000);
@@ -338,7 +340,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
 
@@ -367,7 +369,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
 
@@ -391,7 +393,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
         IRoundManager.Round memory r = roundManager.getRound(roundId);
@@ -409,7 +411,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
 
@@ -428,7 +430,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
 
@@ -459,7 +461,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
         _resolveYes(cIds[0]); // resolve at least 1 market
@@ -485,7 +487,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, correctPreds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
         IRoundManager.Round memory r = roundManager.getRound(roundId);
@@ -509,7 +511,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
         IRoundManager.Round memory r = roundManager.getRound(roundId);
@@ -526,7 +528,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         // Don't post benchmarks; warp to reveal phase
         IRoundManager.Round memory r = roundManager.getRound(roundId);
@@ -557,7 +559,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
 
@@ -582,7 +584,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 1, 5000);
         _resolveYes(cIds[0]); // outcome = 10000
@@ -607,7 +609,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 1, 5000);
         _resolveYes(cIds[0]); // outcome = 10000
@@ -632,7 +634,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 1, 5000);
         _resolveYes(cIds[0]); // outcome = 10000
@@ -658,7 +660,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 1, 5000); // benchmark at 5000
         _resolveYes(cIds[0]); // outcome = 10000
@@ -687,7 +689,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 1, 5000);
         _resolveYes(cIds[0]);
@@ -712,7 +714,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 1, 5000);
         _resolveYes(cIds[0]); // outcome = 10000
@@ -747,7 +749,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
 
@@ -796,7 +798,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
 
@@ -850,7 +852,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postCustomBenchmarks(roundId, benchmarks);
 
@@ -961,7 +963,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
         for (uint256 i = 0; i < 5; i++) {
@@ -1002,7 +1004,7 @@ contract PredictionArenaTest is Test {
         bytes32 commitHash = _computeCommitHash(roundId, preds, SALT);
 
         vm.prank(agent1);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         _postBenchmarks(roundId, 5, 5000);
         for (uint256 i = 0; i < 5; i++) {

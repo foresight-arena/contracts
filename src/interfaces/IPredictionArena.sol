@@ -14,7 +14,9 @@ interface IPredictionArena {
         uint16 totalMarkets;
     }
 
-    event Committed(uint256 indexed roundId, address indexed agent, bytes32 commitHash, uint256 nonce);
+    event Committed(
+        uint256 indexed roundId, address indexed agent, bytes32 commitHash, bytes32 reasoningHash, uint256 nonce
+    );
     event Revealed(
         uint256 indexed roundId, address indexed agent, uint16[] predictions, uint16 scoredMarkets, uint256 nonce
     );
@@ -24,12 +26,13 @@ interface IPredictionArena {
     event OutcomesTriggered(uint256 indexed roundId, uint256 resolvedBitmask, uint16 resolvedCount);
     event PendingScoresProcessed(uint256 indexed roundId, uint256 processed, uint256 remaining);
 
-    function commit(uint256 roundId, bytes32 commitHash) external;
+    function commit(uint256 roundId, bytes32 commitHash, bytes32 reasoningHash) external;
     function reveal(uint256 roundId, uint16[] calldata predictions, bytes32 salt) external;
 
     function commitWithSignature(
         uint256 roundId,
         bytes32 commitHash,
+        bytes32 reasoningHash,
         address agent,
         uint256 deadline,
         bytes calldata signature
@@ -45,6 +48,7 @@ interface IPredictionArena {
     ) external;
 
     function nonces(address agent) external view returns (uint256);
+    function reasoningHashes(uint256 roundId, address agent) external view returns (bytes32);
 
     function getCommitment(uint256 roundId, address agent) external view returns (Commitment memory);
     function getRevealedPredictions(uint256 roundId, address agent) external view returns (uint16[] memory);

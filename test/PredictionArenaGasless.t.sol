@@ -25,13 +25,16 @@ contract PredictionArenaGaslessTest is Test {
     address agent2;
 
     bytes32 DOMAIN_SEPARATOR;
-    bytes32 constant COMMIT_TYPEHASH =
-        keccak256("Commit(uint256 roundId,bytes32 commitHash,address agent,uint256 nonce,uint256 deadline)");
+    bytes32 constant COMMIT_TYPEHASH = keccak256(
+        "Commit(uint256 roundId,bytes32 commitHash,bytes32 reasoningHash,address agent,uint256 nonce,uint256 deadline)"
+    );
     bytes32 constant REVEAL_TYPEHASH = keccak256(
         "Reveal(uint256 roundId,bytes32 predictionsHash,bytes32 salt,address agent,uint256 nonce,uint256 deadline)"
     );
 
-    event Committed(uint256 indexed roundId, address indexed agent, bytes32 commitHash, uint256 nonce);
+    event Committed(
+        uint256 indexed roundId, address indexed agent, bytes32 commitHash, bytes32 reasoningHash, uint256 nonce
+    );
     event Revealed(
         uint256 indexed roundId, address indexed agent, uint16[] predictions, uint16 scoredMarkets, uint256 nonce
     );
@@ -47,7 +50,7 @@ contract PredictionArenaGaslessTest is Test {
 
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), admin);
+        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin, "");
 
         DOMAIN_SEPARATOR = arena.DOMAIN_SEPARATOR();
     }
@@ -88,7 +91,9 @@ contract PredictionArenaGaslessTest is Test {
         uint256 nonce,
         uint256 deadline
     ) internal view returns (bytes memory) {
-        bytes32 structHash = keccak256(abi.encode(COMMIT_TYPEHASH, roundId, commitHash, signer, nonce, deadline));
+        bytes32 structHash = keccak256(
+            abi.encode(COMMIT_TYPEHASH, roundId, commitHash, bytes32(0), signer, nonce, deadline)
+        );
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
         return abi.encodePacked(r, s, v);
@@ -139,8 +144,8 @@ contract PredictionArenaGaslessTest is Test {
         // Relayer submits on behalf of agent
         vm.prank(relayer);
         vm.expectEmit(true, true, false, true);
-        emit Committed(roundId, agent, commitHash, 0);
-        arena.commitWithSignature(roundId, commitHash, agent, deadline, sig);
+        emit Committed(roundId, agent, commitHash, bytes32(0), 0);
+        arena.commitWithSignature(roundId, commitHash, bytes32(0), agent, deadline, sig);
 
         assertTrue(arena.hasCommitted(roundId, agent));
         assertEq(arena.nonces(agent), 1);
@@ -154,7 +159,7 @@ contract PredictionArenaGaslessTest is Test {
 
         vm.prank(relayer);
         vm.expectRevert("Signature expired");
-        arena.commitWithSignature(roundId, commitHash, agent, deadline, sig);
+        arena.commitWithSignature(roundId, commitHash, bytes32(0), agent, deadline, sig);
     }
 
     function test_commitWithSignature_replayNonce() public {
@@ -168,18 +173,18 @@ contract PredictionArenaGaslessTest is Test {
         // First commit uses nonce 0
         bytes memory sig1 = _signCommit(agentPk, roundId1, commitHash1, agent, 0, deadline);
         vm.prank(relayer);
-        arena.commitWithSignature(roundId1, commitHash1, agent, deadline, sig1);
+        arena.commitWithSignature(roundId1, commitHash1, bytes32(0), agent, deadline, sig1);
 
         // Try to reuse nonce 0 — should fail because nonce is now 1
         bytes memory sig2 = _signCommit(agentPk, roundId2, commitHash2, agent, 0, deadline);
         vm.prank(relayer);
         vm.expectRevert("Invalid signature");
-        arena.commitWithSignature(roundId2, commitHash2, agent, deadline, sig2);
+        arena.commitWithSignature(roundId2, commitHash2, bytes32(0), agent, deadline, sig2);
 
         // Using nonce 1 should work
         bytes memory sig3 = _signCommit(agentPk, roundId2, commitHash2, agent, 1, deadline);
         vm.prank(relayer);
-        arena.commitWithSignature(roundId2, commitHash2, agent, deadline, sig3);
+        arena.commitWithSignature(roundId2, commitHash2, bytes32(0), agent, deadline, sig3);
     }
 
     function test_commitWithSignature_wrongSigner() public {
@@ -192,7 +197,7 @@ contract PredictionArenaGaslessTest is Test {
 
         vm.prank(relayer);
         vm.expectRevert("Invalid signature");
-        arena.commitWithSignature(roundId, commitHash, agent, deadline, sig);
+        arena.commitWithSignature(roundId, commitHash, bytes32(0), agent, deadline, sig);
     }
 
     // ---------------------------------------------------------------
@@ -213,7 +218,7 @@ contract PredictionArenaGaslessTest is Test {
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory commitSig = _signCommit(agentPk, roundId, commitHash, agent, 0, deadline);
         vm.prank(relayer);
-        arena.commitWithSignature(roundId, commitHash, agent, deadline, commitSig);
+        arena.commitWithSignature(roundId, commitHash, bytes32(0), agent, deadline, commitSig);
 
         // Warp past commit deadline, post benchmarks
         vm.warp(block.timestamp + 2 hours + 1);
@@ -289,7 +294,7 @@ contract PredictionArenaGaslessTest is Test {
 
         // Commit directly (doesn't consume EIP-712 nonce)
         vm.prank(agent);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         // Warp past commit + set up reveal phase
         vm.warp(block.timestamp + 2 hours + 1);
@@ -339,7 +344,7 @@ contract PredictionArenaGaslessTest is Test {
 
         // Agent commits directly (pays gas)
         vm.prank(agent);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         // Warp and set up reveal phase
         vm.warp(block.timestamp + 2 hours + 1);
@@ -384,7 +389,7 @@ contract PredictionArenaGaslessTest is Test {
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory sig = _signCommit(agentPk, roundId, commitHash, agent, 0, deadline);
         vm.prank(relayer);
-        arena.commitWithSignature(roundId, commitHash, agent, deadline, sig);
+        arena.commitWithSignature(roundId, commitHash, bytes32(0), agent, deadline, sig);
 
         // Warp and set up reveal phase
         vm.warp(block.timestamp + 2 hours + 1);
@@ -418,7 +423,7 @@ contract PredictionArenaGaslessTest is Test {
         bytes32 commitHash = keccak256("direct_test");
 
         vm.prank(agent);
-        arena.commit(roundId, commitHash);
+        arena.commit(roundId, commitHash, bytes32(0));
 
         assertTrue(arena.hasCommitted(roundId, agent));
         // EIP-712 nonce should not have changed
@@ -437,8 +442,8 @@ contract PredictionArenaGaslessTest is Test {
 
         // Relayer submits both
         vm.startPrank(relayer);
-        arena.commitWithSignature(roundId, hash1, agent, deadline, sig1);
-        arena.commitWithSignature(roundId, hash2, agent2, deadline, sig2);
+        arena.commitWithSignature(roundId, hash1, bytes32(0), agent, deadline, sig1);
+        arena.commitWithSignature(roundId, hash2, bytes32(0), agent2, deadline, sig2);
         vm.stopPrank();
 
         assertTrue(arena.hasCommitted(roundId, agent));

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {AgentRegistry} from "../src/AgentRegistry.sol";
+import {AgentNFT} from "../src/AgentNFT.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {PredictionArena} from "../src/PredictionArena.sol";
 
@@ -11,18 +11,21 @@ contract Deploy is Script {
         address curator = vm.envAddress("CURATOR_ADDRESS");
         address admin = vm.envAddress("ADMIN_ADDRESS");
         address ctf = vm.envAddress("CTF_ADDRESS");
-        address existingRegistry = vm.envOr("AGENT_REGISTRY_ADDRESS", address(0));
+        string memory baseURI = vm.envOr("AGENT_BASE_URI", string("https://api.foresightarena.xyz/agent/"));
+        string memory feedbackBaseURI =
+            vm.envOr("FEEDBACK_BASE_URI", string("https://api.foresightarena.xyz/reasoning/"));
+        address existingAgentNFT = vm.envOr("AGENT_NFT_ADDRESS", address(0));
         address existingRoundManager = vm.envOr("ROUND_MANAGER_ADDRESS", address(0));
 
         vm.startBroadcast();
 
-        address registryAddr;
-        if (existingRegistry != address(0)) {
-            registryAddr = existingRegistry;
-            console.log("  Using existing AgentRegistry:", registryAddr);
+        address agentNFTAddr;
+        if (existingAgentNFT != address(0)) {
+            agentNFTAddr = existingAgentNFT;
+            console.log("  Using existing AgentNFT:", agentNFTAddr);
         } else {
-            AgentRegistry registry = new AgentRegistry();
-            registryAddr = address(registry);
+            AgentNFT nft = new AgentNFT(baseURI);
+            agentNFTAddr = address(nft);
         }
 
         address roundManagerAddr;
@@ -34,7 +37,7 @@ contract Deploy is Script {
             roundManagerAddr = address(rm);
         }
 
-        PredictionArena arena = new PredictionArena(roundManagerAddr, ctf, admin);
+        PredictionArena arena = new PredictionArena(roundManagerAddr, ctf, agentNFTAddr, admin, feedbackBaseURI);
 
         vm.stopBroadcast();
 
@@ -43,13 +46,15 @@ contract Deploy is Script {
         console.log("  DEPLOYMENT COMPLETE");
         console.log("==========================================================");
         console.log("");
-        console.log("  AgentRegistry:     ", registryAddr);
+        console.log("  AgentNFT:          ", agentNFTAddr);
         console.log("  RoundManager:      ", roundManagerAddr);
         console.log("  PredictionArena:   ", address(arena));
         console.log("");
         console.log("  CTF (external):    ", ctf);
         console.log("  Curator:           ", curator);
         console.log("  Admin:             ", admin);
+        console.log("  Agent Base URI:    ", baseURI);
+        console.log("  Feedback Base URI: ", feedbackBaseURI);
         console.log("==========================================================");
     }
 }

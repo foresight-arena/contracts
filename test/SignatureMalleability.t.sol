@@ -38,8 +38,9 @@ contract SignatureMalleabilityTest is Test {
     bytes32 ARENA_DOMAIN_SEPARATOR;
     bytes32 REGISTRY_DOMAIN_SEPARATOR;
 
-    bytes32 constant COMMIT_TYPEHASH =
-        keccak256("Commit(uint256 roundId,bytes32 commitHash,address agent,uint256 nonce,uint256 deadline)");
+    bytes32 constant COMMIT_TYPEHASH = keccak256(
+        "Commit(uint256 roundId,bytes32 commitHash,bytes32 reasoningHash,address agent,uint256 nonce,uint256 deadline)"
+    );
     bytes32 constant REGISTER_TYPEHASH =
         keccak256("Register(address agent,string name,string url,address owner,uint256 nonce)");
 
@@ -49,7 +50,7 @@ contract SignatureMalleabilityTest is Test {
 
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), admin);
+        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin, "");
         registry = new AgentRegistry();
 
         ARENA_DOMAIN_SEPARATOR = arena.DOMAIN_SEPARATOR();
@@ -115,7 +116,8 @@ contract SignatureMalleabilityTest is Test {
         uint256 nonce = arena.nonces(agent);
 
         // Sign normally
-        bytes32 structHash = keccak256(abi.encode(COMMIT_TYPEHASH, roundId, commitHash, agent, nonce, deadline));
+        bytes32 structHash =
+            keccak256(abi.encode(COMMIT_TYPEHASH, roundId, commitHash, bytes32(0), agent, nonce, deadline));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", ARENA_DOMAIN_SEPARATOR, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(agentPk, digest);
         bytes memory normalSig = abi.encodePacked(r, s, v);
@@ -126,11 +128,11 @@ contract SignatureMalleabilityTest is Test {
         // Malleable signature should be rejected
         vm.prank(relayer);
         vm.expectRevert("Invalid signature");
-        arena.commitWithSignature(roundId, commitHash, agent, deadline, malleableSig);
+        arena.commitWithSignature(roundId, commitHash, bytes32(0), agent, deadline, malleableSig);
 
         // Normal signature should still work
         vm.prank(relayer);
-        arena.commitWithSignature(roundId, commitHash, agent, deadline, normalSig);
+        arena.commitWithSignature(roundId, commitHash, bytes32(0), agent, deadline, normalSig);
         assertTrue(arena.hasCommitted(roundId, agent));
     }
 
