@@ -24,7 +24,7 @@ const abi = parseAbi([
 ]);
 
 const agentNFTAbi = parseAbi([
-  'function registerWithSignature(address agent, string name, string url, string model, uint256 nonce, uint256 deadline, bytes signature) external',
+  'function registerWithSignature(address agent, string name, string url, uint256 nonce, uint256 deadline, bytes signature) external',
   'function agentIdOf(address agent) view returns (uint256)',
   'function nonces(address) view returns (uint256)',
 ]);
@@ -176,7 +176,6 @@ export async function submitRegister(
   agent: `0x${string}`,
   name: string,
   url: string,
-  model: string,
   nonce: bigint,
   deadline: bigint,
   signature: `0x${string}`,
@@ -185,7 +184,7 @@ export async function submitRegister(
     address: config.agentNFT,
     abi: agentNFTAbi,
     functionName: 'registerWithSignature',
-    args: [agent, name, url, model, nonce, deadline, signature],
+    args: [agent, name, url, nonce, deadline, signature],
     account: walletClient!.account!,
   });
 

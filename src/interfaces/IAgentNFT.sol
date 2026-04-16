@@ -5,27 +5,25 @@ interface IAgentNFT {
     struct AgentInfo {
         string name;
         string url;
-        string model;
         address owner;
         uint64 registeredAt;
     }
 
     event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
-    event AgentRegistered(uint256 indexed agentId, address indexed owner, string name, string model);
-    event AgentUpdated(uint256 indexed agentId, string name, string url, string model);
+    event AgentRegistered(uint256 indexed agentId, address indexed owner, string name, string url);
+    event AgentUpdated(uint256 indexed agentId, string name, string url);
 
-    function register(string calldata name, string calldata url, string calldata model) external returns (uint256);
+    function register(string calldata name, string calldata url) external returns (uint256);
     function registerWithSignature(
         address agent,
         string calldata name,
         string calldata url,
-        string calldata model,
         uint256 nonce,
         uint256 deadline,
         bytes calldata signature
     ) external returns (uint256);
 
-    function updateMetadata(string calldata name, string calldata url, string calldata model) external;
+    function updateMetadata(string calldata name, string calldata url) external;
 
     // ERC-721 views (minimal, soulbound)
     function name() external view returns (string memory);

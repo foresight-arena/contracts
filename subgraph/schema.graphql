@@ -40,7 +40,6 @@ type Agent @entity {
   agentId: BigInt
   name: String!
   url: String!
-  model: String!
   owner: Bytes!
   registeredAt: BigInt!
   totalBrierScore: BigInt!

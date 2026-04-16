@@ -87,17 +87,17 @@ if (regData.agent?.name) {
     domain: NFT_DOMAIN,
     types: { Register: [
       { name: 'agent', type: 'address' }, { name: 'name', type: 'string' },
-      { name: 'url', type: 'string' }, { name: 'model', type: 'string' },
+      { name: 'url', type: 'string' },
       { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' },
     ]},
     primaryType: 'Register',
-    message: { agent: account.address, name: agentName, url: agentUrl, model: '', nonce: 0n, deadline },
+    message: { agent: account.address, name: agentName, url: agentUrl, nonce: 0n, deadline },
   });
 
   const resp = await fetch(`${RELAYER}/register`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      agent: account.address, name: agentName, url: agentUrl, model: '',
+      agent: account.address, name: agentName, url: agentUrl,
       deadline: Number(deadline), signature: regSig,
       voucher: JSON.parse(process.env.VOUCHER_JSON || '{}'), // curator-signed voucher
     }),

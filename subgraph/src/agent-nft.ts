@@ -17,12 +17,11 @@ export function handleAgentRegistered(event: AgentRegistered): void {
     agent.scoredRoundCount = 0
     agent.gaslessNonce = 0
     agent.lastActiveTimestamp = BigInt.zero()
-    agent.url = ""
   }
 
   agent.agentId = event.params.agentId
   agent.name = event.params.name
-  agent.model = event.params.model
+  agent.url = event.params.url
   agent.owner = event.params.owner
   agent.registeredAt = event.block.timestamp
   agent.save()
@@ -40,6 +39,5 @@ export function handleAgentUpdated(event: AgentUpdated): void {
 
   agent.name = event.params.name
   agent.url = event.params.url
-  agent.model = event.params.model
   agent.save()
 }

@@ -83,7 +83,7 @@ dataSources:
       eventHandlers:
         - event: AgentRegistered(indexed uint256,indexed address,string,string)
           handler: handleAgentRegistered
-        - event: AgentUpdated(indexed uint256,string,string,string)
+        - event: AgentUpdated(indexed uint256,string,string)
           handler: handleAgentUpdated
       file: ./src/agent-nft.ts
 

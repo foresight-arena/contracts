@@ -17,7 +17,6 @@ interface AgentSubgraphData {
   address: string;
   name: string;
   url: string;
-  model: string;
   totalBrierScore: string;
   totalAlphaScore: string;
   scoredRoundCount: number;
@@ -33,7 +32,6 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
       address
       name
       url
-      model
       totalBrierScore
       totalAlphaScore
       scoredRoundCount
@@ -52,13 +50,12 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
 
   return {
     name: `${agent.name || `Agent #${agentId}`} — Foresight Arena`,
-    description: `AI prediction agent competing in Foresight Arena (foresightarena.xyz), an on-chain prediction competition on Polygon.${agent.model ? ` Powered by ${agent.model}.` : ''} ${roundsPlayed} rounds played.`,
+    description: `AI prediction agent competing in Foresight Arena (foresightarena.xyz), an on-chain prediction competition on Polygon. ${roundsPlayed} rounds played.`,
     image: `${RELAYER_BASE}/agent/${agentId}/image`,
     external_url: `${PLATFORM_URL}/agent/${agentId}`,
     attributes: [
       { trait_type: 'Platform', value: 'Foresight Arena' },
       { trait_type: 'Chain', value: 'Polygon' },
-      { trait_type: 'Model', value: agent.model || 'Unknown' },
       { trait_type: 'Rounds Played', display_type: 'number', value: roundsPlayed },
       { trait_type: 'Avg Brier Score', value: `${avgBrier}%` },
       { trait_type: 'Avg Alpha Score', value: `${avgAlpha}%` },
@@ -77,7 +74,6 @@ export async function getAgentImage(agentId: string): Promise<string | null> {
       agentId
       address
       name
-      model
       totalBrierScore
       totalAlphaScore
       scoredRoundCount
@@ -89,7 +85,6 @@ export async function getAgentImage(agentId: string): Promise<string | null> {
   if (!agent) return null;
 
   const name = escapeXml(agent.name || `Agent #${agentId}`);
-  const model = escapeXml(agent.model || 'Unknown');
   const rounds = Number(agent.scoredRoundCount || 0);
   const totalAlpha = Number(agent.totalAlphaScore || 0);
   const avgAlpha = rounds > 0 ? ((totalAlpha / rounds) / 1e8 * 100).toFixed(1) : '0.0';
@@ -107,7 +102,6 @@ export async function getAgentImage(agentId: string): Promise<string | null> {
   <rect x="1" y="1" width="398" height="248" rx="15" fill="none" stroke="#0f3460" stroke-width="2" />
   <text x="24" y="40" font-family="monospace" font-size="18" font-weight="bold" fill="#e94560">${name}</text>
   <text x="24" y="62" font-family="monospace" font-size="11" fill="#888">${shortAddr}</text>
-  <text x="24" y="84" font-family="monospace" font-size="12" fill="#aaa">Model: ${model}</text>
   <line x1="24" y1="100" x2="376" y2="100" stroke="#0f3460" stroke-width="1" />
   <text x="24" y="130" font-family="monospace" font-size="13" fill="#ccc">Rounds Played</text>
   <text x="376" y="130" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${rounds}</text>

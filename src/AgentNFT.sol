@@ -23,7 +23,7 @@ contract AgentNFT is IAgentNFT {
     mapping(address => uint256) public nonces;
 
     bytes32 public constant REGISTER_TYPEHASH =
-        keccak256("Register(address agent,string name,string url,string model,uint256 nonce,uint256 deadline)");
+        keccak256("Register(address agent,string name,string url,uint256 nonce,uint256 deadline)");
 
     // ERC-165 interface IDs
     bytes4 private constant ERC721_INTERFACE = 0x80ac58cd;
@@ -51,18 +51,14 @@ contract AgentNFT is IAgentNFT {
     // Registration
     // ---------------------------------------------------------------
 
-    function register(string calldata agentName, string calldata url, string calldata model)
-        external
-        returns (uint256)
-    {
-        return _register(msg.sender, agentName, url, model);
+    function register(string calldata agentName, string calldata url) external returns (uint256) {
+        return _register(msg.sender, agentName, url);
     }
 
     function registerWithSignature(
         address agent,
         string calldata agentName,
         string calldata url,
-        string calldata model,
         uint256 nonce,
         uint256 deadline,
         bytes calldata signature
@@ -73,56 +69,46 @@ contract AgentNFT is IAgentNFT {
 
         bytes32 structHash = keccak256(
             abi.encode(
-                REGISTER_TYPEHASH,
-                agent,
-                keccak256(bytes(agentName)),
-                keccak256(bytes(url)),
-                keccak256(bytes(model)),
-                nonce,
-                deadline
+                REGISTER_TYPEHASH, agent, keccak256(bytes(agentName)), keccak256(bytes(url)), nonce, deadline
             )
         );
 
         _verifySignature(agent, structHash, signature);
-        return _register(agent, agentName, url, model);
+        return _register(agent, agentName, url);
     }
 
-    function _register(address agent, string calldata agentName, string calldata url, string calldata model)
+    function _register(address agent, string calldata agentName, string calldata url)
         internal
         returns (uint256 agentId)
     {
         require(_agentIds[agent] == 0, "Already registered");
         require(bytes(agentName).length > 0 && bytes(agentName).length <= 64, "Invalid name length");
         require(bytes(url).length <= 256, "URL too long");
-        require(bytes(model).length <= 64, "Model too long");
 
         agentId = ++_nextId;
-        _agents[agentId] =
-            AgentInfo({name: agentName, url: url, model: model, owner: agent, registeredAt: uint64(block.timestamp)});
+        _agents[agentId] = AgentInfo({name: agentName, url: url, owner: agent, registeredAt: uint64(block.timestamp)});
         _agentIds[agent] = agentId;
 
         // ERC-721 Transfer event (mint)
         emit Transfer(address(0), agent, agentId);
-        emit AgentRegistered(agentId, agent, agentName, model);
+        emit AgentRegistered(agentId, agent, agentName, url);
     }
 
     // ---------------------------------------------------------------
     // Metadata updates
     // ---------------------------------------------------------------
 
-    function updateMetadata(string calldata agentName, string calldata url, string calldata model) external {
+    function updateMetadata(string calldata agentName, string calldata url) external {
         uint256 agentId = _agentIds[msg.sender];
         require(agentId != 0, "Not registered");
         require(bytes(agentName).length > 0 && bytes(agentName).length <= 64, "Invalid name length");
         require(bytes(url).length <= 256, "URL too long");
-        require(bytes(model).length <= 64, "Model too long");
 
         AgentInfo storage a = _agents[agentId];
         a.name = agentName;
         a.url = url;
-        a.model = model;
 
-        emit AgentUpdated(agentId, agentName, url, model);
+        emit AgentUpdated(agentId, agentName, url);
     }
 
     // ---------------------------------------------------------------

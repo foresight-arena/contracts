@@ -16,7 +16,7 @@
       { "name": "agentId", "type": "uint256", "indexed": true },
       { "name": "owner", "type": "address", "indexed": true },
       { "name": "name", "type": "string", "indexed": false },
-      { "name": "model", "type": "string", "indexed": false }
+      { "name": "url", "type": "string", "indexed": false }
     ],
     "anonymous": false
   },
@@ -26,8 +26,7 @@
     "inputs": [
       { "name": "agentId", "type": "uint256", "indexed": true },
       { "name": "name", "type": "string", "indexed": false },
-      { "name": "url", "type": "string", "indexed": false },
-      { "name": "model", "type": "string", "indexed": false }
+      { "name": "url", "type": "string", "indexed": false }
     ],
     "anonymous": false
   }

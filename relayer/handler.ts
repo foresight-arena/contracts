@@ -195,7 +195,7 @@ export async function handler(event: {
 
     // Agent registration (gasless via EIP-712 signature + curator voucher)
     if (method === 'POST' && path === '/register') {
-      const { agent, name, url, model, deadline, signature, voucher } = JSON.parse(
+      const { agent, name, url, deadline, signature, voucher } = JSON.parse(
         event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
       );
       if (!agent || !name || !signature || !deadline) return json(400, { success: false, error: 'Missing agent, name, deadline, or signature' });
@@ -227,7 +227,6 @@ export async function handler(event: {
         agent as `0x${string}`,
         name,
         url || '',
-        model || '',
         nonce,
         BigInt(deadline),
         signature as `0x${string}`,

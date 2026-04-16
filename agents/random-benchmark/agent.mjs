@@ -61,7 +61,7 @@ const arenaAbi = parseAbi([
 
 const agentNFTAbi = parseAbi([
   'function agentIdOf(address agent) view returns (uint256)',
-  'function register(string name, string url, string model)',
+  'function register(string name, string url)',
 ]);
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ async function ensureRegistered() {
     address: ADDRESSES.agentNFT,
     abi: agentNFTAbi,
     functionName: 'register',
-    args: [name, AGENT_URL, ''],
+    args: [name, AGENT_URL],
     account,
   });
   const hash = await walletClient.writeContract(request);
