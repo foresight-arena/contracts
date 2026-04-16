@@ -20,9 +20,6 @@ Parameters:
   RoundManagerAddress:
     Type: String
     Default: '0x9EB0BF21cE99f463Af2Ca67b4aFDa40e4905AE95'
-  AgentNFTAddress:
-    Type: String
-    Default: '0xf3C9Fbc0F94fd69cFc4c645Ba567C97dD190AAA7'
   CuratorAddress:
     Type: String
     Default: '0x943507c28186741608a80777B03F045C84beA3A5'
@@ -61,7 +58,6 @@ Resources:
           CURATOR_PRIVATE_KEY: !Ref CuratorPrivateKey
           PREDICTION_ARENA_ADDRESS: !Ref PredictionArenaAddress
           ROUND_MANAGER_ADDRESS: !Ref RoundManagerAddress
-          AGENT_NFT_ADDRESS: !Ref AgentNFTAddress
           CURATOR_ADDRESS: !Ref CuratorAddress
           REASONING_BUCKET: !Ref ReasoningBucket
       Policies:

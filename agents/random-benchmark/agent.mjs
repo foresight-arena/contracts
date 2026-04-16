@@ -9,8 +9,7 @@
  *   AGENT_KEY=0x... RPC_URL=https://... node agent.mjs
  *
  * Optional:
- *   AGENT_NAME=MyAgent       (default: Random-<addr>)
- *   AGENT_URL=https://...    (optional metadata URL)
+ *   AGENT_URL=https://...    (optional agentURI — URL to off-chain JSON with name/description)
  *
  * Crontab example (every 2 hours):
  *   0 *\/2 * * * cd /path/to/agents/random-benchmark && AGENT_KEY=0x... RPC_URL=https://... node agent.mjs >> agent.log 2>&1
@@ -38,13 +37,12 @@ const RPC_URL = process.env.RPC_URL;
 if (!AGENT_KEY) throw new Error('Set AGENT_KEY env var (0x-prefixed private key)');
 if (!RPC_URL) throw new Error('Set RPC_URL env var (Polygon RPC endpoint)');
 
-const AGENT_NAME = process.env.AGENT_NAME;
 const AGENT_URL = process.env.AGENT_URL || '';
 
 const ADDRESSES = {
   arena: '0x5f28d56B4aBBE662c29755701C4a5f801Ace9D2a',
   roundManager: '0x9EB0BF21cE99f463Af2Ca67b4aFDa40e4905AE95',
-  agentNFT: '0xf3C9Fbc0F94fd69cFc4c645Ba567C97dD190AAA7',
+  identityRegistry: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432', // canonical ERC-8004
 };
 
 // ─── ABIs (minimal) ───────────────────────────────────────────────────────────
@@ -59,9 +57,9 @@ const arenaAbi = parseAbi([
   'function reveal(uint256 roundId, uint16[] predictions, bytes32 salt)',
 ]);
 
-const agentNFTAbi = parseAbi([
-  'function agentIdOf(address agent) view returns (uint256)',
-  'function register(string name, string url)',
+const identityRegistryAbi = parseAbi([
+  'function register(string agentURI) returns (uint256)',
+  'function balanceOf(address owner) view returns (uint256)',
 ]);
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -73,7 +71,7 @@ const publicClient = createPublicClient({ chain: polygon, transport });
 const walletClient = createWalletClient({ chain: polygon, transport, account });
 
 const roundManager = getContract({ address: ADDRESSES.roundManager, abi: roundManagerAbi, client: publicClient });
-const agentNFT = getContract({ address: ADDRESSES.agentNFT, abi: agentNFTAbi, client: publicClient });
+const identityRegistry = getContract({ address: ADDRESSES.identityRegistry, abi: identityRegistryAbi, client: publicClient });
 
 // ─── Persistent State (survives between cron runs) ────────────────────────────
 
@@ -134,17 +132,19 @@ function log(msg) {
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 async function ensureRegistered() {
-  const agentId = await agentNFT.read.agentIdOf([account.address]);
-  if (agentId > 0n) return;
+  // Check if already registered on the canonical ERC-8004 Identity Registry
+  const balance = await identityRegistry.read.balanceOf([account.address]);
+  if (balance > 0n) return;
 
-  const name = AGENT_NAME || `Random-${account.address.slice(2, 8)}`;
-  log(`Registering as "${name}"...`);
+  // Agent URI — empty by default, or a user-provided URL
+  const agentURI = AGENT_URL || '';
+  log(`Registering on canonical Identity Registry...`);
 
   const { request } = await publicClient.simulateContract({
-    address: ADDRESSES.agentNFT,
-    abi: agentNFTAbi,
+    address: ADDRESSES.identityRegistry,
+    abi: identityRegistryAbi,
     functionName: 'register',
-    args: [name, AGENT_URL],
+    args: [agentURI],
     account,
   });
   const hash = await walletClient.writeContract(request);
@@ -171,7 +171,7 @@ async function tryCommit(roundId, round) {
       address: ADDRESSES.arena,
       abi: arenaAbi,
       functionName: 'commit',
-      args: [BigInt(roundId), commitHash, '0xf3C9Fbc0F94fd69cFc4c645Ba567C97dD190AAA7000000000000000000000000'],
+      args: [BigInt(roundId), commitHash, '0x0000000000000000000000000000000000000000000000000000000000000000'],
       account,
     });
     const hash = await walletClient.writeContract(request);

@@ -1,6 +1,6 @@
 import type { CommitRequest, RevealRequest, RelayerResponse, HealthResponse, ReasoningRequest } from './lib/types.js';
 import { verifyCommitSignature, verifyRevealSignature } from './lib/verify.js';
-import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, getAgentNFTNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister } from './lib/submit.js';
+import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister } from './lib/submit.js';
 import { checkAndPostBenchmarks, checkAndTriggerOutcomes } from './lib/benchmarks.js';
 import { verifyReasoningHash, uploadReasoning, getReasoning, hasRevealStartPassed, isOutcomesTriggeredSubgraph } from './lib/reasoning.js';
 import { getAgentMetadata, getAgentImage } from './lib/metadata.js';
@@ -193,12 +193,13 @@ export async function handler(event: {
       return json(200, { agent, nonce: nonce.toString() });
     }
 
-    // Agent registration (gasless via EIP-712 signature + curator voucher)
+    // Agent registration on canonical ERC-8004 Identity Registry (gasless via curator voucher)
+    // Relayer mints the NFT to itself, then transfers to the agent.
     if (method === 'POST' && path === '/register') {
-      const { agent, name, url, deadline, signature, voucher } = JSON.parse(
+      const { agent, agentURI, voucher } = JSON.parse(
         event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
       );
-      if (!agent || !name || !signature || !deadline) return json(400, { success: false, error: 'Missing agent, name, deadline, or signature' });
+      if (!agent) return json(400, { success: false, error: 'Missing agent' });
 
       // Verify curator voucher
       if (!voucher || !voucher.signature || !voucher.expiry) {
@@ -222,16 +223,11 @@ export async function handler(event: {
       const already = await isAgentRegistered(agent as `0x${string}`);
       if (already) return json(200, { success: true, alreadyRegistered: true });
 
-      const nonce = await getAgentNFTNonce(agent as `0x${string}`);
-      const txHash = await submitRegister(
+      const { txHash, agentId } = await submitRegister(
         agent as `0x${string}`,
-        name,
-        url || '',
-        nonce,
-        BigInt(deadline),
-        signature as `0x${string}`,
+        typeof agentURI === 'string' ? agentURI : '',
       );
-      return json(200, { success: true, txHash });
+      return json(200, { success: true, txHash, agentId: agentId.toString() });
     }
 
     // Manual benchmark posting trigger

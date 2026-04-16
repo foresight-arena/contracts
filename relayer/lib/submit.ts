@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   createWalletClient,
+  decodeEventLog,
   http,
   parseAbi,
   type PublicClient,
@@ -23,10 +24,17 @@ const abi = parseAbi([
   'function getPendingScoringCount(uint256 roundId) view returns (uint256)',
 ]);
 
-const agentNFTAbi = parseAbi([
-  'function registerWithSignature(address agent, string name, string url, uint256 nonce, uint256 deadline, bytes signature) external',
-  'function agentIdOf(address agent) view returns (uint256)',
-  'function nonces(address) view returns (uint256)',
+// Canonical ERC-8004 Identity Registry — same address on all chains
+const IDENTITY_REGISTRY_ADDRESS = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432' as const;
+
+const identityRegistryAbi = parseAbi([
+  'function register() returns (uint256)',
+  'function register(string agentURI) returns (uint256)',
+  'function setAgentURI(uint256 agentId, string newURI)',
+  'function transferFrom(address from, address to, uint256 tokenId)',
+  'function ownerOf(uint256 tokenId) view returns (address)',
+  'function balanceOf(address owner) view returns (uint256)',
+  'event Registered(uint256 indexed agentId, address indexed owner, string agentURI)',
 ]);
 
 let publicClient: PublicClient | null = null;
@@ -154,40 +162,72 @@ export async function getPendingCount(roundId: number): Promise<bigint> {
 }
 
 export async function isAgentRegistered(agent: `0x${string}`): Promise<boolean> {
-  const agentId = await publicClient!.readContract({
-    address: config.agentNFT,
-    abi: agentNFTAbi,
-    functionName: 'agentIdOf',
+  // Canonical Identity Registry has no agentIdOf view — use standard ERC-721 balanceOf
+  const balance = await publicClient!.readContract({
+    address: IDENTITY_REGISTRY_ADDRESS,
+    abi: identityRegistryAbi,
+    functionName: 'balanceOf',
     args: [agent],
   }) as bigint;
-  return agentId > 0n;
+  return balance > 0n;
 }
 
-export async function getAgentNFTNonce(agent: `0x${string}`): Promise<bigint> {
-  return publicClient!.readContract({
-    address: config.agentNFT,
-    abi: agentNFTAbi,
-    functionName: 'nonces',
-    args: [agent],
-  }) as Promise<bigint>;
-}
-
+/**
+ * Register an agent on the canonical ERC-8004 Identity Registry and transfer
+ * the minted NFT to the agent. Two-tx flow since the canonical registry mints
+ * to msg.sender (the relayer) with no signature-based registration path.
+ *
+ * 1. relayer calls register(agentURI) — mints agentId to relayer
+ * 2. parse Registered event for the new agentId
+ * 3. relayer calls transferFrom(relayer, agent, agentId)
+ */
 export async function submitRegister(
   agent: `0x${string}`,
-  name: string,
-  url: string,
-  nonce: bigint,
-  deadline: bigint,
-  signature: `0x${string}`,
-): Promise<string> {
-  const { request } = await publicClient!.simulateContract({
-    address: config.agentNFT,
-    abi: agentNFTAbi,
-    functionName: 'registerWithSignature',
-    args: [agent, name, url, nonce, deadline, signature],
+  agentURI: string,
+): Promise<{ txHash: string; agentId: bigint }> {
+  // Step 1: mint to relayer
+  const { request: mintRequest } = await publicClient!.simulateContract({
+    address: IDENTITY_REGISTRY_ADDRESS,
+    abi: identityRegistryAbi,
+    functionName: 'register',
+    args: [agentURI],
     account: walletClient!.account!,
   });
+  const mintTxHash = await walletClient!.writeContract(mintRequest);
 
-  const txHash = await walletClient!.writeContract(request);
-  return txHash;
+  // Step 2: wait for receipt and parse Registered event to learn the agentId
+  const receipt = await publicClient!.waitForTransactionReceipt({ hash: mintTxHash });
+
+  let agentId: bigint | null = null;
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== IDENTITY_REGISTRY_ADDRESS.toLowerCase()) continue;
+    try {
+      const decoded = decodeEventLog({
+        abi: identityRegistryAbi,
+        data: log.data,
+        topics: log.topics,
+      });
+      if (decoded.eventName === 'Registered') {
+        agentId = (decoded.args as { agentId: bigint }).agentId;
+        break;
+      }
+    } catch {
+      // Not a Registered event — skip
+    }
+  }
+  if (agentId == null) {
+    throw new Error('Failed to parse Registered event from mint receipt');
+  }
+
+  // Step 3: transfer the freshly-minted NFT from the relayer to the agent
+  const { request: transferRequest } = await publicClient!.simulateContract({
+    address: IDENTITY_REGISTRY_ADDRESS,
+    abi: identityRegistryAbi,
+    functionName: 'transferFrom',
+    args: [relayerAddress, agent, agentId],
+    account: walletClient!.account!,
+  });
+  const transferTxHash = await walletClient!.writeContract(transferRequest);
+
+  return { txHash: transferTxHash, agentId };
 }

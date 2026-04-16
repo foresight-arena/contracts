@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {PredictionArena} from "../src/PredictionArena.sol";
-import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {MockConditionalTokens} from "./mocks/MockConditionalTokens.sol";
 
@@ -24,7 +23,6 @@ contract SignatureMalleabilityTest is Test {
     uint256 constant SECP256K1_N_DIV_2 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0;
 
     PredictionArena public arena;
-    AgentRegistry public registry;
     RoundManager public roundManager;
     MockConditionalTokens public mockCtf;
 
@@ -36,13 +34,10 @@ contract SignatureMalleabilityTest is Test {
     address agent;
 
     bytes32 ARENA_DOMAIN_SEPARATOR;
-    bytes32 REGISTRY_DOMAIN_SEPARATOR;
 
     bytes32 constant COMMIT_TYPEHASH = keccak256(
         "Commit(uint256 roundId,bytes32 commitHash,bytes32 reasoningHash,address agent,uint256 nonce,uint256 deadline)"
     );
-    bytes32 constant REGISTER_TYPEHASH =
-        keccak256("Register(address agent,string name,string url,address owner,uint256 nonce)");
 
     function setUp() public {
         vm.warp(1000000);
@@ -51,10 +46,8 @@ contract SignatureMalleabilityTest is Test {
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
         arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin);
-        registry = new AgentRegistry();
 
         ARENA_DOMAIN_SEPARATOR = arena.DOMAIN_SEPARATOR();
-        REGISTRY_DOMAIN_SEPARATOR = registry.DOMAIN_SEPARATOR();
     }
 
     /// @dev Create a malleable (high-s) version of a signature.
@@ -136,33 +129,4 @@ contract SignatureMalleabilityTest is Test {
         assertTrue(arena.hasCommitted(roundId, agent));
     }
 
-    // ---------------------------------------------------------------
-    // AgentRegistry — registerAgentWithSignature
-    // ---------------------------------------------------------------
-
-    function test_registerAgentWithSignature_rejectsMalleableSignature() public {
-        string memory name = "TestAgent";
-        string memory url = "";
-        uint256 nonce = registry.nonces(agent);
-
-        bytes32 structHash = keccak256(
-            abi.encode(REGISTER_TYPEHASH, agent, keccak256(bytes(name)), keccak256(bytes(url)), agent, nonce)
-        );
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", REGISTRY_DOMAIN_SEPARATOR, structHash));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(agentPk, digest);
-        bytes memory normalSig = abi.encodePacked(r, s, v);
-
-        // Create malleable version
-        bytes memory malleableSig = _makeHighS(normalSig);
-
-        // Malleable signature should be rejected
-        vm.prank(relayer);
-        vm.expectRevert("Invalid signature");
-        registry.registerAgentWithSignature(agent, name, url, agent, malleableSig);
-
-        // Normal signature should still work
-        vm.prank(relayer);
-        registry.registerAgentWithSignature(agent, name, url, agent, normalSig);
-        assertTrue(registry.isRegistered(agent));
-    }
 }

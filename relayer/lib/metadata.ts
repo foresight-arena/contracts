@@ -15,11 +15,29 @@ async function querySubgraph(query: string): Promise<any> {
 interface AgentSubgraphData {
   agentId: string;
   address: string;
-  name: string;
-  url: string;
+  agentURI?: string;
+  name?: string;
+  url?: string;
   totalBrierScore: string;
   totalAlphaScore: string;
   scoredRoundCount: number;
+}
+
+// Fetch optional off-chain metadata from an agent's ERC-8004 agentURI.
+// Best-effort — any failure just returns empty fields.
+async function fetchAgentUriMetadata(agentURI: string | undefined): Promise<{ name?: string; url?: string }> {
+  if (!agentURI) return {};
+  try {
+    const resp = await fetch(agentURI, { signal: AbortSignal.timeout(3000) });
+    if (!resp.ok) return {};
+    const data: any = await resp.json();
+    return {
+      name: typeof data.name === 'string' ? data.name : undefined,
+      url: typeof data.url === 'string' ? data.url : (typeof data.external_url === 'string' ? data.external_url : undefined),
+    };
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -30,8 +48,7 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
     agents(where: { agentId: "${agentId}" }, first: 1) {
       agentId
       address
-      name
-      url
+      agentURI
       totalBrierScore
       totalAlphaScore
       scoredRoundCount
@@ -39,7 +56,7 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
   }`);
 
   const agents = data?.agents || [];
-  const agent = agents.length > 0 ? agents[0] : null;
+  const agent: AgentSubgraphData | null = agents.length > 0 ? agents[0] : null;
   if (!agent) return null;
 
   const roundsPlayed = Number(agent.scoredRoundCount || 0);
@@ -48,8 +65,14 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
   const avgBrier = roundsPlayed > 0 ? ((totalBrier / roundsPlayed) / 1e8 * 100).toFixed(2) : '0';
   const avgAlpha = roundsPlayed > 0 ? ((totalAlpha / roundsPlayed) / 1e8 * 100).toFixed(2) : '0';
 
+  // Canonical ERC-8004 registry stores only agentURI. Fetch off-chain metadata
+  // (name, url) best-effort; fall back to defaults if unavailable.
+  const offchain = await fetchAgentUriMetadata(agent.agentURI);
+  const displayName = agent.name || offchain.name || `Agent #${agentId}`;
+  const agentUrl = agent.url || offchain.url;
+
   return {
-    name: `${agent.name || `Agent #${agentId}`} — Foresight Arena`,
+    name: `${displayName} — Foresight Arena`,
     description: `AI prediction agent competing in Foresight Arena (foresightarena.xyz), an on-chain prediction competition on Polygon. ${roundsPlayed} rounds played.`,
     image: `${RELAYER_BASE}/agent/${agentId}/image`,
     external_url: `${PLATFORM_URL}/agent/${agentId}`,
@@ -61,7 +84,7 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
       { trait_type: 'Avg Alpha Score', value: `${avgAlpha}%` },
       { trait_type: 'Agent Address', value: agent.address },
     ],
-    ...(agent.url ? { agent_url: agent.url } : {}),
+    ...(agentUrl ? { agent_url: agentUrl } : {}),
   };
 }
 
@@ -73,7 +96,7 @@ export async function getAgentImage(agentId: string): Promise<string | null> {
     agents(where: { agentId: "${agentId}" }, first: 1) {
       agentId
       address
-      name
+      agentURI
       totalBrierScore
       totalAlphaScore
       scoredRoundCount
@@ -81,10 +104,11 @@ export async function getAgentImage(agentId: string): Promise<string | null> {
   }`);
 
   const agents = data?.agents || [];
-  const agent = agents.length > 0 ? agents[0] : null;
+  const agent: AgentSubgraphData | null = agents.length > 0 ? agents[0] : null;
   if (!agent) return null;
 
-  const name = escapeXml(agent.name || `Agent #${agentId}`);
+  const offchain = await fetchAgentUriMetadata(agent.agentURI);
+  const name = escapeXml(agent.name || offchain.name || `Agent #${agentId}`);
   const rounds = Number(agent.scoredRoundCount || 0);
   const totalAlpha = Number(agent.totalAlphaScore || 0);
   const avgAlpha = rounds > 0 ? ((totalAlpha / rounds) / 1e8 * 100).toFixed(1) : '0.0';

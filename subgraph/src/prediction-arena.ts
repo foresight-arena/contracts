@@ -4,10 +4,9 @@ import {
   Revealed,
   ScoreComputed,
   OutcomesTriggered,
-  NewFeedback,
 } from "../generated/PredictionArena/PredictionArena"
 import { ConditionalTokens } from "../generated/PredictionArena/ConditionalTokens"
-import { AgentRound, Agent, Round, Market, ReputationFeedback } from "../generated/schema"
+import { AgentRound, Agent, Round, Market } from "../generated/schema"
 
 const CTF_ADDRESS = Address.fromString("0x4D97DCd97eC945f40cF65F87097ACe5EA0476045")
 
@@ -16,8 +15,6 @@ function getOrCreateAgent(address: string, rawAddress: Address): Agent {
   if (agent == null) {
     agent = new Agent(address)
     agent.address = rawAddress
-    agent.name = ""
-    agent.url = ""
     agent.owner = rawAddress
     agent.registeredAt = BigInt.zero()
     agent.totalBrierScore = BigInt.zero()
@@ -122,27 +119,6 @@ export function handleScoreComputed(event: ScoreComputed): void {
     }
   }
 
-}
-
-export function handleNewFeedback(event: NewFeedback): void {
-  let id = event.transaction.hash.toHexString() + "-" + event.logIndex.toString()
-
-  let feedback = new ReputationFeedback(id)
-  feedback.agentId = event.params.agentId
-  // Look up agent by iterating — for now use agentId as a reference hint
-  // The agent entity ID is the owner address; we store the relation via agentId
-  // We need to find the Agent whose agentId matches
-  feedback.agent = "" // will be set below
-  feedback.roundId = BigInt.zero()
-  feedback.alphaScore = event.params.value
-  feedback.feedbackURI = event.params.feedbackURI
-  feedback.feedbackHash = event.params.feedbackHash
-  feedback.timestamp = event.block.timestamp
-
-  // Try to parse roundId from tag2 if available, otherwise use feedbackIndex
-  feedback.roundId = event.params.feedbackIndex
-
-  feedback.save()
 }
 
 export function handleOutcomesTriggered(event: OutcomesTriggered): void {

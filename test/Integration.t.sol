@@ -7,13 +7,11 @@ import {IPredictionArena} from "../src/interfaces/IPredictionArena.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {IRoundManager} from "../src/interfaces/IRoundManager.sol";
 
-import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {MockConditionalTokens} from "./mocks/MockConditionalTokens.sol";
 
 contract IntegrationTest is Test {
     PredictionArena public arena;
     RoundManager public roundManager;
-    AgentRegistry public registry;
     MockConditionalTokens public mockCtf;
 
     address public curator = makeAddr("curator");
@@ -26,7 +24,6 @@ contract IntegrationTest is Test {
 
     function setUp() public {
         mockCtf = new MockConditionalTokens();
-        registry = new AgentRegistry();
         roundManager = new RoundManager(curator, admin);
         arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin);
 
@@ -159,17 +156,7 @@ contract IntegrationTest is Test {
     // ---------------------------------------------------------------
 
     function test_fullRound_happyPath() public {
-        // 1. Register 2 agents (agent3 participates without registration)
-        vm.prank(agent1);
-        registry.registerAgent("Agent Alpha", "https://alpha.ai", agent1);
-        vm.prank(agent2);
-        registry.registerAgent("Agent Beta", "https://beta.ai", agent2);
-
-        assertTrue(registry.isRegistered(agent1));
-        assertTrue(registry.isRegistered(agent2));
-        assertFalse(registry.isRegistered(agent3));
-
-        // 2. Curator creates round
+        // 1. Curator creates round (registration is external — canonical ERC-8004 Identity Registry, not required to participate)
         (uint256 roundId, uint64 commitDeadline, uint64 revealStart,) = _createDefaultRound();
         assertEq(roundId, 1);
 

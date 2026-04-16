@@ -45,7 +45,6 @@ dataSources:
       entities:
         - AgentRound
         - Agent
-        - ReputationFeedback
       abis:
         - name: PredictionArena
           file: ./abis/PredictionArena.json
@@ -60,16 +59,14 @@ dataSources:
           handler: handleScoreComputed
         - event: OutcomesTriggered(indexed uint256,uint256,uint16)
           handler: handleOutcomesTriggered
-        - event: NewFeedback(indexed uint256,indexed address,uint64,int128,uint8,indexed string,string,string,string,string,bytes32)
-          handler: handleNewFeedback
       file: ./src/prediction-arena.ts
 
   - kind: ethereum
-    name: AgentNFT
+    name: IdentityRegistry
     network: matic
     source:
-      address: "0xf3C9Fbc0F94fd69cFc4c645Ba567C97dD190AAA7"
-      abi: AgentNFT
+      address: "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+      abi: IdentityRegistry
       startBlock: 85597000
     mapping:
       kind: ethereum/events
@@ -78,14 +75,16 @@ dataSources:
       entities:
         - Agent
       abis:
-        - name: AgentNFT
-          file: ./abis/AgentNFT.json
+        - name: IdentityRegistry
+          file: ./abis/IdentityRegistry.json
       eventHandlers:
-        - event: AgentRegistered(indexed uint256,indexed address,string,string)
-          handler: handleAgentRegistered
-        - event: AgentUpdated(indexed uint256,string,string)
-          handler: handleAgentUpdated
-      file: ./src/agent-nft.ts
+        - event: Registered(indexed uint256,indexed address,string)
+          handler: handleRegistered
+        - event: URIUpdated(indexed uint256,string,indexed address)
+          handler: handleURIUpdated
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+      file: ./src/identity-registry.ts
 
   - kind: ethereum
     name: ConditionalTokens

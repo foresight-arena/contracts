@@ -3,7 +3,7 @@ import {
   RoundCreated,
   BenchmarksPosted,
   RoundInvalidated,
-} from "../generated/FastRoundManager/RoundManager"
+} from "../generated/RoundManager/RoundManager"
 import { Round, Market, RoundMarket } from "../generated/schema"
 
 export function handleRoundCreated(event: RoundCreated): void {

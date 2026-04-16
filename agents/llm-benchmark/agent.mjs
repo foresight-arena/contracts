@@ -10,8 +10,7 @@
  *     OPENROUTER_API_KEY=... TAVILY_API_KEY=... node agent.mjs
  *
  * Optional:
- *   AGENT_NAME=MyAgent       (default: <model-slug>-<addr>)
- *   AGENT_URL=https://...    (optional metadata URL)
+ *   AGENT_URL=https://...    (optional agentURI — URL to off-chain JSON with name/description)
  *   DRY_RUN=1                (predict only, do not commit on-chain)
  *   ROUND_ID=42              (only used in DRY_RUN; default: current round)
  *   RELAYER_URL=https://...  (if set, posts reasoning JSON to /reasoning endpoint)
@@ -54,7 +53,6 @@ if (!AGENT_KEY) throw new Error('Set AGENT_KEY env var (0x-prefixed private key)
 if (!RPC_URL) throw new Error('Set RPC_URL env var (Polygon RPC endpoint)');
 if (!MODEL) throw new Error('Set MODEL env var (e.g. anthropic/claude-opus-4)');
 
-const AGENT_NAME = process.env.AGENT_NAME;
 const AGENT_URL = process.env.AGENT_URL || '';
 const TAVILY_KEY = process.env.TAVILY_API_KEY || '';
 const ROUND_ID_OVERRIDE = process.env.ROUND_ID ? BigInt(process.env.ROUND_ID) : null;
@@ -68,7 +66,7 @@ if (!['discover', 'predict', 'all'].includes(MODE)) {
 const ADDRESSES = {
   arena: '0x5f28d56B4aBBE662c29755701C4a5f801Ace9D2a',
   roundManager: '0x9EB0BF21cE99f463Af2Ca67b4aFDa40e4905AE95',
-  agentNFT: '0xf3C9Fbc0F94fd69cFc4c645Ba567C97dD190AAA7',
+  identityRegistry: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432', // canonical ERC-8004
   ctf: '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045',
 };
 
@@ -84,9 +82,9 @@ const arenaAbi = parseAbi([
   'function reveal(uint256 roundId, uint16[] predictions, bytes32 salt)',
 ]);
 
-const agentNFTAbi = parseAbi([
-  'function agentIdOf(address agent) view returns (uint256)',
-  'function register(string name, string url)',
+const identityRegistryAbi = parseAbi([
+  'function register(string agentURI) returns (uint256)',
+  'function balanceOf(address owner) view returns (uint256)',
 ]);
 
 const ctfAbi = parseAbi([
@@ -102,7 +100,7 @@ const publicClient = createPublicClient({ chain: polygon, transport });
 const walletClient = createWalletClient({ chain: polygon, transport, account });
 
 const roundManager = getContract({ address: ADDRESSES.roundManager, abi: roundManagerAbi, client: publicClient });
-const agentNFT = getContract({ address: ADDRESSES.agentNFT, abi: agentNFTAbi, client: publicClient });
+const identityRegistry = getContract({ address: ADDRESSES.identityRegistry, abi: identityRegistryAbi, client: publicClient });
 const ctf = getContract({ address: ADDRESSES.ctf, abi: ctfAbi, client: publicClient });
 
 // ─── Persistent State ─────────────────────────────────────────────────────────
@@ -185,17 +183,18 @@ function canonicalize(content) {
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 async function ensureRegistered() {
-  const agentId = await agentNFT.read.agentIdOf([account.address]);
-  if (agentId > 0n) return;
+  // Check if already registered on canonical ERC-8004 Identity Registry
+  const balance = await identityRegistry.read.balanceOf([account.address]);
+  if (balance > 0n) return;
 
-  const name = AGENT_NAME || `${MODEL.split('/').pop()}-${account.address.slice(2, 8)}`;
-  log(`Registering as "${name}"...`);
+  const agentURI = AGENT_URL || '';
+  log(`Registering on canonical Identity Registry...`);
 
   const { request } = await publicClient.simulateContract({
-    address: ADDRESSES.agentNFT,
-    abi: agentNFTAbi,
+    address: ADDRESSES.identityRegistry,
+    abi: identityRegistryAbi,
     functionName: 'register',
-    args: [name, AGENT_URL],
+    args: [agentURI],
     account,
   });
   const hash = await walletClient.writeContract(request);
