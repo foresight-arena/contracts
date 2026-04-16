@@ -5,7 +5,7 @@ export interface ContractAddresses {
 }
 
 export const CONTRACTS: ContractAddresses = {
-  roundManager: '0x31861F5E8540257AFd98C4F4693Aa67ac7462909',
-  predictionArena: '0x95899D57cF8A74dC3892B93F221763a4547e394c',
-  agentNFT: '0xB515aE5EA8AAF13b34D2C065a253630bAf83Fc19', // updated after deploy
+  roundManager: '0x9EB0BF21cE99f463Af2Ca67b4aFDa40e4905AE95',
+  predictionArena: '0x5f28d56B4aBBE662c29755701C4a5f801Ace9D2a',
+  agentNFT: '0xf3C9Fbc0F94fd69cFc4c645Ba567C97dD190AAA7', // updated after deploy
 };

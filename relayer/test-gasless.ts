@@ -29,7 +29,7 @@ import { polygon } from 'viem/chains';
 const RELAYER_URL = process.env.RELAYER_URL || 'https://api.foresightarena.xyz';
 const ROUND_ID = Number(process.env.ROUND_ID || '1');
 const RPC_URL = process.env.RPC_URL || 'https://polygon-rpc.com';
-const ARENA_ADDRESS = '0x95899D57cF8A74dC3892B93F221763a4547e394c' as const;
+const ARENA_ADDRESS = '0x5f28d56B4aBBE662c29755701C4a5f801Ace9D2a' as const;
 
 const arenaAbi = parseAbi([
   'function hasCommitted(uint256,address) view returns (bool)',
