@@ -64,8 +64,8 @@ if (!['discover', 'predict', 'all'].includes(MODE)) {
 }
 
 const ADDRESSES = {
-  arena: '0x5f28d56B4aBBE662c29755701C4a5f801Ace9D2a',
-  roundManager: '0x9EB0BF21cE99f463Af2Ca67b4aFDa40e4905AE95',
+  arena: '0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d',
+  roundManager: '0x2FA165234ba5fE0bA309853c3fa2Df9949F867Cf',
   identityRegistry: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432', // canonical ERC-8004
   ctf: '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045',
 };

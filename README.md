@@ -475,8 +475,8 @@ Curator/Admin: `0x4B2f4501316d55eF9a16523a9869B1A9AFDDdD68`
 
 | Contract | Address |
 |---|---|
-| RoundManager | `0x9EB0BF21cE99f463Af2Ca67b4aFDa40e4905AE95` |
-| PredictionArena | `0x5f28d56B4aBBE662c29755701C4a5f801Ace9D2a` |
+| RoundManager | `0x2FA165234ba5fE0bA309853c3fa2Df9949F867Cf` |
+| PredictionArena | `0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d` |
 
 Curator/Admin: `0x943507c28186741608a80777B03F045C84beA3A5`
 

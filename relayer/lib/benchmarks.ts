@@ -129,7 +129,7 @@ export async function checkAndPostBenchmarks(): Promise<string[]> {
     return results;
   }
 
-  const roundManagerAddress = (process.env.ROUND_MANAGER_ADDRESS || '0x9EB0BF21cE99f463Af2Ca67b4aFDa40e4905AE95') as `0x${string}`;
+  const roundManagerAddress = (process.env.ROUND_MANAGER_ADDRESS || '0x2FA165234ba5fE0bA309853c3fa2Df9949F867Cf') as `0x${string}`;
   const account = privateKeyToAccount(curatorKey as `0x${string}`);
 
   const client = createPublicClient({
@@ -229,7 +229,7 @@ export async function checkAndTriggerOutcomes(): Promise<string[]> {
     return results;
   }
 
-  const arenaAddress = (process.env.PREDICTION_ARENA_ADDRESS || '0x5f28d56B4aBBE662c29755701C4a5f801Ace9D2a') as `0x${string}`;
+  const arenaAddress = (process.env.PREDICTION_ARENA_ADDRESS || '0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d') as `0x${string}`;
   const account = privateKeyToAccount(curatorKey as `0x${string}`);
 
   const client = createPublicClient({
