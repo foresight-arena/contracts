@@ -197,6 +197,9 @@ export default function RoundDetailPage() {
     }
   }, [round]);
 
+  const agentMap = agentRegistry;
+  const resolvedMeta = useAgentsMetadata(agentMap);
+
   if (loading) return <LoadingSpinner />;
 
   if (!round) {
@@ -211,8 +214,6 @@ export default function RoundDetailPage() {
     );
   }
 
-  const agentMap = agentRegistry;
-  const resolvedMeta = useAgentsMetadata(agentMap);
   const agentEntries = Array.from(round.agents.values());
 
   return (
