@@ -68,9 +68,7 @@ contract AgentNFT is IAgentNFT {
         nonces[agent]++;
 
         bytes32 structHash = keccak256(
-            abi.encode(
-                REGISTER_TYPEHASH, agent, keccak256(bytes(agentName)), keccak256(bytes(url)), nonce, deadline
-            )
+            abi.encode(REGISTER_TYPEHASH, agent, keccak256(bytes(agentName)), keccak256(bytes(url)), nonce, deadline)
         );
 
         _verifySignature(agent, structHash, signature);
