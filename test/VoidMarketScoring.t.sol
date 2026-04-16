@@ -34,7 +34,7 @@ contract VoidMarketScoringTest is Test {
         vm.warp(1000000);
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin, "");
+        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin);
     }
 
     function _createRound() internal returns (uint256 roundId) {

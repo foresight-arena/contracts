@@ -52,7 +52,7 @@ contract E2EStep1 is Script {
         TestnetRoundManager rm = new TestnetRoundManager(deployer, deployer);
         console.log("TestnetRoundManager:", address(rm));
 
-        PredictionArena arena = new PredictionArena(address(rm), address(mockCtf), address(0), deployer, "");
+        PredictionArena arena = new PredictionArena(address(rm), address(mockCtf), address(0), deployer);
         console.log("PredictionArena:", address(arena));
 
         // Fund agent B for gas

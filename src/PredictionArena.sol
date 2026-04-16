@@ -4,12 +4,12 @@ pragma solidity ^0.8.20;
 import {IPredictionArena} from "./interfaces/IPredictionArena.sol";
 import {IRoundManager} from "./interfaces/IRoundManager.sol";
 import {IConditionalTokens} from "./interfaces/IConditionalTokens.sol";
-import {IAgentNFT} from "./interfaces/IAgentNFT.sol";
+import {IReputationRegistry} from "./interfaces/IReputationRegistry.sol";
 
 contract PredictionArena is IPredictionArena {
     IRoundManager public roundManager;
     IConditionalTokens public ctf;
-    IAgentNFT public agentNFT;
+    IReputationRegistry public reputationRegistry;
     address public admin;
 
     mapping(uint256 => mapping(address => Commitment)) internal _commitments;
@@ -42,38 +42,18 @@ contract PredictionArena is IPredictionArena {
         "Reveal(uint256 roundId,bytes32 predictionsHash,bytes32 salt,address agent,uint256 nonce,uint256 deadline)"
     );
 
-    // ERC-8004 reputation event
-    event NewFeedback(
-        uint256 indexed agentId,
-        address indexed clientAddress,
-        uint64 feedbackIndex,
-        int128 value,
-        uint8 valueDecimals,
-        string indexed indexedTag1,
-        string tag1,
-        string tag2,
-        string endpoint,
-        string feedbackURI,
-        bytes32 feedbackHash
+    event CampaignFeedbackPosted(
+        string indexed campaignTag, uint256 indexed agentId, int128 value, string feedbackURI, bytes32 feedbackHash
     );
 
-    string public feedbackBaseURI;
-
-    constructor(
-        address _roundManager,
-        address _ctf,
-        address _agentNFT,
-        address _admin,
-        string memory _feedbackBaseURI
-    ) {
+    constructor(address _roundManager, address _ctf, address _reputationRegistry, address _admin) {
         require(_roundManager != address(0), "Invalid RoundManager");
         require(_ctf != address(0), "Invalid CTF");
         require(_admin != address(0), "Invalid admin");
         roundManager = IRoundManager(_roundManager);
         ctf = IConditionalTokens(_ctf);
-        agentNFT = IAgentNFT(_agentNFT);
+        reputationRegistry = IReputationRegistry(_reputationRegistry);
         admin = _admin;
-        feedbackBaseURI = _feedbackBaseURI;
 
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
@@ -340,36 +320,40 @@ contract PredictionArena is IPredictionArena {
 
         emit Revealed(roundId, agent, predictions, scoredMarkets, DIRECT_CALL_NONCE);
         emit ScoreComputed(roundId, agent, s.brierScore, s.alphaScore, scoredMarkets);
-
-        // Emit ERC-8004 reputation feedback for registered agents
-        _emitFeedback(roundId, agent, s.alphaScore);
     }
 
-    function _emitFeedback(uint256 roundId, address agent, int256 alphaScore) internal {
-        if (address(agentNFT) == address(0)) return;
+    // ---------------------------------------------------------------
+    // Campaign feedback (ERC-8004 reputation)
+    // ---------------------------------------------------------------
 
-        uint256 agentId = agentNFT.agentIdOf(agent);
-        if (agentId == 0) return;
+    /// @notice Curator publishes feedback for top performers of a campaign.
+    ///         Calls the canonical ERC-8004 Reputation Registry with this contract
+    ///         as the clientAddress. Only positive achievements should be posted.
+    /// @param campaignTag     Human-readable campaign identifier (e.g. "7d-challenge-apr-2026")
+    /// @param agentIds        ERC-8004 agent IDs of winners
+    /// @param values          Score values (same decimals as valueDecimals)
+    /// @param valueDecimals   Fixed-point decimals for values
+    /// @param feedbackURI     Pointer to campaign summary JSON
+    /// @param feedbackHash    keccak256 hash of the campaign summary content
+    function postCampaignFeedback(
+        string calldata campaignTag,
+        uint256[] calldata agentIds,
+        int128[] calldata values,
+        uint8 valueDecimals,
+        string calldata feedbackURI,
+        bytes32 feedbackHash
+    ) external {
+        require(msg.sender == admin || msg.sender == roundManager.curator(), "Not authorized");
+        require(address(reputationRegistry) != address(0), "Reputation registry not set");
+        require(agentIds.length == values.length, "Length mismatch");
+        require(bytes(campaignTag).length > 0, "Empty campaign tag");
 
-        bytes32 rHash = reasoningHashes[roundId][agent];
-        string memory feedbackURI = "";
-        if (rHash != bytes32(0) && bytes(feedbackBaseURI).length > 0) {
-            feedbackURI = string(abi.encodePacked(feedbackBaseURI, _toString(roundId), "/", _toHexString(agent)));
+        for (uint256 i = 0; i < agentIds.length; i++) {
+            reputationRegistry.giveFeedback(
+                agentIds[i], values[i], valueDecimals, "foresight-arena", campaignTag, "", feedbackURI, feedbackHash
+            );
+            emit CampaignFeedbackPosted(campaignTag, agentIds[i], values[i], feedbackURI, feedbackHash);
         }
-
-        emit NewFeedback(
-            agentId,
-            address(this),
-            uint64(roundId),
-            int128(alphaScore),
-            8,
-            "foresight-arena",
-            "foresight-arena",
-            "",
-            "",
-            feedbackURI,
-            rHash
-        );
     }
 
     // ---------------------------------------------------------------
@@ -411,39 +395,5 @@ contract PredictionArena is IPredictionArena {
 
     function getPendingScoringCount(uint256 roundId) external view returns (uint256) {
         return _roundOutcomes[roundId].pendingScoring.length;
-    }
-
-    // ---------------------------------------------------------------
-    // Internal helpers
-    // ---------------------------------------------------------------
-
-    function _toString(uint256 value) internal pure returns (string memory) {
-        if (value == 0) return "0";
-        uint256 temp = value;
-        uint256 digits;
-        while (temp != 0) {
-            digits++;
-            temp /= 10;
-        }
-        bytes memory buffer = new bytes(digits);
-        while (value != 0) {
-            digits--;
-            buffer[digits] = bytes1(uint8(48 + value % 10));
-            value /= 10;
-        }
-        return string(buffer);
-    }
-
-    function _toHexString(address addr) internal pure returns (string memory) {
-        bytes memory alphabet = "0123456789abcdef";
-        bytes20 data = bytes20(addr);
-        bytes memory str = new bytes(42);
-        str[0] = "0";
-        str[1] = "x";
-        for (uint256 i = 0; i < 20; i++) {
-            str[2 + i * 2] = alphabet[uint8(data[i] >> 4)];
-            str[3 + i * 2] = alphabet[uint8(data[i] & 0x0f)];
-        }
-        return string(str);
     }
 }

@@ -28,7 +28,7 @@ contract IntegrationTest is Test {
         mockCtf = new MockConditionalTokens();
         registry = new AgentRegistry();
         roundManager = new RoundManager(curator, admin);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin, "");
+        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin);
 
         // Setup 5 condition IDs
         conditionIds.push(keccak256("market1"));

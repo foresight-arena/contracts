@@ -50,7 +50,7 @@ contract SignatureMalleabilityTest is Test {
 
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin, "");
+        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin);
         registry = new AgentRegistry();
 
         ARENA_DOMAIN_SEPARATOR = arena.DOMAIN_SEPARATOR();

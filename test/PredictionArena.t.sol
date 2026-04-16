@@ -47,7 +47,7 @@ contract PredictionArenaTest is Test {
 
         mockCtf = new MockConditionalTokens();
         roundManager = new RoundManager(curator, admin);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin, "");
+        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin);
     }
 
     // ---------------------------------------------------------------
