@@ -5,6 +5,7 @@ import TimeFilter from '../components/TimeFilter';
 import LoadingSpinner from '../components/LoadingSpinner';
 import type { TimePeriod, LeaderboardEntry } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
+import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
 
 function truncAddr(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
@@ -53,6 +54,7 @@ export default function LeaderboardPage() {
 
   // agentRegistry is Map<string, AgentInfo> keyed by address
   const agentMap = agentRegistry;
+  const resolvedMeta = useAgentsMetadata(agentMap);
 
   const entries = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
@@ -88,10 +90,11 @@ export default function LeaderboardPage() {
     const result: LeaderboardEntry[] = [];
     for (const [addr, data] of agg) {
       const info = agentMap.get(addr);
+      const meta = resolvedMeta.get(addr);
       result.push({
         address: addr,
-        name: info?.name ?? '',
-        url: info?.url ?? '',
+        name: meta?.name ?? info?.name ?? '',
+        url: meta?.url ?? info?.url ?? '',
         avgBrierScore: data.count > 0 ? data.totalBrier / data.count : 0,
         avgAlphaScore: data.count > 0 ? data.totalAlpha / data.count : 0,
         totalBrierScore: data.totalBrier,
@@ -108,7 +111,7 @@ export default function LeaderboardPage() {
     }
 
     return result;
-  }, [rounds, agentRegistry, period, sortMode, agentMap]);
+  }, [rounds, agentRegistry, period, sortMode, agentMap, resolvedMeta]);
 
   if (loading) return <LoadingSpinner />;
 

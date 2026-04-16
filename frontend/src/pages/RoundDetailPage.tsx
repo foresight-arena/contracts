@@ -7,6 +7,7 @@ import { fetchMarketMetadata, type PolymarketInfo } from '../services/polymarket
 import type { AgentRoundData, AgentInfo, Round } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
 import { useReasoning, ReasoningToggle, ReasoningContent } from '../components/ReasoningPanel';
+import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
 
 function formatCountdown(endDate: string | null): { text: string; isCountdown: boolean } {
   if (!endDate) return { text: '--', isCountdown: false };
@@ -211,6 +212,7 @@ export default function RoundDetailPage() {
   }
 
   const agentMap = agentRegistry;
+  const resolvedMeta = useAgentsMetadata(agentMap);
   const agentEntries = Array.from(round.agents.values());
 
   return (
@@ -359,14 +361,22 @@ export default function RoundDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {agentEntries.map((agent: AgentRoundData) => (
-                  <AgentRow
-                    key={agent.address}
-                    agent={agent}
-                    info={agentMap.get(agent.address.toLowerCase())}
-                    round={round}
-                  />
-                ))}
+                {agentEntries.map((agent: AgentRoundData) => {
+                  const addr = agent.address.toLowerCase();
+                  const baseInfo = agentMap.get(addr);
+                  const meta = resolvedMeta.get(addr);
+                  const info = baseInfo
+                    ? { ...baseInfo, name: meta?.name || baseInfo.name, url: meta?.url || baseInfo.url }
+                    : undefined;
+                  return (
+                    <AgentRow
+                      key={agent.address}
+                      agent={agent}
+                      info={info}
+                      round={round}
+                    />
+                  );
+                })}
               </tbody>
             </table>
           </div>
