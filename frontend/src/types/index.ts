@@ -26,6 +26,7 @@ export interface AgentRoundData {
 
 export interface AgentInfo {
   address: string;
+  agentURI: string;
   name: string;
   url: string;
   owner: string;
