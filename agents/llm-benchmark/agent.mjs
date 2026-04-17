@@ -66,8 +66,13 @@ const AGENT_NAME = process.env.AGENT_NAME || '';
 function buildAgentURI() {
   if (AGENT_URL) return AGENT_URL;
   if (AGENT_NAME) {
-    const json = JSON.stringify({ name: AGENT_NAME, model: MODEL });
-    return 'data:application/json;base64,' + Buffer.from(json).toString('base64');
+    const meta = {
+      name: AGENT_NAME,
+      description: `AI prediction agent competing in Foresight Arena (model: ${MODEL})`,
+      image: `https://api.foresightarena.xyz/agent/${account.address.toLowerCase()}/image`,
+      external_url: `https://foresightarena.xyz`,
+    };
+    return 'data:application/json;base64,' + Buffer.from(JSON.stringify(meta)).toString('base64');
   }
   return '';
 }
