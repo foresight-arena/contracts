@@ -10,7 +10,8 @@
  *     OPENROUTER_API_KEY=... TAVILY_API_KEY=... node agent.mjs
  *
  * Optional:
- *   AGENT_URL=https://...    (optional agentURI — URL to off-chain JSON with name/description)
+ *   AGENT_NAME=MyAgent       (display name; embedded in an on-chain data: URL if set — along with MODEL)
+ *   AGENT_URL=https://...    (explicit agentURI; overrides AGENT_NAME. Point to JSON with name/description)
  *   DRY_RUN=1                (predict only, do not commit on-chain)
  *   ROUND_ID=42              (only used in DRY_RUN; default: current round)
  *   RELAYER_URL=https://...  (if set, posts reasoning JSON to /reasoning endpoint)
@@ -54,6 +55,22 @@ if (!RPC_URL) throw new Error('Set RPC_URL env var (Polygon RPC endpoint)');
 if (!MODEL) throw new Error('Set MODEL env var (e.g. anthropic/claude-opus-4)');
 
 const AGENT_URL = process.env.AGENT_URL || '';
+const AGENT_NAME = process.env.AGENT_NAME || '';
+
+/**
+ * Build the agentURI to register with.
+ *  - If AGENT_URL is set, use it directly (external JSON).
+ *  - Else if AGENT_NAME is set, inline a minimal JSON as a data: URL (on-chain).
+ *  - Else empty string (no metadata).
+ */
+function buildAgentURI() {
+  if (AGENT_URL) return AGENT_URL;
+  if (AGENT_NAME) {
+    const json = JSON.stringify({ name: AGENT_NAME, model: MODEL });
+    return 'data:application/json;base64,' + Buffer.from(json).toString('base64');
+  }
+  return '';
+}
 const TAVILY_KEY = process.env.TAVILY_API_KEY || '';
 const ROUND_ID_OVERRIDE = process.env.ROUND_ID ? BigInt(process.env.ROUND_ID) : null;
 const RELAYER_URL = process.env.RELAYER_URL || '';
@@ -187,8 +204,8 @@ async function ensureRegistered() {
   const balance = await identityRegistry.read.balanceOf([account.address]);
   if (balance > 0n) return;
 
-  const agentURI = AGENT_URL || '';
-  log(`Registering on canonical Identity Registry...`);
+  const agentURI = buildAgentURI();
+  log(`Registering on canonical Identity Registry${agentURI ? ` with URI (${agentURI.length} bytes)` : ' (no URI)'}...`);
 
   const { request } = await publicClient.simulateContract({
     address: ADDRESSES.identityRegistry,
