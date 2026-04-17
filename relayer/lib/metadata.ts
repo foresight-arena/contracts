@@ -41,11 +41,12 @@ async function fetchAgentUriMetadata(agentURI: string | undefined): Promise<{ na
 }
 
 /**
- * Assemble OpenSea-compatible JSON metadata for an agent NFT.
+ * Assemble OpenSea-compatible JSON metadata for an agent, looked up by address.
  */
-export async function getAgentMetadata(agentId: string): Promise<object | null> {
+export async function getAgentMetadata(address: string): Promise<object | null> {
+  const addr = address.toLowerCase();
   const data = await querySubgraph(`{
-    agents(where: { agentId: "${agentId}" }, first: 1) {
+    agent(id: "${addr}") {
       agentId
       address
       agentURI
@@ -55,8 +56,7 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
     }
   }`);
 
-  const agents = data?.agents || [];
-  const agent: AgentSubgraphData | null = agents.length > 0 ? agents[0] : null;
+  const agent: AgentSubgraphData | null = data?.agent || null;
   if (!agent) return null;
 
   const roundsPlayed = Number(agent.scoredRoundCount || 0);
@@ -65,35 +65,34 @@ export async function getAgentMetadata(agentId: string): Promise<object | null> 
   const avgBrier = roundsPlayed > 0 ? ((totalBrier / roundsPlayed) / 1e8 * 100).toFixed(2) : '0';
   const avgAlpha = roundsPlayed > 0 ? ((totalAlpha / roundsPlayed) / 1e8 * 100).toFixed(2) : '0';
 
-  // Canonical ERC-8004 registry stores only agentURI. Fetch off-chain metadata
-  // (name, url) best-effort; fall back to defaults if unavailable.
   const offchain = await fetchAgentUriMetadata(agent.agentURI);
-  const displayName = agent.name || offchain.name || `Agent #${agentId}`;
-  const agentUrl = agent.url || offchain.url;
+  const displayName = offchain.name || `Agent ${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  const agentUrl = offchain.url;
 
   return {
     name: `${displayName} — Foresight Arena`,
     description: `AI prediction agent competing in Foresight Arena (foresightarena.xyz), an on-chain prediction competition on Polygon. ${roundsPlayed} rounds played.`,
-    image: `${RELAYER_BASE}/agent/${agentId}/image`,
-    external_url: `${PLATFORM_URL}/agent/${agentId}`,
+    image: `${RELAYER_BASE}/agent/${addr}/image`,
+    external_url: `${PLATFORM_URL}/agent/${addr}`,
     attributes: [
       { trait_type: 'Platform', value: 'Foresight Arena' },
       { trait_type: 'Chain', value: 'Polygon' },
       { trait_type: 'Rounds Played', display_type: 'number', value: roundsPlayed },
       { trait_type: 'Avg Brier Score', value: `${avgBrier}%` },
       { trait_type: 'Avg Alpha Score', value: `${avgAlpha}%` },
-      { trait_type: 'Agent Address', value: agent.address },
+      { trait_type: 'Agent Address', value: addr },
     ],
     ...(agentUrl ? { agent_url: agentUrl } : {}),
   };
 }
 
 /**
- * Generate a dynamic SVG card with agent stats.
+ * Generate a dynamic SVG card with agent stats, looked up by address.
  */
-export async function getAgentImage(agentId: string): Promise<string | null> {
+export async function getAgentImage(address: string): Promise<string | null> {
+  const addr = address.toLowerCase();
   const data = await querySubgraph(`{
-    agents(where: { agentId: "${agentId}" }, first: 1) {
+    agent(id: "${addr}") {
       agentId
       address
       agentURI
@@ -103,16 +102,14 @@ export async function getAgentImage(agentId: string): Promise<string | null> {
     }
   }`);
 
-  const agents = data?.agents || [];
-  const agent: AgentSubgraphData | null = agents.length > 0 ? agents[0] : null;
+  const agent: AgentSubgraphData | null = data?.agent || null;
   if (!agent) return null;
 
   const offchain = await fetchAgentUriMetadata(agent.agentURI);
-  const name = escapeXml(agent.name || offchain.name || `Agent #${agentId}`);
+  const name = escapeXml(offchain.name || `Agent ${addr.slice(0, 6)}...${addr.slice(-4)}`);
   const rounds = Number(agent.scoredRoundCount || 0);
   const totalAlpha = Number(agent.totalAlphaScore || 0);
   const avgAlpha = rounds > 0 ? ((totalAlpha / rounds) / 1e8 * 100).toFixed(1) : '0.0';
-  const addr = agent.address || '';
   const shortAddr = addr.length >= 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="250" viewBox="0 0 400 250">
