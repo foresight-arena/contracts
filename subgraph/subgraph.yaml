@@ -78,7 +78,7 @@ dataSources:
         - name: IdentityRegistry
           file: ./abis/IdentityRegistry.json
       eventHandlers:
-        - event: Registered(indexed uint256,indexed address,string)
+        - event: Registered(indexed uint256,string,indexed address)
           handler: handleRegistered
         - event: URIUpdated(indexed uint256,string,indexed address)
           handler: handleURIUpdated

@@ -4,8 +4,8 @@
     "name": "Registered",
     "inputs": [
       { "name": "agentId", "type": "uint256", "indexed": true },
-      { "name": "owner", "type": "address", "indexed": true },
-      { "name": "agentURI", "type": "string", "indexed": false }
+      { "name": "agentURI", "type": "string", "indexed": false },
+      { "name": "owner", "type": "address", "indexed": true }
     ],
     "anonymous": false
   },
