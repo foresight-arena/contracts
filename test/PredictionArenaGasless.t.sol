@@ -68,7 +68,7 @@ contract PredictionArenaGaslessTest is Test {
         uint64 revealStart = commitDeadline + 2 hours;
         uint64 revealDeadline = revealStart + 13 hours;
         vm.prank(curator);
-        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline, 1);
+        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline);
     }
 
     function _computeCommitHash(uint256 roundId, uint16[] memory predictions, bytes32 salt)
@@ -305,7 +305,7 @@ contract PredictionArenaGaslessTest is Test {
         vm.prank(curator);
         roundManager.postBenchmarkPrices(roundId, benchmarks);
 
-        // Resolve at least 1 market so minResolvedMarkets is satisfied
+        // Resolve at least 1 market so outcomes can be triggered
         uint256[] memory yesPayouts = new uint256[](2);
         yesPayouts[0] = 1;
         yesPayouts[1] = 0;
@@ -355,7 +355,7 @@ contract PredictionArenaGaslessTest is Test {
         vm.prank(curator);
         roundManager.postBenchmarkPrices(roundId, benchmarks);
 
-        // Resolve at least 1 market so minResolvedMarkets is satisfied
+        // Resolve at least 1 market so outcomes can be triggered
         uint256[] memory yesPayouts = new uint256[](2);
         yesPayouts[0] = 1;
         yesPayouts[1] = 0;
@@ -400,7 +400,7 @@ contract PredictionArenaGaslessTest is Test {
         vm.prank(curator);
         roundManager.postBenchmarkPrices(roundId, benchmarks);
 
-        // Resolve at least 1 market so minResolvedMarkets is satisfied
+        // Resolve at least 1 market so outcomes can be triggered
         uint256[] memory yesPayouts = new uint256[](2);
         yesPayouts[0] = 1;
         yesPayouts[1] = 0;

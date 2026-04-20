@@ -17,8 +17,7 @@ contract TestnetRoundManager is RoundManager {
         bytes32[] calldata conditionIds,
         uint64 commitDeadline,
         uint64 revealStart,
-        uint64 revealDeadline,
-        uint16 minResolvedMarkets
+        uint64 revealDeadline
     ) external returns (uint256 roundId) {
         require(msg.sender == curator, "Only curator");
         require(conditionIds.length >= 1 && conditionIds.length <= 20, "Invalid market count");
@@ -32,9 +31,8 @@ contract TestnetRoundManager is RoundManager {
         r.commitDeadline = commitDeadline;
         r.revealStart = revealStart;
         r.revealDeadline = revealDeadline;
-        r.minResolvedMarkets = minResolvedMarkets;
 
-        emit RoundCreated(roundId, conditionIds, commitDeadline, revealStart, revealDeadline, minResolvedMarkets);
+        emit RoundCreated(roundId, conditionIds, commitDeadline, revealStart, revealDeadline);
     }
 }
 
@@ -67,7 +65,7 @@ contract E2EStep1 is Script {
         uint64 commitDeadline = uint64(block.timestamp) + 180;
         uint64 revealStart = commitDeadline + 10; // 10s oracle buffer for testnet
         uint64 revealDeadline = revealStart + 600;
-        uint256 roundId = rm.createTestRound(cids, commitDeadline, revealStart, revealDeadline, 1);
+        uint256 roundId = rm.createTestRound(cids, commitDeadline, revealStart, revealDeadline);
         console.log("Round ID:", roundId);
         console.log("Commit deadline:", commitDeadline);
 

@@ -71,7 +71,7 @@ const ADDRESSES = {
 
 const roundManagerAbi = parseAbi([
   'function currentRoundId() view returns (uint256)',
-  'function getRound(uint256 roundId) view returns ((bytes32[] conditionIds, uint16[] benchmarkPrices, uint64 commitDeadline, uint64 revealStart, uint64 revealDeadline, uint16 minResolvedMarkets, bool benchmarksPosted, bool invalidated))',
+  'function getRound(uint256 roundId) view returns ((bytes32[] conditionIds, uint16[] benchmarkPrices, uint64 commitDeadline, uint64 revealStart, uint64 revealDeadline, bool benchmarksPosted, bool invalidated))',
 ]);
 
 const arenaAbi = parseAbi([

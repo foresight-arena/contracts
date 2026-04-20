@@ -8,7 +8,6 @@ interface IRoundManager {
         uint64 commitDeadline;
         uint64 revealStart;
         uint64 revealDeadline;
-        uint16 minResolvedMarkets;
         bool benchmarksPosted;
         bool invalidated;
     }
@@ -18,8 +17,7 @@ interface IRoundManager {
         bytes32[] conditionIds,
         uint64 commitDeadline,
         uint64 revealStart,
-        uint64 revealDeadline,
-        uint16 minResolvedMarkets
+        uint64 revealDeadline
     );
     event BenchmarksPosted(uint256 indexed roundId, uint16[] benchmarkPrices);
     event RoundInvalidated(uint256 indexed roundId);
@@ -29,8 +27,7 @@ interface IRoundManager {
         bytes32[] calldata conditionIds,
         uint64 commitDeadline,
         uint64 revealStart,
-        uint64 revealDeadline,
-        uint16 minResolvedMarkets
+        uint64 revealDeadline
     ) external returns (uint256 roundId);
 
     function postBenchmarkPrices(uint256 roundId, uint16[] calldata benchmarkPrices) external;

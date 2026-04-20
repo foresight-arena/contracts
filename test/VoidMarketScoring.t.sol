@@ -9,7 +9,7 @@ import {MockConditionalTokens} from "./mocks/MockConditionalTokens.sol";
 
 /**
  * @dev Tests that void/split CTF market resolutions (non-binary payouts)
- *      are excluded from scoring but still count toward minResolvedMarkets.
+ *      are excluded from scoring.
  */
 contract VoidMarketScoringTest is Test {
     PredictionArena public arena;
@@ -46,7 +46,7 @@ contract VoidMarketScoringTest is Test {
         uint64 revealStart = commitDeadline + 2 hours;
         uint64 revealDeadline = revealStart + 13 hours;
         vm.prank(curator);
-        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline, 2);
+        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline);
     }
 
     function _commitAndSetup(uint256 roundId, uint16[] memory preds, bytes32 salt) internal {
@@ -74,8 +74,7 @@ contract VoidMarketScoringTest is Test {
         vm.warp(block.timestamp + 2 hours + 1);
     }
 
-    /// @dev Void market (50/50 split) should be skipped from scoring
-    ///      but still count toward minResolvedMarkets.
+    /// @dev Void market (50/50 split) should be skipped from scoring.
     function test_voidMarket_skippedFromScoring() public {
         uint256 roundId = _createRound();
 
@@ -105,7 +104,7 @@ contract VoidMarketScoringTest is Test {
         no[1] = 1;
         mockCtf.setPayouts(cid2, no);
 
-        // All 3 markets are resolved (denom > 0), minResolvedMarkets=2 is satisfied.
+        // All 3 markets are resolved (denom > 0).
         // But only 2 should be scored (void market excluded).
         vm.prank(curator);
         arena.triggerOutcomes(roundId);
@@ -124,10 +123,8 @@ contract VoidMarketScoringTest is Test {
         assertEq(score.brierScore, 4000000, "Brier score should only include binary markets");
     }
 
-    /// @dev Void markets still count toward minResolvedMarkets.
-    ///      With 2 binary + 1 void resolved, minResolvedMarkets=3 should pass.
-    function test_voidMarket_countsTowardMinResolved() public {
-        // Create round with minResolvedMarkets=3
+    /// @dev Void markets are excluded from scoring but do not block triggerOutcomes.
+    function test_voidMarket_countsTowardResolved() public {
         bytes32[] memory conditionIds = new bytes32[](3);
         conditionIds[0] = cid0;
         conditionIds[1] = cid1;
@@ -137,8 +134,7 @@ contract VoidMarketScoringTest is Test {
             conditionIds,
             uint64(block.timestamp) + 2 hours,
             uint64(block.timestamp) + 4 hours,
-            uint64(block.timestamp) + 17 hours,
-            3 // all 3 must be resolved
+            uint64(block.timestamp) + 17 hours
         );
 
         uint16[] memory preds = new uint16[](3);
@@ -195,7 +191,6 @@ contract VoidMarketScoringTest is Test {
     /// @dev If only void markets are resolved and no binary ones,
     ///      triggerOutcomes should revert — nothing scorable.
     function test_allVoidMarkets_reverts() public {
-        // Create round with minResolvedMarkets=1
         bytes32[] memory conditionIds = new bytes32[](2);
         conditionIds[0] = cid0;
         conditionIds[1] = cid1;
@@ -204,8 +199,7 @@ contract VoidMarketScoringTest is Test {
             conditionIds,
             uint64(block.timestamp) + 2 hours,
             uint64(block.timestamp) + 4 hours,
-            uint64(block.timestamp) + 17 hours,
-            1
+            uint64(block.timestamp) + 17 hours
         );
 
         vm.warp(block.timestamp + 2 hours + 1);

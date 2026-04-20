@@ -62,7 +62,7 @@ contract IntegrationTest is Test {
         revealDeadline = revealStart + 13 hours;
 
         vm.prank(curator);
-        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline, 1);
+        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline);
     }
 
     /// @dev Sets oracle payouts for all 5 markets: markets 1,2,3 = YES [1,0], markets 4,5 = NO [0,1].
@@ -527,7 +527,7 @@ contract IntegrationTest is Test {
         uint64 revealDeadline2 = revealStart2 + 13 hours;
 
         vm.prank(curator);
-        roundId2 = roundManager.createRound(conditionIds, commitDeadline2, revealStart2, revealDeadline2, 1);
+        roundId2 = roundManager.createRound(conditionIds, commitDeadline2, revealStart2, revealDeadline2);
 
         uint16[] memory preds1 = new uint16[](5);
         preds1[0] = 3000;
@@ -594,9 +594,9 @@ contract IntegrationTest is Test {
         uint64 revealDeadlineB = revealStartB + 13 hours;
 
         vm.prank(curator);
-        uint256 roundA = roundManager.createRound(conditionIds, commitDeadlineA, revealStartA, revealDeadlineA, 1);
+        uint256 roundA = roundManager.createRound(conditionIds, commitDeadlineA, revealStartA, revealDeadlineA);
         vm.prank(curator);
-        uint256 roundB = roundManager.createRound(conditionIds, commitDeadlineB, revealStartB, revealDeadlineB, 1);
+        uint256 roundB = roundManager.createRound(conditionIds, commitDeadlineB, revealStartB, revealDeadlineB);
 
         assertEq(roundA, 1);
         assertEq(roundB, 2);

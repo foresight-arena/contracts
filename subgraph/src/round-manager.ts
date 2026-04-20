@@ -15,7 +15,6 @@ export function handleRoundCreated(event: RoundCreated): void {
   round.commitDeadline = event.params.commitDeadline
   round.revealStart = event.params.revealStart
   round.revealDeadline = event.params.revealDeadline
-  round.minResolvedMarkets = event.params.minResolvedMarkets
   round.benchmarksPosted = false
   round.invalidated = false
   round.outcomesTriggered = false

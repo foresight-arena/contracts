@@ -30,14 +30,12 @@ contract RoundManager is IRoundManager {
         bytes32[] calldata conditionIds,
         uint64 commitDeadline,
         uint64 revealStart,
-        uint64 revealDeadline,
-        uint16 minResolvedMarkets
+        uint64 revealDeadline
     ) external virtual onlyCurator returns (uint256 roundId) {
         require(conditionIds.length >= 1 && conditionIds.length <= 20, "Invalid market count");
         require(commitDeadline > uint64(block.timestamp), "Commit deadline must be in the future");
         require(revealStart >= commitDeadline, "Reveal start must be >= commit deadline");
         require(revealDeadline > revealStart, "Reveal deadline must be after reveal start");
-        require(minResolvedMarkets <= conditionIds.length, "Min resolved exceeds market count");
 
         // Reject duplicate conditionIds (max 20 markets, O(n^2) is cheap)
         for (uint256 i = 0; i < conditionIds.length; i++) {
@@ -52,9 +50,8 @@ contract RoundManager is IRoundManager {
         r.commitDeadline = commitDeadline;
         r.revealStart = revealStart;
         r.revealDeadline = revealDeadline;
-        r.minResolvedMarkets = minResolvedMarkets;
 
-        emit RoundCreated(roundId, conditionIds, commitDeadline, revealStart, revealDeadline, minResolvedMarkets);
+        emit RoundCreated(roundId, conditionIds, commitDeadline, revealStart, revealDeadline);
     }
 
     function postBenchmarkPrices(uint256 roundId, uint16[] calldata benchmarkPrices) external onlyCurator {

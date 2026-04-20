@@ -78,7 +78,7 @@ contract PredictionArenaTest is Test {
         uint64 revealDeadline = revealStart + REVEAL_WINDOW + 1;
 
         vm.prank(curator);
-        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline, 1);
+        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline);
     }
 
     /// @dev Create a standard 5-market round.

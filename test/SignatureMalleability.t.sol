@@ -100,8 +100,7 @@ contract SignatureMalleabilityTest is Test {
             conditionIds,
             uint64(block.timestamp) + 2 hours,
             uint64(block.timestamp) + 4 hours,
-            uint64(block.timestamp) + 17 hours,
-            1
+            uint64(block.timestamp) + 17 hours
         );
 
         bytes32 commitHash = keccak256("commit_data");
