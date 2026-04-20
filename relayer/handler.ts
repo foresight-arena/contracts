@@ -254,18 +254,18 @@ export async function handler(event: {
       return json(200, content);
     }
 
-    // Agent NFT metadata (OpenSea-compatible)
-    if (method === 'GET' && path.match(/^\/agent\/\d+$/)) {
-      const agentId = path.replace('/agent/', '');
-      const metadata = await getAgentMetadata(agentId);
+    // Agent metadata (OpenSea-compatible), looked up by address
+    if (method === 'GET' && path.match(/^\/agent\/0x[0-9a-fA-F]{40}$/)) {
+      const address = path.replace('/agent/', '');
+      const metadata = await getAgentMetadata(address);
       if (!metadata) return json(404, { error: 'Agent not found' });
       return json(200, metadata);
     }
 
-    // Agent NFT dynamic SVG image
-    if (method === 'GET' && path.match(/^\/agent\/\d+\/image$/)) {
-      const agentId = path.replace('/agent/', '').replace('/image', '');
-      const svg = await getAgentImage(agentId);
+    // Agent dynamic SVG image, looked up by address
+    if (method === 'GET' && path.match(/^\/agent\/0x[0-9a-fA-F]{40}\/image$/)) {
+      const address = path.replace('/agent/', '').replace('/image', '');
+      const svg = await getAgentImage(address);
       if (!svg) return json(404, { error: 'Agent not found' });
       return {
         statusCode: 200,

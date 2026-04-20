@@ -193,8 +193,8 @@ contract VoidMarketScoringTest is Test {
     }
 
     /// @dev If only void markets are resolved and no binary ones,
-    ///      scoring should still work (scoredMarkets=0, scores=0).
-    function test_allVoidMarkets_zeroScore() public {
+    ///      triggerOutcomes should revert — nothing scorable.
+    function test_allVoidMarkets_reverts() public {
         // Create round with minResolvedMarkets=1
         bytes32[] memory conditionIds = new bytes32[](2);
         conditionIds[0] = cid0;
@@ -208,18 +208,6 @@ contract VoidMarketScoringTest is Test {
             1
         );
 
-        uint16[] memory preds = new uint16[](2);
-        preds[0] = 5000;
-        preds[1] = 5000;
-        bytes32 salt = keccak256("all_void");
-
-        bytes memory packed = abi.encodePacked(roundId);
-        for (uint256 i = 0; i < preds.length; i++) {
-            packed = abi.encodePacked(packed, preds[i]);
-        }
-        vm.prank(agent1);
-        arena.commit(roundId, keccak256(abi.encodePacked(packed, salt)), bytes32(0));
-
         vm.warp(block.timestamp + 2 hours + 1);
         uint16[] memory benchmarks = new uint16[](2);
         benchmarks[0] = 5000;
@@ -228,7 +216,7 @@ contract VoidMarketScoringTest is Test {
         roundManager.postBenchmarkPrices(roundId, benchmarks);
         vm.warp(block.timestamp + 2 hours + 1);
 
-        // Both void
+        // Both void (50/50 split)
         uint256[] memory void_ = new uint256[](2);
         void_[0] = 1;
         void_[1] = 1;
@@ -236,13 +224,7 @@ contract VoidMarketScoringTest is Test {
         mockCtf.setPayouts(cid1, void_);
 
         vm.prank(curator);
+        vm.expectRevert("No markets resolved");
         arena.triggerOutcomes(roundId);
-
-        vm.prank(agent1);
-        arena.reveal(roundId, preds, salt);
-
-        IPredictionArena.Score memory score = arena.getScore(roundId, agent1);
-        assertEq(score.scoredMarkets, 0, "No binary markets to score");
-        assertEq(score.brierScore, 0);
     }
 }

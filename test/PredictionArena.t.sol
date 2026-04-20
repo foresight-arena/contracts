@@ -553,6 +553,19 @@ contract PredictionArenaTest is Test {
         arena.triggerOutcomes(roundId);
     }
 
+    function test_triggerOutcomes_requiresAtLeastOneResolved() public {
+        (uint256 roundId,) = _createStandardRound();
+        _postBenchmarks(roundId, 5, 5000);
+
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        vm.warp(r.revealStart);
+
+        // No payouts set on mock CTF — all markets unresolved
+        vm.prank(curator);
+        vm.expectRevert("No markets resolved");
+        arena.triggerOutcomes(roundId);
+    }
+
     function test_reveal_invalidatedRound() public {
         (uint256 roundId,) = _createStandardRound();
         uint16[] memory preds = _uniformPredictions(5, 5000);

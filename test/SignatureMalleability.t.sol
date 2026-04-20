@@ -128,5 +128,4 @@ contract SignatureMalleabilityTest is Test {
         arena.commitWithSignature(roundId, commitHash, bytes32(0), agent, deadline, normalSig);
         assertTrue(arena.hasCommitted(roundId, agent));
     }
-
 }

@@ -174,6 +174,8 @@ contract PredictionArena is IPredictionArena {
             resolvedCount++;
         }
 
+        require(resolvedCount > 0, "No markets resolved");
+
         o.resolvedBitmask = bitmask;
         o.outcomesTriggered = true;
 
