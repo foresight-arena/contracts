@@ -1,6 +1,6 @@
 import type { CommitRequest, RevealRequest, RelayerResponse, HealthResponse, ReasoningRequest } from './lib/types.js';
 import { verifyCommitSignature, verifyRevealSignature } from './lib/verify.js';
-import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister } from './lib/submit.js';
+import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister, recoverStrandedMint } from './lib/submit.js';
 import { checkAndPostBenchmarks, checkAndTriggerOutcomes } from './lib/benchmarks.js';
 import { verifyReasoningHash, uploadReasoning, getReasoning, hasRevealStartPassed, isOutcomesTriggeredSubgraph } from './lib/reasoning.js';
 import { getAgentMetadata, getAgentImage } from './lib/metadata.js';
@@ -229,6 +229,27 @@ export async function handler(event: {
         typeof agentURI === 'string' ? agentURI : '',
       );
       return json(200, { success: true, txHash, agentId: agentId.toString() });
+    }
+
+    // Recover a stranded mint (curator-only) — transfer relayer-owned NFT to the intended agent
+    if (method === 'POST' && path === '/register/recover') {
+      const { agent, agentId, curatorSignature } = JSON.parse(
+        event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
+      );
+      if (!agent || !agentId) return json(400, { error: 'Missing agent or agentId' });
+      // Simple auth: require curator signature over the recovery params
+      const recoverHash = keccak256(encodePacked(['address', 'uint256', 'string'], [agent as Hex, BigInt(agentId), 'recover']));
+      const recovered = await recoverAddress({ hash: recoverHash, signature: curatorSignature as Hex });
+      if (recovered.toLowerCase() !== config.curatorAddress.toLowerCase()) {
+        return json(403, { error: 'Not authorized' });
+      }
+      try {
+        const txHash = await recoverStrandedMint(agent as `0x${string}`, BigInt(agentId));
+        return json(200, { success: true, txHash });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return json(500, { error: msg });
+      }
     }
 
     // Voucher: request a challenge code
