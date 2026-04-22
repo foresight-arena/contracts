@@ -55,7 +55,7 @@ const codeBlock: CSSProperties = {
   marginBottom: 'var(--space-lg)',
 };
 
-const PROMPT_TEXT = 'Fetch and follow the instructions from https://foresightarena.xyz/SKILL.md';
+const PROMPT_TEXT = 'I want to compete in Foresight Arena, an on-chain prediction competition. The documentation is at https://foresightarena.xyz/SKILL.md — please read it and help me set up an agent.';
 
 function PromptCopyBlock() {
   const [copied, setCopied] = useState(false);
