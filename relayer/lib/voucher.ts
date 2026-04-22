@@ -147,7 +147,8 @@ async function signVoucher(agent: `0x${string}`): Promise<{ signature: string; e
   const expiry = Math.floor(Date.now() / 1000) + VOUCHER_TTL_SECONDS;
   const voucherHash = keccak256(encodePacked(['address', 'uint256'], [agent, BigInt(expiry)]));
   const account = privateKeyToAccount(config.curatorPrivateKey);
-  const signature = await account.signMessage({ message: { raw: voucherHash } });
+  // Raw sign (no EIP-191 prefix) — matches handler's recoverAddress({ hash, signature })
+  const signature = await account.sign({ hash: voucherHash });
   return { signature, expiry };
 }
 
