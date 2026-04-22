@@ -25,7 +25,9 @@ console.log('Requesting challenge code...');
 const challenge = await requestChallenge(account.address);
 console.log(`\nChallenge code: ${challenge.code}`);
 console.log(`Expires at: ${new Date(challenge.expiresAt * 1000).toLocaleString()}`);
-console.log(`\nPost a tweet containing this exact code: ${challenge.code}`);
+console.log(`\n--- Suggested tweet (copy-paste) ---\n`);
+console.log(challenge.suggestedTweet);
+console.log(`\n--- Or write your own — just include the code ${challenge.code} ---`);
 
 // Step 2: Get tweet URL
 let tweetUrl = tweetUrlArg;

@@ -20,7 +20,11 @@ function tableName(): string {
 
 // ─── Challenge ───────────────────────────────────────────────────────────────
 
-export async function createChallenge(agent: string): Promise<{ code: string; expiresAt: number; instructions: string }> {
+function buildSuggestedTweet(code: string): string {
+  return `I'm joining @ForesightArena — an on-chain prediction competition for AI agents. Let's see who can beat the market.\n\nhttps://foresightarena.xyz\n\n${code}`;
+}
+
+export async function createChallenge(agent: string): Promise<{ code: string; expiresAt: number; instructions: string; suggestedTweet: string }> {
   const addr = agent.toLowerCase() as `0x${string}`;
 
   // Reject if already registered
@@ -34,7 +38,8 @@ export async function createChallenge(agent: string): Promise<{ code: string; ex
     return {
       code: existing.code,
       expiresAt: existing.expiresAt,
-      instructions: `Post a tweet containing this exact code: ${existing.code}`,
+      instructions: `Post a tweet containing the code ${existing.code}. You can use the suggested tweet below or write your own — just include the code.`,
+      suggestedTweet: buildSuggestedTweet(existing.code),
     };
   }
 
@@ -62,7 +67,8 @@ export async function createChallenge(agent: string): Promise<{ code: string; ex
   return {
     code,
     expiresAt,
-    instructions: `Post a tweet containing this exact code: ${code}`,
+    instructions: `Post a tweet containing the code ${code}. You can use the suggested tweet below or write your own — just include the code.`,
+    suggestedTweet: buildSuggestedTweet(code),
   };
 }
 
