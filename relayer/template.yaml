@@ -26,6 +26,21 @@ Parameters:
     Description: Curator public address for voucher verification
 
 Resources:
+  VoucherTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: foresight-arena-vouchers
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
   ReasoningBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -60,9 +75,12 @@ Resources:
           ROUND_MANAGER_ADDRESS: !Ref RoundManagerAddress
           CURATOR_ADDRESS: !Ref CuratorAddress
           REASONING_BUCKET: !Ref ReasoningBucket
+          VOUCHER_TABLE: !Ref VoucherTable
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref ReasoningBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref VoucherTable
       FunctionUrlConfig:
         AuthType: NONE
       Events:

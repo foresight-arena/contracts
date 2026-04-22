@@ -4,6 +4,7 @@ import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit
 import { checkAndPostBenchmarks, checkAndTriggerOutcomes } from './lib/benchmarks.js';
 import { verifyReasoningHash, uploadReasoning, getReasoning, hasRevealStartPassed, isOutcomesTriggeredSubgraph } from './lib/reasoning.js';
 import { getAgentMetadata, getAgentImage } from './lib/metadata.js';
+import { createChallenge, verifyTweetAndSign, VoucherError } from './lib/voucher.js';
 import { config } from './config.js';
 import { keccak256, encodePacked, recoverAddress, type Hex } from 'viem';
 
@@ -228,6 +229,36 @@ export async function handler(event: {
         typeof agentURI === 'string' ? agentURI : '',
       );
       return json(200, { success: true, txHash, agentId: agentId.toString() });
+    }
+
+    // Voucher: request a challenge code
+    if (method === 'POST' && path === '/voucher/challenge') {
+      const { agent } = JSON.parse(
+        event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
+      );
+      if (!agent) return json(400, { error: 'Missing agent' });
+      try {
+        const result = await createChallenge(agent);
+        return json(200, result);
+      } catch (err) {
+        if (err instanceof VoucherError) return json(err.status, { error: err.message });
+        throw err;
+      }
+    }
+
+    // Voucher: verify tweet and get signed voucher
+    if (method === 'POST' && path === '/voucher/verify') {
+      const { agent, tweetUrl } = JSON.parse(
+        event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
+      );
+      if (!agent || !tweetUrl) return json(400, { error: 'Missing agent or tweetUrl' });
+      try {
+        const voucher = await verifyTweetAndSign(agent, tweetUrl);
+        return json(200, { voucher });
+      } catch (err) {
+        if (err instanceof VoucherError) return json(err.status, { error: err.message });
+        throw err;
+      }
     }
 
     // Manual benchmark posting trigger
