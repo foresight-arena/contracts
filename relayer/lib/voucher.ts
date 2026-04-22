@@ -5,7 +5,7 @@ import { config } from '../config.js';
 import { isAgentRegistered } from './submit.js';
 
 const CHALLENGE_TTL_SECONDS = 15 * 60;   // 15 minutes
-const VOUCHER_TTL_SECONDS = 60 * 60;     // 1 hour
+const VOUCHER_TTL_SECONDS = 7 * 24 * 60 * 60; // 1 week
 const USED_TWEET_TTL_DAYS = 30;
 
 let ddb: DynamoDBClient | null = null;
