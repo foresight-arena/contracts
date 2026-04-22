@@ -4,7 +4,6 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import './styles/global.css';
 
 import App from './App';
-import { ContractProvider } from './context/ContractContext';
 import { DataProvider } from './context/DataContext';
 import ArenaPage from './pages/ArenaPage';
 import RoundDetailPage from './pages/RoundDetailPage';
@@ -26,10 +25,8 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('app')!).render(
   <StrictMode>
-    <ContractProvider>
-      <DataProvider>
-        <RouterProvider router={router} />
-      </DataProvider>
-    </ContractProvider>
+    <DataProvider>
+      <RouterProvider router={router} />
+    </DataProvider>
   </StrictMode>,
 );

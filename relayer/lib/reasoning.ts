@@ -1,16 +1,7 @@
-import { verifyTypedData, keccak256, toBytes } from 'viem';
+import { keccak256, toBytes } from 'viem';
 import { S3Client, PutObjectCommand, GetObjectCommand, NoSuchKey } from '@aws-sdk/client-s3';
-import { config } from '../config.js';
-import type { ReasoningRequest } from './types.js';
 
-const reasoningTypes = {
-  ReasoningPost: [
-    { name: 'roundId', type: 'uint256' },
-    { name: 'agent', type: 'address' },
-    { name: 'contentHash', type: 'bytes32' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-} as const;
+const SUBGRAPH = 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
 
 const MAX_CONTENT_BYTES = 256 * 1024; // 256 KB cap
 
@@ -26,18 +17,14 @@ function getBucket(): string {
   return bucket;
 }
 
-function getWhitelist(): Set<string> {
-  const raw = process.env.REASONING_WHITELIST || '';
-  return new Set(
-    raw
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean),
-  );
-}
-
-export function isWhitelisted(agent: string): boolean {
-  return getWhitelist().has(agent.toLowerCase());
+async function querySubgraph(query: string): Promise<any> {
+  const resp = await fetch(SUBGRAPH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+  const json = await resp.json();
+  return json.data;
 }
 
 /**
@@ -57,22 +44,62 @@ export function hashContent(content: unknown): `0x${string}` {
   return keccak256(toBytes(json));
 }
 
-export async function verifyReasoningSignature(req: ReasoningRequest): Promise<boolean> {
-  const contentHash = hashContent(req.content);
+/**
+ * Verify that the reasoning content matches the on-chain reasoningHash
+ * stored for (roundId, agent) in the subgraph.
+ */
+export async function verifyReasoningHash(
+  roundId: number,
+  agent: string,
+  content: unknown,
+): Promise<boolean> {
+  const id = `${roundId}-${agent.toLowerCase()}`;
+  const data = await querySubgraph(`{
+    agentRound(id: "${id}") {
+      reasoningHash
+    }
+  }`);
 
-  return verifyTypedData({
-    address: req.agent,
-    domain: config.eip712Domain,
-    types: reasoningTypes,
-    primaryType: 'ReasoningPost',
-    message: {
-      roundId: BigInt(req.roundId),
-      agent: req.agent,
-      contentHash,
-      deadline: BigInt(req.deadline),
-    },
-    signature: req.signature,
-  });
+  const ar = data?.agentRound;
+  if (!ar) return false;
+
+  const onChainHash = ar.reasoningHash as string;
+  if (!onChainHash || onChainHash === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+    return false;
+  }
+
+  const computedHash = hashContent(content);
+  return computedHash.toLowerCase() === onChainHash.toLowerCase();
+}
+
+/**
+ * Check if a round's revealStart has passed (for reasoning submission timing gate).
+ */
+export async function hasRevealStartPassed(roundId: number): Promise<boolean> {
+  const data = await querySubgraph(`{
+    round(id: "${roundId}") {
+      revealStart
+    }
+  }`);
+
+  if (!data?.round) return false;
+
+  const revealStart = Number(data.round.revealStart);
+  const now = Math.floor(Date.now() / 1000);
+  return now >= revealStart;
+}
+
+/**
+ * Check if outcomes have been triggered for a round.
+ */
+export async function isOutcomesTriggeredSubgraph(roundId: number): Promise<boolean> {
+  const data = await querySubgraph(`{
+    round(id: "${roundId}") {
+      outcomesTriggered
+    }
+  }`);
+
+  return data?.round?.outcomesTriggered === true;
 }
 
 function s3Key(roundId: number, agent: string): string {

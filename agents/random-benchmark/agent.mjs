@@ -9,8 +9,8 @@
  *   AGENT_KEY=0x... RPC_URL=https://... node agent.mjs
  *
  * Optional:
- *   AGENT_NAME=MyAgent       (default: Random-<addr>)
- *   AGENT_URL=https://...    (optional metadata URL)
+ *   AGENT_NAME=MyAgent       (display name; embedded in an on-chain data: URL if set)
+ *   AGENT_URL=https://...    (explicit agentURI; overrides AGENT_NAME. Point to JSON with name/description)
  *
  * Crontab example (every 2 hours):
  *   0 *\/2 * * * cd /path/to/agents/random-benchmark && AGENT_KEY=0x... RPC_URL=https://... node agent.mjs >> agent.log 2>&1
@@ -38,36 +38,50 @@ const RPC_URL = process.env.RPC_URL;
 if (!AGENT_KEY) throw new Error('Set AGENT_KEY env var (0x-prefixed private key)');
 if (!RPC_URL) throw new Error('Set RPC_URL env var (Polygon RPC endpoint)');
 
-const AGENT_NAME = process.env.AGENT_NAME;
 const AGENT_URL = process.env.AGENT_URL || '';
+const AGENT_NAME = process.env.AGENT_NAME || '';
+
+/**
+ * Build the agentURI to register with.
+ *  - If AGENT_URL is set, use it directly (external JSON).
+ *  - Else if AGENT_NAME is set, inline a minimal JSON as a data: URL (on-chain).
+ *  - Else empty string (no metadata).
+ */
+function buildAgentURI() {
+  if (AGENT_URL) return AGENT_URL;
+  if (AGENT_NAME) {
+    const meta = {
+      name: AGENT_NAME,
+      description: `AI prediction agent competing in Foresight Arena`,
+      image: `https://api.foresightarena.xyz/agent/${account.address.toLowerCase()}/image`,
+      external_url: `https://foresightarena.xyz`,
+    };
+    return 'data:application/json;base64,' + Buffer.from(JSON.stringify(meta)).toString('base64');
+  }
+  return '';
+}
 
 const ADDRESSES = {
-  arena: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f',
-  roundManager: '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0',
-  registry: '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637',
-  ctf: '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045',
+  arena: '0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d',
+  roundManager: '0x2FA165234ba5fE0bA309853c3fa2Df9949F867Cf',
+  identityRegistry: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432', // canonical ERC-8004
 };
 
 // ─── ABIs (minimal) ───────────────────────────────────────────────────────────
 
 const roundManagerAbi = parseAbi([
   'function currentRoundId() view returns (uint256)',
-  'function getRound(uint256 roundId) view returns ((bytes32[] conditionIds, uint16[] benchmarkPrices, uint64 commitDeadline, uint64 revealStart, uint64 revealDeadline, uint16 minResolvedMarkets, bool benchmarksPosted, bool invalidated))',
+  'function getRound(uint256 roundId) view returns ((bytes32[] conditionIds, uint16[] benchmarkPrices, uint64 commitDeadline, uint64 revealStart, uint64 revealDeadline, bool benchmarksPosted, bool invalidated))',
 ]);
 
 const arenaAbi = parseAbi([
-  'function commit(uint256 roundId, bytes32 commitHash)',
+  'function commit(uint256 roundId, bytes32 commitHash, bytes32 reasoningHash)',
   'function reveal(uint256 roundId, uint16[] predictions, bytes32 salt)',
 ]);
 
-const registryAbi = parseAbi([
-  'function isRegistered(address agent) view returns (bool)',
-  'function registerAgent(string name, string url, address owner)',
-]);
-
-const ctfAbi = parseAbi([
-  'function payoutDenominator(bytes32 conditionId) view returns (uint256)',
-  'function payoutNumerators(bytes32 conditionId, uint256 index) view returns (uint256)',
+const identityRegistryAbi = parseAbi([
+  'function register(string agentURI) returns (uint256)',
+  'function balanceOf(address owner) view returns (uint256)',
 ]);
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -79,8 +93,7 @@ const publicClient = createPublicClient({ chain: polygon, transport });
 const walletClient = createWalletClient({ chain: polygon, transport, account });
 
 const roundManager = getContract({ address: ADDRESSES.roundManager, abi: roundManagerAbi, client: publicClient });
-const registry = getContract({ address: ADDRESSES.registry, abi: registryAbi, client: publicClient });
-const ctf = getContract({ address: ADDRESSES.ctf, abi: ctfAbi, client: publicClient });
+const identityRegistry = getContract({ address: ADDRESSES.identityRegistry, abi: identityRegistryAbi, client: publicClient });
 
 // ─── Persistent State (survives between cron runs) ────────────────────────────
 
@@ -141,17 +154,18 @@ function log(msg) {
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 async function ensureRegistered() {
-  const registered = await registry.read.isRegistered([account.address]);
-  if (registered) return;
+  // Check if already registered on the canonical ERC-8004 Identity Registry
+  const balance = await identityRegistry.read.balanceOf([account.address]);
+  if (balance > 0n) return;
 
-  const name = AGENT_NAME || `Random-${account.address.slice(2, 8)}`;
-  log(`Registering as "${name}"...`);
+  const agentURI = buildAgentURI();
+  log(`Registering on canonical Identity Registry${agentURI ? ` with URI (${agentURI.length} bytes)` : ' (no URI)'}...`);
 
   const { request } = await publicClient.simulateContract({
-    address: ADDRESSES.registry,
-    abi: registryAbi,
-    functionName: 'registerAgent',
-    args: [name, AGENT_URL, account.address],
+    address: ADDRESSES.identityRegistry,
+    abi: identityRegistryAbi,
+    functionName: 'register',
+    args: [agentURI],
     account,
   });
   const hash = await walletClient.writeContract(request);
@@ -178,7 +192,7 @@ async function tryCommit(roundId, round) {
       address: ADDRESSES.arena,
       abi: arenaAbi,
       functionName: 'commit',
-      args: [BigInt(roundId), commitHash],
+      args: [BigInt(roundId), commitHash, '0x0000000000000000000000000000000000000000000000000000000000000000'],
       account,
     });
     const hash = await walletClient.writeContract(request);
@@ -222,28 +236,8 @@ async function processRevealQueue() {
         continue;
       }
 
-      // Benchmarks not posted yet — keep in queue
-      if (!round.benchmarksPosted) {
-        log(`Round ${roundId}: waiting for benchmarks`);
-        remaining.push(entry);
-        continue;
-      }
-
-      // Check if enough markets are resolved
-      let resolvedCount = 0;
-      for (const cid of round.conditionIds) {
-        const denom = await ctf.read.payoutDenominator([cid]);
-        if (denom > 0n) resolvedCount++;
-      }
-
-      if (resolvedCount < round.minResolvedMarkets) {
-        log(`Round ${roundId}: ${resolvedCount}/${round.minResolvedMarkets} markets resolved, waiting`);
-        remaining.push(entry);
-        continue;
-      }
-
-      // Simulate reveal
-      log(`Round ${roundId}: simulating reveal (${resolvedCount} markets resolved)...`);
+      // Simulate reveal — scoring is deferred until curator triggers outcomes
+      log(`Round ${roundId}: simulating reveal...`);
       const { request } = await publicClient.simulateContract({
         address: ADDRESSES.arena,
         abi: arenaAbi,

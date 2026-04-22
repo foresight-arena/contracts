@@ -42,8 +42,7 @@ export async function fetchAllData(): Promise<{
         agentRounds {
           agent {
             id
-            name
-            url
+            agentURI
             owner
             registeredAt
           }
@@ -59,8 +58,7 @@ export async function fetchAllData(): Promise<{
       }
       agents(first: 1000) {
         id
-        name
-        url
+        agentURI
         owner
         registeredAt
       }
@@ -104,6 +102,7 @@ export async function fetchAllData(): Promise<{
       revealDeadline: Number(r.revealDeadline),
       benchmarksPosted: r.benchmarksPosted,
       invalidated: r.invalidated,
+      outcomesTriggered: r.outcomesTriggered ?? false,
       agents,
     } as Round;
   });
@@ -113,8 +112,9 @@ export async function fetchAllData(): Promise<{
     const addr = a.id.toLowerCase();
     agentsMap.set(addr, {
       address: addr,
-      name: a.name || '',
-      url: a.url || '',
+      agentURI: a.agentURI || '',
+      name: '',
+      url: '',
       owner: (a.owner || '').toLowerCase(),
       registeredAt: Number(a.registeredAt || 0),
     });

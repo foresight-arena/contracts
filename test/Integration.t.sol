@@ -7,13 +7,11 @@ import {IPredictionArena} from "../src/interfaces/IPredictionArena.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {IRoundManager} from "../src/interfaces/IRoundManager.sol";
 
-import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {MockConditionalTokens} from "./mocks/MockConditionalTokens.sol";
 
 contract IntegrationTest is Test {
     PredictionArena public arena;
     RoundManager public roundManager;
-    AgentRegistry public registry;
     MockConditionalTokens public mockCtf;
 
     address public curator = makeAddr("curator");
@@ -26,9 +24,8 @@ contract IntegrationTest is Test {
 
     function setUp() public {
         mockCtf = new MockConditionalTokens();
-        registry = new AgentRegistry();
         roundManager = new RoundManager(curator, admin);
-        arena = new PredictionArena(address(roundManager), address(mockCtf), admin);
+        arena = new PredictionArena(address(roundManager), address(mockCtf), address(0), admin);
 
         // Setup 5 condition IDs
         conditionIds.push(keccak256("market1"));
@@ -65,7 +62,7 @@ contract IntegrationTest is Test {
         revealDeadline = revealStart + 13 hours;
 
         vm.prank(curator);
-        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline, 1);
+        roundId = roundManager.createRound(conditionIds, commitDeadline, revealStart, revealDeadline);
     }
 
     /// @dev Sets oracle payouts for all 5 markets: markets 1,2,3 = YES [1,0], markets 4,5 = NO [0,1].
@@ -159,17 +156,7 @@ contract IntegrationTest is Test {
     // ---------------------------------------------------------------
 
     function test_fullRound_happyPath() public {
-        // 1. Register 2 agents (agent3 participates without registration)
-        vm.prank(agent1);
-        registry.registerAgent("Agent Alpha", "https://alpha.ai", agent1);
-        vm.prank(agent2);
-        registry.registerAgent("Agent Beta", "https://beta.ai", agent2);
-
-        assertTrue(registry.isRegistered(agent1));
-        assertTrue(registry.isRegistered(agent2));
-        assertFalse(registry.isRegistered(agent3));
-
-        // 2. Curator creates round
+        // 1. Curator creates round (registration is external — canonical ERC-8004 Identity Registry, not required to participate)
         (uint256 roundId, uint64 commitDeadline, uint64 revealStart,) = _createDefaultRound();
         assertEq(roundId, 1);
 
@@ -206,11 +193,11 @@ contract IntegrationTest is Test {
         bytes32 hash3 = _computeCommitHash(roundId, preds3, salt3);
 
         vm.prank(agent1);
-        arena.commit(roundId, hash1);
+        arena.commit(roundId, hash1, bytes32(0));
         vm.prank(agent2);
-        arena.commit(roundId, hash2);
+        arena.commit(roundId, hash2, bytes32(0));
         vm.prank(agent3);
-        arena.commit(roundId, hash3);
+        arena.commit(roundId, hash3, bytes32(0));
 
         assertEq(arena.getCommitCount(roundId), 3);
         assertTrue(arena.hasCommitted(roundId, agent1));
@@ -228,6 +215,10 @@ contract IntegrationTest is Test {
 
         // 7. Warp past revealStart
         vm.warp(revealStart + 1);
+
+        // 7b. Trigger outcomes before reveals
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
 
         // 8. All 3 agents reveal
         vm.prank(agent1);
@@ -277,7 +268,7 @@ contract IntegrationTest is Test {
         bytes32 hash = _computeCommitHash(roundId, preds, salt);
 
         vm.prank(agent1);
-        arena.commit(roundId, hash);
+        arena.commit(roundId, hash, bytes32(0));
 
         // Warp past commit deadline, post benchmarks
         vm.warp(commitDeadline + 1);
@@ -294,6 +285,10 @@ contract IntegrationTest is Test {
 
         // Warp past revealStart and reveal
         vm.warp(revealStart + 1);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds, salt);
 
@@ -365,11 +360,11 @@ contract IntegrationTest is Test {
         bytes32 salt3 = keccak256("nr_salt3");
 
         vm.prank(agent1);
-        arena.commit(roundId, _computeCommitHash(roundId, preds1, salt1));
+        arena.commit(roundId, _computeCommitHash(roundId, preds1, salt1), bytes32(0));
         vm.prank(agent2);
-        arena.commit(roundId, _computeCommitHash(roundId, preds2, salt2));
+        arena.commit(roundId, _computeCommitHash(roundId, preds2, salt2), bytes32(0));
         vm.prank(agent3);
-        arena.commit(roundId, _computeCommitHash(roundId, preds3, salt3));
+        arena.commit(roundId, _computeCommitHash(roundId, preds3, salt3), bytes32(0));
 
         // Warp, post benchmarks, set payouts
         vm.warp(commitDeadline + 1);
@@ -378,6 +373,10 @@ contract IntegrationTest is Test {
 
         // Warp to reveal phase — only agent1 and agent2 reveal
         vm.warp(revealStart + 1);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds1, salt1);
         vm.prank(agent2);
@@ -419,9 +418,9 @@ contract IntegrationTest is Test {
         bytes32 salt = keccak256("inv_salt");
 
         vm.prank(agent1);
-        arena.commit(roundId, _computeCommitHash(roundId, preds, salt));
+        arena.commit(roundId, _computeCommitHash(roundId, preds, salt), bytes32(0));
         vm.prank(agent2);
-        arena.commit(roundId, _computeCommitHash(roundId, preds, keccak256("inv_salt2")));
+        arena.commit(roundId, _computeCommitHash(roundId, preds, keccak256("inv_salt2")), bytes32(0));
 
         // Admin invalidates round
         vm.prank(admin);
@@ -438,7 +437,7 @@ contract IntegrationTest is Test {
         // Also verify new commits fail
         vm.prank(agent3);
         vm.expectRevert("Round invalidated");
-        arena.commit(roundId, _computeCommitHash(roundId, preds, keccak256("new_salt")));
+        arena.commit(roundId, _computeCommitHash(roundId, preds, keccak256("new_salt")), bytes32(0));
     }
 
     // ---------------------------------------------------------------
@@ -491,15 +490,19 @@ contract IntegrationTest is Test {
         bytes32 salt2 = keccak256("multi_r1_s2");
 
         vm.prank(agent1);
-        arena.commit(roundId, _computeCommitHash(roundId, preds1, salt1));
+        arena.commit(roundId, _computeCommitHash(roundId, preds1, salt1), bytes32(0));
         vm.prank(agent2);
-        arena.commit(roundId, _computeCommitHash(roundId, preds2, salt2));
+        arena.commit(roundId, _computeCommitHash(roundId, preds2, salt2), bytes32(0));
 
         vm.warp(commitDeadline + 1);
         _postDefaultBenchmarks(roundId);
         _setDefaultPayouts();
 
         vm.warp(revealStart + 1);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId);
+
         vm.prank(agent1);
         arena.reveal(roundId, preds1, salt1);
         vm.prank(agent2);
@@ -524,7 +527,7 @@ contract IntegrationTest is Test {
         uint64 revealDeadline2 = revealStart2 + 13 hours;
 
         vm.prank(curator);
-        roundId2 = roundManager.createRound(conditionIds, commitDeadline2, revealStart2, revealDeadline2, 1);
+        roundId2 = roundManager.createRound(conditionIds, commitDeadline2, revealStart2, revealDeadline2);
 
         uint16[] memory preds1 = new uint16[](5);
         preds1[0] = 3000;
@@ -543,9 +546,9 @@ contract IntegrationTest is Test {
         bytes32 salt2 = keccak256("multi_r2_s2");
 
         vm.prank(agent1);
-        arena.commit(roundId2, _computeCommitHash(roundId2, preds1, salt1));
+        arena.commit(roundId2, _computeCommitHash(roundId2, preds1, salt1), bytes32(0));
         vm.prank(agent2);
-        arena.commit(roundId2, _computeCommitHash(roundId2, preds2, salt2));
+        arena.commit(roundId2, _computeCommitHash(roundId2, preds2, salt2), bytes32(0));
 
         vm.warp(commitDeadline2 + 1);
 
@@ -566,6 +569,10 @@ contract IntegrationTest is Test {
         }
 
         vm.warp(revealStart2 + 1);
+
+        vm.prank(curator);
+        arena.triggerOutcomes(roundId2);
+
         vm.prank(agent1);
         arena.reveal(roundId2, preds1, salt1);
         vm.prank(agent2);
@@ -587,9 +594,9 @@ contract IntegrationTest is Test {
         uint64 revealDeadlineB = revealStartB + 13 hours;
 
         vm.prank(curator);
-        uint256 roundA = roundManager.createRound(conditionIds, commitDeadlineA, revealStartA, revealDeadlineA, 1);
+        uint256 roundA = roundManager.createRound(conditionIds, commitDeadlineA, revealStartA, revealDeadlineA);
         vm.prank(curator);
-        uint256 roundB = roundManager.createRound(conditionIds, commitDeadlineB, revealStartB, revealDeadlineB, 1);
+        uint256 roundB = roundManager.createRound(conditionIds, commitDeadlineB, revealStartB, revealDeadlineB);
 
         assertEq(roundA, 1);
         assertEq(roundB, 2);
@@ -612,9 +619,9 @@ contract IntegrationTest is Test {
         bytes32 saltB = keccak256("concB");
 
         vm.prank(agent1);
-        arena.commit(roundA, _computeCommitHash(roundA, predsA, saltA));
+        arena.commit(roundA, _computeCommitHash(roundA, predsA, saltA), bytes32(0));
         vm.prank(agent1);
-        arena.commit(roundB, _computeCommitHash(roundB, predsB, saltB));
+        arena.commit(roundB, _computeCommitHash(roundB, predsB, saltB), bytes32(0));
 
         assertTrue(arena.hasCommitted(roundA, agent1));
         assertTrue(arena.hasCommitted(roundB, agent1));
@@ -639,6 +646,12 @@ contract IntegrationTest is Test {
 
         // Warp past both revealStarts (B's revealStart is later)
         vm.warp(revealStartB + 1);
+
+        // Trigger outcomes for both rounds
+        vm.prank(curator);
+        arena.triggerOutcomes(roundA);
+        vm.prank(curator);
+        arena.triggerOutcomes(roundB);
 
         // Agent reveals in both rounds
         vm.prank(agent1);

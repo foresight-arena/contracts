@@ -10,8 +10,8 @@
  *     OPENROUTER_API_KEY=... TAVILY_API_KEY=... node agent.mjs
  *
  * Optional:
- *   AGENT_NAME=MyAgent       (default: <model-slug>-<addr>)
- *   AGENT_URL=https://...    (optional metadata URL)
+ *   AGENT_NAME=MyAgent       (display name; embedded in an on-chain data: URL if set — along with MODEL)
+ *   AGENT_URL=https://...    (explicit agentURI; overrides AGENT_NAME. Point to JSON with name/description)
  *   DRY_RUN=1                (predict only, do not commit on-chain)
  *   ROUND_ID=42              (only used in DRY_RUN; default: current round)
  *   RELAYER_URL=https://...  (if set, posts reasoning JSON to /reasoning endpoint)
@@ -28,6 +28,7 @@ import {
   http,
   encodePacked,
   keccak256,
+  toBytes,
   getContract,
   parseAbi,
 } from 'viem';
@@ -41,7 +42,6 @@ import { getMarkets, summarizeMarket } from './lib/polymarket.mjs';
 import { createTools } from './lib/tools.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { getPredictions } from './lib/llm.mjs';
-import { postReasoning } from './lib/reasoning-poster.mjs';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -54,8 +54,28 @@ if (!AGENT_KEY) throw new Error('Set AGENT_KEY env var (0x-prefixed private key)
 if (!RPC_URL) throw new Error('Set RPC_URL env var (Polygon RPC endpoint)');
 if (!MODEL) throw new Error('Set MODEL env var (e.g. anthropic/claude-opus-4)');
 
-const AGENT_NAME = process.env.AGENT_NAME;
 const AGENT_URL = process.env.AGENT_URL || '';
+const AGENT_NAME = process.env.AGENT_NAME || '';
+
+/**
+ * Build the agentURI to register with.
+ *  - If AGENT_URL is set, use it directly (external JSON).
+ *  - Else if AGENT_NAME is set, inline a minimal JSON as a data: URL (on-chain).
+ *  - Else empty string (no metadata).
+ */
+function buildAgentURI() {
+  if (AGENT_URL) return AGENT_URL;
+  if (AGENT_NAME) {
+    const meta = {
+      name: AGENT_NAME,
+      description: `AI prediction agent competing in Foresight Arena (model: ${MODEL})`,
+      image: `https://api.foresightarena.xyz/agent/${account.address.toLowerCase()}/image`,
+      external_url: `https://foresightarena.xyz`,
+    };
+    return 'data:application/json;base64,' + Buffer.from(JSON.stringify(meta)).toString('base64');
+  }
+  return '';
+}
 const TAVILY_KEY = process.env.TAVILY_API_KEY || '';
 const ROUND_ID_OVERRIDE = process.env.ROUND_ID ? BigInt(process.env.ROUND_ID) : null;
 const RELAYER_URL = process.env.RELAYER_URL || '';
@@ -66,9 +86,9 @@ if (!['discover', 'predict', 'all'].includes(MODE)) {
 }
 
 const ADDRESSES = {
-  arena: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f',
-  roundManager: '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0',
-  registry: '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637',
+  arena: '0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d',
+  roundManager: '0x2FA165234ba5fE0bA309853c3fa2Df9949F867Cf',
+  identityRegistry: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432', // canonical ERC-8004
   ctf: '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045',
 };
 
@@ -76,17 +96,17 @@ const ADDRESSES = {
 
 const roundManagerAbi = parseAbi([
   'function currentRoundId() view returns (uint256)',
-  'function getRound(uint256 roundId) view returns ((bytes32[] conditionIds, uint16[] benchmarkPrices, uint64 commitDeadline, uint64 revealStart, uint64 revealDeadline, uint16 minResolvedMarkets, bool benchmarksPosted, bool invalidated))',
+  'function getRound(uint256 roundId) view returns ((bytes32[] conditionIds, uint16[] benchmarkPrices, uint64 commitDeadline, uint64 revealStart, uint64 revealDeadline, bool benchmarksPosted, bool invalidated))',
 ]);
 
 const arenaAbi = parseAbi([
-  'function commit(uint256 roundId, bytes32 commitHash)',
+  'function commit(uint256 roundId, bytes32 commitHash, bytes32 reasoningHash)',
   'function reveal(uint256 roundId, uint16[] predictions, bytes32 salt)',
 ]);
 
-const registryAbi = parseAbi([
-  'function isRegistered(address agent) view returns (bool)',
-  'function registerAgent(string name, string url, address owner)',
+const identityRegistryAbi = parseAbi([
+  'function register(string agentURI) returns (uint256)',
+  'function balanceOf(address owner) view returns (uint256)',
 ]);
 
 const ctfAbi = parseAbi([
@@ -102,7 +122,7 @@ const publicClient = createPublicClient({ chain: polygon, transport });
 const walletClient = createWalletClient({ chain: polygon, transport, account });
 
 const roundManager = getContract({ address: ADDRESSES.roundManager, abi: roundManagerAbi, client: publicClient });
-const registry = getContract({ address: ADDRESSES.registry, abi: registryAbi, client: publicClient });
+const identityRegistry = getContract({ address: ADDRESSES.identityRegistry, abi: identityRegistryAbi, client: publicClient });
 const ctf = getContract({ address: ADDRESSES.ctf, abi: ctfAbi, client: publicClient });
 
 // ─── Persistent State ─────────────────────────────────────────────────────────
@@ -172,20 +192,31 @@ function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
+/**
+ * Canonical JSON serialization — sorted keys, matches relayer's canonicalize().
+ */
+function canonicalize(content) {
+  if (content === null || typeof content !== 'object') return JSON.stringify(content);
+  if (Array.isArray(content)) return '[' + content.map(canonicalize).join(',') + ']';
+  const keys = Object.keys(content).sort();
+  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalize(content[k])).join(',') + '}';
+}
+
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 async function ensureRegistered() {
-  const registered = await registry.read.isRegistered([account.address]);
-  if (registered) return;
+  // Check if already registered on canonical ERC-8004 Identity Registry
+  const balance = await identityRegistry.read.balanceOf([account.address]);
+  if (balance > 0n) return;
 
-  const name = AGENT_NAME || `${MODEL.split('/').pop()}-${account.address.slice(2, 8)}`;
-  log(`Registering as "${name}"...`);
+  const agentURI = buildAgentURI();
+  log(`Registering on canonical Identity Registry${agentURI ? ` with URI (${agentURI.length} bytes)` : ' (no URI)'}...`);
 
   const { request } = await publicClient.simulateContract({
-    address: ADDRESSES.registry,
-    abi: registryAbi,
-    functionName: 'registerAgent',
-    args: [name, AGENT_URL, account.address],
+    address: ADDRESSES.identityRegistry,
+    abi: identityRegistryAbi,
+    functionName: 'register',
+    args: [agentURI],
     account,
   });
   const hash = await walletClient.writeContract(request);
@@ -368,6 +399,14 @@ async function tryCommit(roundId, round) {
   const salt = generateSalt();
   const commitHash = computeCommitHash(roundId, predictions, salt);
 
+  const reasoningPayload = RELAYER_URL
+    ? buildReasoningPayload({ roundId, summaries, result, autoResolved })
+    : undefined;
+
+  const reasoningHash = reasoningPayload
+    ? keccak256(toBytes(canonicalize(reasoningPayload)))
+    : '0x0000000000000000000000000000000000000000000000000000000000000000';
+
   log(`Round ${roundId}: committing on-chain...`);
 
   try {
@@ -375,16 +414,12 @@ async function tryCommit(roundId, round) {
       address: ADDRESSES.arena,
       abi: arenaAbi,
       functionName: 'commit',
-      args: [BigInt(roundId), commitHash],
+      args: [BigInt(roundId), commitHash, reasoningHash],
       account,
     });
     const hash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     log(`Committed in tx ${receipt.transactionHash}`);
-
-    const reasoningPayload = RELAYER_URL
-      ? buildReasoningPayload({ roundId, summaries, result, autoResolved })
-      : undefined;
 
     const queue = loadQueue();
     queue.push({ roundId, predictions, salt, commitHash, committedAt: new Date().toISOString(), reasoningPayload });
@@ -422,25 +457,27 @@ async function processRevealQueue() {
         continue;
       }
 
-      if (!round.benchmarksPosted) {
-        log(`Round ${roundId}: waiting for benchmarks`);
-        remaining.push(entry);
-        continue;
+      // Post reasoning before reveal (relayer verifies by hash)
+      if (RELAYER_URL && entry.reasoningPayload) {
+        try {
+          const resp = await fetch(`${RELAYER_URL}/reasoning`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roundId, agent: account.address, content: entry.reasoningPayload }),
+          });
+          const data = await resp.json();
+          if (!resp.ok || !data.success) {
+            log(`Reasoning post failed: ${data.error || resp.status}`);
+          } else {
+            log(`Reasoning posted for round ${roundId}`);
+          }
+        } catch (err) {
+          log(`Reasoning post failed: ${err.message}`);
+        }
       }
 
-      let resolvedCount = 0;
-      for (const cid of round.conditionIds) {
-        const denom = await ctf.read.payoutDenominator([cid]);
-        if (denom > 0n) resolvedCount++;
-      }
-
-      if (resolvedCount < round.minResolvedMarkets) {
-        log(`Round ${roundId}: ${resolvedCount}/${round.minResolvedMarkets} markets resolved, waiting`);
-        remaining.push(entry);
-        continue;
-      }
-
-      log(`Round ${roundId}: simulating reveal (${resolvedCount} markets resolved)...`);
+      // Scoring is deferred until curator triggers outcomes — just reveal
+      log(`Round ${roundId}: simulating reveal...`);
       const { request } = await publicClient.simulateContract({
         address: ADDRESSES.arena,
         abi: arenaAbi,
@@ -452,22 +489,6 @@ async function processRevealQueue() {
       const hash = await walletClient.writeContract(request);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       log(`Revealed round ${roundId} in tx ${receipt.transactionHash}`);
-
-      // Post reasoning after reveal (not before — don't leak predictions)
-      if (RELAYER_URL && entry.reasoningPayload) {
-        try {
-          const resp = await postReasoning({
-            relayerUrl: RELAYER_URL,
-            account,
-            arenaAddress: ADDRESSES.arena,
-            roundId,
-            content: entry.reasoningPayload,
-          });
-          log(`Reasoning posted: ${resp.key} (${resp.size} bytes)`);
-        } catch (err) {
-          log(`Reasoning post failed: ${err.message}`);
-        }
-      }
     } catch (err) {
       if (err.message.includes('Already revealed')) {
         log(`Round ${roundId}: already revealed, dropping`);

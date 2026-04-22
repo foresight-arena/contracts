@@ -16,19 +16,31 @@ Parameters:
     Description: Curator wallet private key for posting benchmarks (0x-prefixed)
   PredictionArenaAddress:
     Type: String
-    Default: '0xF0C6EFD4A2F1B10528A360F388fbE45839c1b60f'
+    Default: '0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d'
   RoundManagerAddress:
     Type: String
-    Default: '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0'
-  AgentRegistryAddress:
+    Default: '0x2FA165234ba5fE0bA309853c3fa2Df9949F867Cf'
+  CuratorAddress:
     Type: String
-    Default: '0x624C60c4a3c7461909412FF9b7A0216d4cB0e637'
-  ReasoningWhitelist:
-    Type: String
-    Default: ''
-    Description: Comma-separated list of agent addresses allowed to post reasoning
+    Default: '0x943507c28186741608a80777B03F045C84beA3A5'
+    Description: Curator public address for voucher verification
 
 Resources:
+  VoucherTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: foresight-arena-vouchers
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
   ReasoningBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -61,12 +73,14 @@ Resources:
           CURATOR_PRIVATE_KEY: !Ref CuratorPrivateKey
           PREDICTION_ARENA_ADDRESS: !Ref PredictionArenaAddress
           ROUND_MANAGER_ADDRESS: !Ref RoundManagerAddress
-          AGENT_REGISTRY_ADDRESS: !Ref AgentRegistryAddress
+          CURATOR_ADDRESS: !Ref CuratorAddress
           REASONING_BUCKET: !Ref ReasoningBucket
-          REASONING_WHITELIST: !Ref ReasoningWhitelist
+          VOUCHER_TABLE: !Ref VoucherTable
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref ReasoningBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref VoucherTable
       FunctionUrlConfig:
         AuthType: NONE
       Events:

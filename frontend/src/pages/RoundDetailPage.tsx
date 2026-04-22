@@ -7,6 +7,7 @@ import { fetchMarketMetadata, type PolymarketInfo } from '../services/polymarket
 import type { AgentRoundData, AgentInfo, Round } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
 import { useReasoning, ReasoningToggle, ReasoningContent } from '../components/ReasoningPanel';
+import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
 
 function formatCountdown(endDate: string | null): { text: string; isCountdown: boolean } {
   if (!endDate) return { text: '--', isCountdown: false };
@@ -128,9 +129,13 @@ function AgentRow({ agent, info, round }: { agent: AgentRoundData; info?: AgentI
           )}
         </td>
         <td>
-          <span className={`badge ${agent.revealed ? 'success' : 'warning'}`}>
-            {agent.revealed ? 'Revealed' : 'Committed'}
-          </span>
+          {agent.revealed && agent.scoredMarkets === 0 && !round.outcomesTriggered ? (
+            <span className="badge accent">Pending scoring</span>
+          ) : (
+            <span className={`badge ${agent.revealed ? 'success' : 'warning'}`}>
+              {agent.revealed ? 'Revealed' : 'Committed'}
+            </span>
+          )}
         </td>
         <td className="mono" style={{ maxWidth: 400 }}>
           {agent.predictions.length > 0
@@ -192,6 +197,9 @@ export default function RoundDetailPage() {
     }
   }, [round]);
 
+  const agentMap = agentRegistry;
+  const resolvedMeta = useAgentsMetadata(agentMap);
+
   if (loading) return <LoadingSpinner />;
 
   if (!round) {
@@ -206,7 +214,6 @@ export default function RoundDetailPage() {
     );
   }
 
-  const agentMap = agentRegistry;
   const agentEntries = Array.from(round.agents.values());
 
   return (
@@ -355,14 +362,22 @@ export default function RoundDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {agentEntries.map((agent: AgentRoundData) => (
-                  <AgentRow
-                    key={agent.address}
-                    agent={agent}
-                    info={agentMap.get(agent.address.toLowerCase())}
-                    round={round}
-                  />
-                ))}
+                {agentEntries.map((agent: AgentRoundData) => {
+                  const addr = agent.address.toLowerCase();
+                  const baseInfo = agentMap.get(addr);
+                  const meta = resolvedMeta.get(addr);
+                  const info = baseInfo
+                    ? { ...baseInfo, name: meta?.name || baseInfo.name, url: meta?.url || baseInfo.url }
+                    : undefined;
+                  return (
+                    <AgentRow
+                      key={agent.address}
+                      agent={agent}
+                      info={info}
+                      round={round}
+                    />
+                  );
+                })}
               </tbody>
             </table>
           </div>

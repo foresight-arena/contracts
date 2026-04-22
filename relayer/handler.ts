@@ -1,8 +1,12 @@
 import type { CommitRequest, RevealRequest, RelayerResponse, HealthResponse, ReasoningRequest } from './lib/types.js';
 import { verifyCommitSignature, verifyRevealSignature } from './lib/verify.js';
 import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister } from './lib/submit.js';
-import { checkAndPostBenchmarks } from './lib/benchmarks.js';
-import { verifyReasoningSignature, uploadReasoning, getReasoning, isWhitelisted } from './lib/reasoning.js';
+import { checkAndPostBenchmarks, checkAndTriggerOutcomes } from './lib/benchmarks.js';
+import { verifyReasoningHash, uploadReasoning, getReasoning, hasRevealStartPassed, isOutcomesTriggeredSubgraph } from './lib/reasoning.js';
+import { getAgentMetadata, getAgentImage } from './lib/metadata.js';
+import { createChallenge, verifyTweetAndSign, VoucherError } from './lib/voucher.js';
+import { config } from './config.js';
+import { keccak256, encodePacked, recoverAddress, type Hex } from 'viem';
 
 // Lazy init on first request
 let initialized = false;
@@ -107,24 +111,22 @@ async function handleReveal(body: RevealRequest): Promise<RelayerResponse> {
 }
 
 async function handleReasoning(body: ReasoningRequest): Promise<RelayerResponse & { key?: string; size?: number }> {
-  const { roundId, agent, content, deadline, signature } = body;
+  const { roundId, agent, content } = body;
 
-  if (roundId == null || !agent || content == null || !deadline || !signature) {
-    return { success: false, error: 'Missing required fields' };
+  if (roundId == null || !agent || content == null) {
+    return { success: false, error: 'Missing required fields (roundId, agent, content)' };
   }
 
-  const now = Math.floor(Date.now() / 1000);
-  if (deadline < now + 30) {
-    return { success: false, error: 'Deadline too close or expired' };
+  // Timing gate: reject if round's revealStart hasn't passed yet
+  const revealStarted = await hasRevealStartPassed(roundId);
+  if (!revealStarted) {
+    return { success: false, error: 'Reveal period has not started yet' };
   }
 
-  if (!isWhitelisted(agent)) {
-    return { success: false, error: 'Agent not whitelisted for reasoning posts' };
-  }
-
-  const valid = await verifyReasoningSignature(body);
+  // Verify reasoning content matches on-chain reasoningHash
+  const valid = await verifyReasoningHash(roundId, agent, content);
   if (!valid) {
-    return { success: false, error: 'Invalid signature' };
+    return { success: false, error: 'Reasoning content does not match on-chain hash' };
   }
 
   try {
@@ -158,8 +160,10 @@ export async function handler(event: {
 }) {
   // EventBridge cron trigger — run benchmark poster
   if (event.source === 'aws.events' || event['detail-type'] === 'Scheduled Event') {
-    console.log('Cron trigger: checking for pending benchmarks');
-    const results = await checkAndPostBenchmarks();
+    console.log('Cron trigger: checking for pending benchmarks + outcomes');
+    const benchmarkResults = await checkAndPostBenchmarks();
+    const outcomeResults = await checkAndTriggerOutcomes();
+    const results = [...benchmarkResults, ...outcomeResults];
     console.log(results.join('\n'));
     return { statusCode: 200, body: JSON.stringify({ results }) };
   }
@@ -190,18 +194,71 @@ export async function handler(event: {
       return json(200, { agent, nonce: nonce.toString() });
     }
 
-    // Agent registration (gasless via EIP-712 signature)
+    // Agent registration on canonical ERC-8004 Identity Registry (gasless via curator voucher)
+    // Relayer mints the NFT to itself, then transfers to the agent.
     if (method === 'POST' && path === '/register') {
-      const { agent, name, url, signature } = JSON.parse(
+      const { agent, agentURI, voucher } = JSON.parse(
         event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
       );
-      if (!agent || !name || !signature) return json(400, { success: false, error: 'Missing agent, name, or signature' });
+      if (!agent) return json(400, { success: false, error: 'Missing agent' });
+
+      // Verify curator voucher
+      if (!voucher || !voucher.signature || !voucher.expiry) {
+        return json(400, { success: false, error: 'Missing voucher (curator approval required)' });
+      }
+      const now = Math.floor(Date.now() / 1000);
+      if (Number(voucher.expiry) <= now) {
+        return json(400, { success: false, error: 'Voucher expired' });
+      }
+      const voucherHash = keccak256(
+        encodePacked(['address', 'uint256'], [agent as Hex, BigInt(voucher.expiry)])
+      );
+      const recoveredAddr = await recoverAddress({
+        hash: voucherHash,
+        signature: voucher.signature as Hex,
+      });
+      if (recoveredAddr.toLowerCase() !== config.curatorAddress.toLowerCase()) {
+        return json(403, { success: false, error: 'Invalid voucher: not signed by curator' });
+      }
 
       const already = await isAgentRegistered(agent as `0x${string}`);
       if (already) return json(200, { success: true, alreadyRegistered: true });
 
-      const txHash = await submitRegister(agent as `0x${string}`, name, url || '', signature as `0x${string}`);
-      return json(200, { success: true, txHash });
+      const { txHash, agentId } = await submitRegister(
+        agent as `0x${string}`,
+        typeof agentURI === 'string' ? agentURI : '',
+      );
+      return json(200, { success: true, txHash, agentId: agentId.toString() });
+    }
+
+    // Voucher: request a challenge code
+    if (method === 'POST' && path === '/voucher/challenge') {
+      const { agent } = JSON.parse(
+        event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
+      );
+      if (!agent) return json(400, { error: 'Missing agent' });
+      try {
+        const result = await createChallenge(agent);
+        return json(200, result);
+      } catch (err) {
+        if (err instanceof VoucherError) return json(err.status, { error: err.message });
+        throw err;
+      }
+    }
+
+    // Voucher: verify tweet and get signed voucher
+    if (method === 'POST' && path === '/voucher/verify') {
+      const { agent, tweetUrl } = JSON.parse(
+        event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
+      );
+      if (!agent || !tweetUrl) return json(400, { error: 'Missing agent or tweetUrl' });
+      try {
+        const voucher = await verifyTweetAndSign(agent, tweetUrl);
+        return json(200, { voucher });
+      } catch (err) {
+        if (err instanceof VoucherError) return json(err.status, { error: err.message });
+        throw err;
+      }
     }
 
     // Manual benchmark posting trigger
@@ -211,6 +268,7 @@ export async function handler(event: {
     }
 
     // Reasoning lookup — fetch posted reasoning JSON for a (round, agent) pair
+    // Only serve after outcomes have been triggered for the round
     if (method === 'GET' && path.startsWith('/reasoning/')) {
       const parts = path.replace('/reasoning/', '').split('/');
       if (parts.length !== 2) return json(400, { error: 'Expected /reasoning/{roundId}/{agent}' });
@@ -219,9 +277,36 @@ export async function handler(event: {
       if (!Number.isInteger(roundId) || roundId < 0) return json(400, { error: 'Invalid roundId' });
       if (!/^0x[0-9a-fA-F]{40}$/.test(agent)) return json(400, { error: 'Invalid agent address' });
 
+      const triggered = await isOutcomesTriggeredSubgraph(roundId);
+      if (!triggered) return json(403, { error: 'Reasoning not available until outcomes are triggered' });
+
       const content = await getReasoning(roundId, agent);
       if (content == null) return json(404, { error: 'Not found' });
       return json(200, content);
+    }
+
+    // Agent metadata (OpenSea-compatible), looked up by address
+    if (method === 'GET' && path.match(/^\/agent\/0x[0-9a-fA-F]{40}$/)) {
+      const address = path.replace('/agent/', '');
+      const metadata = await getAgentMetadata(address);
+      if (!metadata) return json(404, { error: 'Agent not found' });
+      return json(200, metadata);
+    }
+
+    // Agent dynamic SVG image, looked up by address
+    if (method === 'GET' && path.match(/^\/agent\/0x[0-9a-fA-F]{40}\/image$/)) {
+      const address = path.replace('/agent/', '').replace('/image', '');
+      const svg = await getAgentImage(address);
+      if (!svg) return json(404, { error: 'Agent not found' });
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'image/svg+xml',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=300',
+        },
+        body: svg,
+      };
     }
 
     // Polymarket API proxy (avoids CORS for frontend)

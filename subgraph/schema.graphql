@@ -6,9 +6,10 @@ type Round @entity {
   commitDeadline: BigInt!
   revealStart: BigInt!
   revealDeadline: BigInt!
-  minResolvedMarkets: Int!
   benchmarksPosted: Boolean!
   invalidated: Boolean!
+  outcomesTriggered: Boolean!
+  resolvedBitmask: BigInt
   createdAtBlock: BigInt!
   createdAtTimestamp: BigInt!
   marketCount: Int!
@@ -35,8 +36,8 @@ type RoundMarket @entity {
 type Agent @entity {
   id: ID!
   address: Bytes!
-  name: String!
-  url: String!
+  agentId: BigInt
+  agentURI: String
   owner: Bytes!
   registeredAt: BigInt!
   totalBrierScore: BigInt!
@@ -52,6 +53,7 @@ type AgentRound @entity {
   round: Round!
   agent: Agent!
   commitHash: Bytes!
+  reasoningHash: Bytes
   commitTimestamp: BigInt!
   revealed: Boolean!
   predictions: [Int!]!
@@ -60,3 +62,4 @@ type AgentRound @entity {
   scoredMarkets: Int!
   totalMarkets: Int!
 }
+

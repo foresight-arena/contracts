@@ -4,10 +4,12 @@ pragma solidity ^0.8.20;
 import {IPredictionArena} from "./interfaces/IPredictionArena.sol";
 import {IRoundManager} from "./interfaces/IRoundManager.sol";
 import {IConditionalTokens} from "./interfaces/IConditionalTokens.sol";
+import {IReputationRegistry} from "./interfaces/IReputationRegistry.sol";
 
 contract PredictionArena is IPredictionArena {
     IRoundManager public roundManager;
     IConditionalTokens public ctf;
+    IReputationRegistry public reputationRegistry;
     address public admin;
 
     mapping(uint256 => mapping(address => Commitment)) internal _commitments;
@@ -15,23 +17,42 @@ contract PredictionArena is IPredictionArena {
     mapping(uint256 => mapping(address => Score)) internal _scores;
     mapping(uint256 => uint256) public commitCount;
 
+    // Reasoning hash per (round, agent) — committed at commit time, verified off-chain
+    mapping(uint256 => mapping(address => bytes32)) public reasoningHashes;
+
+    // Two-phase outcome resolution
+    struct RoundOutcomes {
+        uint256 resolvedBitmask;
+        int256[] cachedOutcomes;
+        bool outcomesTriggered;
+        address[] pendingScoring;
+    }
+
+    mapping(uint256 => RoundOutcomes) internal _roundOutcomes;
+
     // EIP-712 gasless support
     bytes32 public immutable DOMAIN_SEPARATOR;
     mapping(address => uint256) public nonces;
 
-    bytes32 public constant COMMIT_TYPEHASH =
-        keccak256("Commit(uint256 roundId,bytes32 commitHash,address agent,uint256 nonce,uint256 deadline)");
+    bytes32 public constant COMMIT_TYPEHASH = keccak256(
+        "Commit(uint256 roundId,bytes32 commitHash,bytes32 reasoningHash,address agent,uint256 nonce,uint256 deadline)"
+    );
 
     bytes32 public constant REVEAL_TYPEHASH = keccak256(
         "Reveal(uint256 roundId,bytes32 predictionsHash,bytes32 salt,address agent,uint256 nonce,uint256 deadline)"
     );
 
-    constructor(address _roundManager, address _ctf, address _admin) {
+    event CampaignFeedbackPosted(
+        string indexed campaignTag, uint256 indexed agentId, int128 value, string feedbackURI, bytes32 feedbackHash
+    );
+
+    constructor(address _roundManager, address _ctf, address _reputationRegistry, address _admin) {
         require(_roundManager != address(0), "Invalid RoundManager");
         require(_ctf != address(0), "Invalid CTF");
         require(_admin != address(0), "Invalid admin");
         roundManager = IRoundManager(_roundManager);
         ctf = IConditionalTokens(_ctf);
+        reputationRegistry = IReputationRegistry(_reputationRegistry);
         admin = _admin;
 
         DOMAIN_SEPARATOR = keccak256(
@@ -51,8 +72,8 @@ contract PredictionArena is IPredictionArena {
 
     uint256 private constant DIRECT_CALL_NONCE = type(uint256).max;
 
-    function commit(uint256 roundId, bytes32 commitHash) external {
-        _commit(roundId, commitHash, msg.sender, DIRECT_CALL_NONCE);
+    function commit(uint256 roundId, bytes32 commitHash, bytes32 reasoningHash) external {
+        _commit(roundId, commitHash, reasoningHash, msg.sender, DIRECT_CALL_NONCE);
     }
 
     function reveal(uint256 roundId, uint16[] calldata predictions, bytes32 salt) external {
@@ -66,6 +87,7 @@ contract PredictionArena is IPredictionArena {
     function commitWithSignature(
         uint256 roundId,
         bytes32 commitHash,
+        bytes32 reasoningHash,
         address agent,
         uint256 deadline,
         bytes calldata signature
@@ -73,10 +95,11 @@ contract PredictionArena is IPredictionArena {
         require(block.timestamp <= deadline, "Signature expired");
 
         uint256 nonce = nonces[agent]++;
-        bytes32 structHash = keccak256(abi.encode(COMMIT_TYPEHASH, roundId, commitHash, agent, nonce, deadline));
+        bytes32 structHash =
+            keccak256(abi.encode(COMMIT_TYPEHASH, roundId, commitHash, reasoningHash, agent, nonce, deadline));
         _verifySignature(agent, structHash, signature);
 
-        _commit(roundId, commitHash, agent, nonce);
+        _commit(roundId, commitHash, reasoningHash, agent, nonce);
     }
 
     function revealWithSignature(
@@ -90,7 +113,6 @@ contract PredictionArena is IPredictionArena {
         require(block.timestamp <= deadline, "Signature expired");
 
         uint256 nonce = nonces[agent]++;
-        // Tight 2-byte packing for predictionsHash (matches commit hash encoding)
         bytes memory packedPredictions;
         for (uint256 i = 0; i < predictions.length; i++) {
             packedPredictions = abi.encodePacked(packedPredictions, predictions[i]);
@@ -100,6 +122,77 @@ contract PredictionArena is IPredictionArena {
         _verifySignature(agent, structHash, signature);
 
         _reveal(roundId, predictions, salt, agent, nonce);
+    }
+
+    // ---------------------------------------------------------------
+    // Outcome triggering (two-phase scoring)
+    // ---------------------------------------------------------------
+
+    function triggerOutcomes(uint256 roundId) external {
+        _triggerOutcomes(roundId);
+    }
+
+    function triggerOutcomesAndScore(uint256 roundId) external {
+        _triggerOutcomes(roundId);
+        _scorePending(roundId);
+    }
+
+    function calculateScoresForPendingReveals(uint256 roundId) external {
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        require(o.outcomesTriggered, "Outcomes not triggered");
+        _scorePending(roundId);
+    }
+
+    function _triggerOutcomes(uint256 roundId) internal {
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+        require(r.conditionIds.length > 0, "Round does not exist");
+        require(!r.invalidated, "Round invalidated");
+        require(r.benchmarksPosted, "Benchmarks not posted");
+
+        if (uint64(block.timestamp) < r.revealDeadline) {
+            require(msg.sender == roundManager.curator() || msg.sender == admin, "Only curator during reveal window");
+        }
+
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        require(!o.outcomesTriggered, "Outcomes already triggered");
+
+        uint256 len = r.conditionIds.length;
+        o.cachedOutcomes = new int256[](len);
+        uint256 bitmask;
+        uint16 resolvedCount;
+
+        for (uint256 i = 0; i < len; i++) {
+            bytes32 conditionId = r.conditionIds[i];
+            uint256 denom = ctf.payoutDenominator(conditionId);
+            if (denom == 0) continue;
+
+            uint256 payout0 = ctf.payoutNumerators(conditionId, 0);
+            if (payout0 != 0 && payout0 != denom) continue;
+
+            bitmask |= (1 << i);
+            o.cachedOutcomes[i] = (payout0 > 0) ? int256(10000) : int256(0);
+            resolvedCount++;
+        }
+
+        require(resolvedCount > 0, "No markets resolved");
+
+        o.resolvedBitmask = bitmask;
+        o.outcomesTriggered = true;
+
+        emit OutcomesTriggered(roundId, bitmask, resolvedCount);
+    }
+
+    function _scorePending(uint256 roundId) internal {
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        IRoundManager.Round memory r = roundManager.getRound(roundId);
+
+        uint256 count = o.pendingScoring.length;
+        for (uint256 i = 0; i < count; i++) {
+            _scoreAgent(roundId, o.pendingScoring[i], r);
+        }
+
+        delete o.pendingScoring;
+        emit PendingScoresProcessed(roundId, count, 0);
     }
 
     // ---------------------------------------------------------------
@@ -120,11 +213,15 @@ contract PredictionArena is IPredictionArena {
             v := byte(0, calldataload(add(signature.offset, 64)))
         }
 
+        require(uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0, "Invalid signature");
+
         address recovered = ecrecover(digest, v, r, s);
         require(recovered != address(0) && recovered == expected, "Invalid signature");
     }
 
-    function _commit(uint256 roundId, bytes32 commitHash, address agent, uint256 eventNonce) internal {
+    function _commit(uint256 roundId, bytes32 commitHash, bytes32 reasoningHash, address agent, uint256 eventNonce)
+        internal
+    {
         require(commitHash != bytes32(0), "Empty hash");
 
         IRoundManager.Round memory r = roundManager.getRound(roundId);
@@ -138,7 +235,11 @@ contract PredictionArena is IPredictionArena {
         c.commitHash = commitHash;
         commitCount[roundId]++;
 
-        emit Committed(roundId, agent, commitHash, eventNonce);
+        if (reasoningHash != bytes32(0)) {
+            reasoningHashes[roundId][agent] = reasoningHash;
+        }
+
+        emit Committed(roundId, agent, commitHash, reasoningHash, eventNonce);
     }
 
     function _reveal(uint256 roundId, uint16[] calldata predictions, bytes32 salt, address agent, uint256 eventNonce)
@@ -149,14 +250,13 @@ contract PredictionArena is IPredictionArena {
         require(!r.invalidated, "Round invalidated");
         require(uint64(block.timestamp) >= r.revealStart, "Reveal not started");
         require(uint64(block.timestamp) < r.revealDeadline, "Reveal phase ended");
-        require(r.benchmarksPosted, "Benchmarks not posted");
 
         Commitment storage c = _commitments[roundId][agent];
-        require(c.commitHash != bytes32(0), "No commitment");
         require(!c.revealed, "Already revealed");
+        require(c.commitHash != bytes32(0), "No commitment");
         require(predictions.length == r.conditionIds.length, "Wrong prediction count");
 
-        // Verify hash — manually pack uint16[] as tight 2-byte elements
+        // Verify hash
         bytes memory packed = abi.encodePacked(roundId);
         for (uint256 i = 0; i < predictions.length; i++) {
             packed = abi.encodePacked(packed, predictions[i]);
@@ -164,55 +264,54 @@ contract PredictionArena is IPredictionArena {
         bytes32 expectedHash = keccak256(abi.encodePacked(packed, salt));
         require(expectedHash == c.commitHash, "Hash mismatch");
 
-        // Validate predictions
         for (uint256 i = 0; i < predictions.length; i++) {
             require(predictions[i] <= 10000, "Prediction out of range");
         }
 
         c.revealed = true;
+        c.commitHash = bytes32(0);
         _revealedPredictions[roundId][agent] = predictions;
 
-        // Compute and store scores
-        _computeScores(roundId, agent, predictions, r, eventNonce);
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        if (o.outcomesTriggered) {
+            _scoreAgent(roundId, agent, r);
+        } else {
+            o.pendingScoring.push(agent);
+            emit Revealed(roundId, agent, predictions, 0, eventNonce);
+        }
     }
 
-    function _computeScores(
-        uint256 roundId,
-        address agent,
-        uint16[] calldata predictions,
-        IRoundManager.Round memory r,
-        uint256 eventNonce
-    ) internal {
+    function _scoreAgent(uint256 roundId, address agent, IRoundManager.Round memory r) internal {
+        Score storage s = _scores[roundId][agent];
+        if (s.totalMarkets > 0) return;
+
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        uint16[] memory predictions = _revealedPredictions[roundId][agent];
+
         uint256 totalBrier;
         int256 totalAlpha;
         uint16 scoredMarkets;
 
         for (uint256 i = 0; i < r.conditionIds.length; i++) {
-            bytes32 conditionId = r.conditionIds[i];
+            if (o.resolvedBitmask & (1 << i) == 0) continue;
 
-            uint256 denom = ctf.payoutDenominator(conditionId);
-            if (denom == 0) continue;
+            {
+                int256 outcome = o.cachedOutcomes[i];
+                int256 prediction = int256(uint256(predictions[i]));
+                int256 benchmark = int256(uint256(r.benchmarkPrices[i]));
 
-            uint256 payout0 = ctf.payoutNumerators(conditionId, 0);
-            int256 outcome = (payout0 > 0) ? int256(10000) : int256(0);
-            int256 prediction = int256(uint256(predictions[i]));
-            int256 benchmark = int256(uint256(r.benchmarkPrices[i]));
+                int256 diff = prediction - outcome;
+                uint256 brierComponent = uint256(diff * diff);
 
-            int256 diff = prediction - outcome;
-            uint256 brierComponent = uint256(diff * diff);
+                int256 benchDiff = benchmark - outcome;
+                int256 alphaComponent = (benchDiff * benchDiff) - int256(brierComponent);
 
-            int256 benchDiff = benchmark - outcome;
-            int256 baselineBrier = benchDiff * benchDiff;
-            int256 alphaComponent = baselineBrier - int256(brierComponent);
-
-            totalBrier += brierComponent;
-            totalAlpha += alphaComponent;
+                totalBrier += brierComponent;
+                totalAlpha += alphaComponent;
+            }
             scoredMarkets++;
         }
 
-        require(scoredMarkets >= r.minResolvedMarkets, "Not enough markets resolved");
-
-        Score storage s = _scores[roundId][agent];
         s.totalMarkets = uint16(r.conditionIds.length);
         s.scoredMarkets = scoredMarkets;
 
@@ -221,8 +320,42 @@ contract PredictionArena is IPredictionArena {
             s.alphaScore = totalAlpha / int256(uint256(scoredMarkets));
         }
 
-        emit Revealed(roundId, agent, predictions, scoredMarkets, eventNonce);
+        emit Revealed(roundId, agent, predictions, scoredMarkets, DIRECT_CALL_NONCE);
         emit ScoreComputed(roundId, agent, s.brierScore, s.alphaScore, scoredMarkets);
+    }
+
+    // ---------------------------------------------------------------
+    // Campaign feedback (ERC-8004 reputation)
+    // ---------------------------------------------------------------
+
+    /// @notice Curator publishes feedback for top performers of a campaign.
+    ///         Calls the canonical ERC-8004 Reputation Registry with this contract
+    ///         as the clientAddress. Only positive achievements should be posted.
+    /// @param campaignTag     Human-readable campaign identifier (e.g. "7d-challenge-apr-2026")
+    /// @param agentIds        ERC-8004 agent IDs of winners
+    /// @param values          Score values (same decimals as valueDecimals)
+    /// @param valueDecimals   Fixed-point decimals for values
+    /// @param feedbackURI     Pointer to campaign summary JSON
+    /// @param feedbackHash    keccak256 hash of the campaign summary content
+    function postCampaignFeedback(
+        string calldata campaignTag,
+        uint256[] calldata agentIds,
+        int128[] calldata values,
+        uint8 valueDecimals,
+        string calldata feedbackURI,
+        bytes32 feedbackHash
+    ) external {
+        require(msg.sender == admin || msg.sender == roundManager.curator(), "Not authorized");
+        require(address(reputationRegistry) != address(0), "Reputation registry not set");
+        require(agentIds.length == values.length, "Length mismatch");
+        require(bytes(campaignTag).length > 0, "Empty campaign tag");
+
+        for (uint256 i = 0; i < agentIds.length; i++) {
+            reputationRegistry.giveFeedback(
+                agentIds[i], values[i], valueDecimals, "foresight-arena", campaignTag, "", feedbackURI, feedbackHash
+            );
+            emit CampaignFeedbackPosted(campaignTag, agentIds[i], values[i], feedbackURI, feedbackHash);
+        }
     }
 
     // ---------------------------------------------------------------
@@ -251,5 +384,18 @@ contract PredictionArena is IPredictionArena {
 
     function hasRevealed(uint256 roundId, address agent) external view returns (bool) {
         return _commitments[roundId][agent].revealed;
+    }
+
+    function getRoundOutcomes(uint256 roundId)
+        external
+        view
+        returns (bool triggered, uint256 bitmask, int256[] memory outcomes)
+    {
+        RoundOutcomes storage o = _roundOutcomes[roundId];
+        return (o.outcomesTriggered, o.resolvedBitmask, o.cachedOutcomes);
+    }
+
+    function getPendingScoringCount(uint256 roundId) external view returns (uint256) {
+        return _roundOutcomes[roundId].pendingScoring.length;
     }
 }

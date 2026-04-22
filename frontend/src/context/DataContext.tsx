@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from 'react';
 import type { Round, AgentInfo } from '../types';
-import { useContractContext } from './ContractContext';
 import { fetchAllData } from '../services/subgraph';
 
 interface DataContextValue {
@@ -22,7 +21,6 @@ interface DataContextValue {
 const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { contractSet } = useContractContext();
 
   const [rounds, setRounds] = useState<Round[]>([]);
   const [agents, setAgents] = useState<Map<string, AgentInfo>>(new Map());
@@ -62,7 +60,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [contractSet, refreshKey]);
+  }, [refreshKey]);
 
   const value = useMemo<DataContextValue>(
     () => ({ rounds, agents, loading, error, refresh }),

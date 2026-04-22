@@ -13,7 +13,7 @@ contract DeployTestnetResume is Script {
 
         vm.startBroadcast();
 
-        PredictionArena arena = new PredictionArena(roundManager, mockCtf, deployer);
+        PredictionArena arena = new PredictionArena(roundManager, mockCtf, address(0), deployer);
         console.log("PredictionArena:", address(arena));
 
         vm.stopBroadcast();

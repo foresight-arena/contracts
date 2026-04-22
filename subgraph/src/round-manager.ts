@@ -3,7 +3,7 @@ import {
   RoundCreated,
   BenchmarksPosted,
   RoundInvalidated,
-} from "../generated/FastRoundManager/RoundManager"
+} from "../generated/RoundManager/RoundManager"
 import { Round, Market, RoundMarket } from "../generated/schema"
 
 export function handleRoundCreated(event: RoundCreated): void {
@@ -15,9 +15,10 @@ export function handleRoundCreated(event: RoundCreated): void {
   round.commitDeadline = event.params.commitDeadline
   round.revealStart = event.params.revealStart
   round.revealDeadline = event.params.revealDeadline
-  round.minResolvedMarkets = event.params.minResolvedMarkets
   round.benchmarksPosted = false
   round.invalidated = false
+  round.outcomesTriggered = false
+  round.resolvedBitmask = null
   round.createdAtBlock = event.block.number
   round.createdAtTimestamp = event.block.timestamp
   round.marketCount = event.params.conditionIds.length

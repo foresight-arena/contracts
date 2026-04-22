@@ -4,9 +4,6 @@ pragma solidity ^0.8.20;
 import {IRoundManager} from "./interfaces/IRoundManager.sol";
 
 contract RoundManager is IRoundManager {
-    uint64 public constant MIN_COMMIT_WINDOW = 1 hours;
-    uint64 public constant MIN_REVEAL_WINDOW = 12 hours;
-
     mapping(uint256 => Round) internal _rounds;
     uint256 public currentRoundId;
     address public curator;
@@ -33,14 +30,19 @@ contract RoundManager is IRoundManager {
         bytes32[] calldata conditionIds,
         uint64 commitDeadline,
         uint64 revealStart,
-        uint64 revealDeadline,
-        uint16 minResolvedMarkets
+        uint64 revealDeadline
     ) external virtual onlyCurator returns (uint256 roundId) {
         require(conditionIds.length >= 1 && conditionIds.length <= 20, "Invalid market count");
-        require(commitDeadline > uint64(block.timestamp) + MIN_COMMIT_WINDOW, "Commit deadline too soon");
-        require(revealStart > commitDeadline, "Reveal start must be after commit deadline");
-        require(revealDeadline > revealStart + MIN_REVEAL_WINDOW, "Reveal deadline too soon");
-        require(minResolvedMarkets <= conditionIds.length, "Min resolved exceeds market count");
+        require(commitDeadline > uint64(block.timestamp), "Commit deadline must be in the future");
+        require(revealStart >= commitDeadline, "Reveal start must be >= commit deadline");
+        require(revealDeadline > revealStart, "Reveal deadline must be after reveal start");
+
+        // Reject duplicate conditionIds (max 20 markets, O(n^2) is cheap)
+        for (uint256 i = 0; i < conditionIds.length; i++) {
+            for (uint256 j = i + 1; j < conditionIds.length; j++) {
+                require(conditionIds[i] != conditionIds[j], "Duplicate conditionId");
+            }
+        }
 
         roundId = ++currentRoundId;
         Round storage r = _rounds[roundId];
@@ -48,9 +50,8 @@ contract RoundManager is IRoundManager {
         r.commitDeadline = commitDeadline;
         r.revealStart = revealStart;
         r.revealDeadline = revealDeadline;
-        r.minResolvedMarkets = minResolvedMarkets;
 
-        emit RoundCreated(roundId, conditionIds, commitDeadline, revealStart, revealDeadline, minResolvedMarkets);
+        emit RoundCreated(roundId, conditionIds, commitDeadline, revealStart, revealDeadline);
     }
 
     function postBenchmarkPrices(uint256 roundId, uint16[] calldata benchmarkPrices) external onlyCurator {

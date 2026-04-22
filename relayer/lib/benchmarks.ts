@@ -14,6 +14,17 @@ const roundManagerAbi = parseAbi([
   'function postBenchmarkPrices(uint256 roundId, uint16[] benchmarkPrices) external',
 ]);
 
+const arenaAbi = parseAbi([
+  'function triggerOutcomesAndScore(uint256 roundId) external',
+  'function getRoundOutcomes(uint256 roundId) view returns (bool triggered, uint256 bitmask, int256[] outcomes)',
+  'function getPendingScoringCount(uint256 roundId) view returns (uint256 total, uint256 processed)',
+  'function calculateScoresForPendingReveals(uint256 roundId, uint256 batchSize) external',
+]);
+
+const ctfAbi = parseAbi([
+  'function payoutDenominator(bytes32 conditionId) view returns (uint256)',
+]);
+
 interface SubgraphRound {
   roundId: string;
   conditionIds: string[];
@@ -122,7 +133,7 @@ export async function checkAndPostBenchmarks(): Promise<string[]> {
     return results;
   }
 
-  const roundManagerAddress = (process.env.ROUND_MANAGER_ADDRESS || '0x625eD13a6c37DA525C96C3FBF65f35E266268Ee0') as `0x${string}`;
+  const roundManagerAddress = (process.env.ROUND_MANAGER_ADDRESS || '0x2FA165234ba5fE0bA309853c3fa2Df9949F867Cf') as `0x${string}`;
   const account = privateKeyToAccount(curatorKey as `0x${string}`);
 
   const client = createPublicClient({
@@ -183,6 +194,109 @@ export async function checkAndPostBenchmarks(): Promise<string[]> {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       results.push(`  ERROR posting benchmarks for round ${roundId}: ${msg}`);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Check for rounds that need outcomes triggered and pending scores computed.
+ * Called by the same EventBridge cron as benchmarks.
+ * Curator can trigger during reveal window; anyone can trigger after revealDeadline.
+ */
+export async function checkAndTriggerOutcomes(): Promise<string[]> {
+  const results: string[] = [];
+
+  const now = Math.floor(Date.now() / 1000);
+  const data = await querySubgraph(`{
+    rounds(where: { benchmarksPosted: true, invalidated: false, outcomesTriggered: false }) {
+      roundId
+      conditionIds
+      revealStart
+      revealDeadline
+      marketCount
+    }
+  }`);
+
+  const rounds = data?.rounds || [];
+  const ready = rounds.filter((r: any) => Number(r.revealStart) <= now);
+
+  if (ready.length === 0) {
+    results.push('No rounds need outcome triggering');
+    return results;
+  }
+
+  const rpcUrl = process.env.RPC_URL || 'https://polygon-rpc.com';
+  const curatorKey = process.env.CURATOR_PRIVATE_KEY || process.env.RELAYER_PRIVATE_KEY;
+  if (!curatorKey) {
+    results.push('ERROR: No CURATOR_PRIVATE_KEY set');
+    return results;
+  }
+
+  const ctfAddress = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045' as const;
+  const arenaAddress = (process.env.PREDICTION_ARENA_ADDRESS || '0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d') as `0x${string}`;
+  const account = privateKeyToAccount(curatorKey as `0x${string}`);
+
+  const client = createPublicClient({
+    chain: polygon as Chain,
+    transport: http(rpcUrl),
+  });
+
+  const wallet = createWalletClient({
+    account,
+    chain: polygon as Chain,
+    transport: http(rpcUrl),
+  });
+
+  for (const round of ready) {
+    const roundId = Number(round.roundId);
+    const conditionIds: string[] = round.conditionIds || [];
+    const marketCount = conditionIds.length;
+    const pastDeadline = now >= Number(round.revealDeadline);
+
+    // Check how many markets are resolved on the CTF
+    let resolvedCount = 0;
+    for (const cid of conditionIds) {
+      try {
+        const denom = await client.readContract({
+          address: ctfAddress,
+          abi: ctfAbi,
+          functionName: 'payoutDenominator',
+          args: [cid as `0x${string}`],
+        }) as bigint;
+        if (denom > 0n) resolvedCount++;
+      } catch {
+        // CTF read failed — treat as unresolved
+      }
+    }
+
+    results.push(`Round ${roundId}: ${resolvedCount}/${marketCount} markets resolved on CTF`);
+
+    // Trigger when ALL markets are resolved, or after revealDeadline with at least one
+    if (resolvedCount === marketCount) {
+      results.push(`  All markets resolved — triggering outcomes`);
+    } else if (pastDeadline && resolvedCount > 0) {
+      results.push(`  Past reveal deadline with ${resolvedCount} resolved — triggering with partial outcomes`);
+    } else {
+      results.push(`  Waiting for more markets to resolve`);
+      continue;
+    }
+
+    try {
+      const { request } = await client.simulateContract({
+        address: arenaAddress,
+        abi: arenaAbi,
+        functionName: 'triggerOutcomesAndScore',
+        args: [BigInt(roundId)],
+        account,
+      });
+
+      const txHash = await wallet.writeContract(request);
+      results.push(`  Triggered outcomes + scored round ${roundId}: ${txHash}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      results.push(`  ERROR triggering outcomes for round ${roundId}: ${msg}`);
     }
   }
 

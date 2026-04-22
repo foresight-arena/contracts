@@ -1,6 +1,7 @@
 export interface CommitRequest {
   roundId: number;
   commitHash: `0x${string}`;
+  reasoningHash?: `0x${string}`;
   agent: `0x${string}`;
   deadline: number;
   signature: `0x${string}`;
