@@ -112,23 +112,28 @@ export async function getAgentImage(address: string): Promise<string | null> {
   const avgAlpha = rounds > 0 ? ((totalAlpha / rounds) / 1e8 * 100).toFixed(1) : '0.0';
   const shortAddr = addr.length >= 10 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="250" viewBox="0 0 400 250">
+  const totalBrier = Number(agent.totalBrierScore || 0);
+  const avgBrier = rounds > 0 ? ((totalBrier / rounds) / 1e8 * 100).toFixed(1) : '0.0';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#16213e;stop-opacity:1" />
     </linearGradient>
   </defs>
-  <rect width="400" height="250" rx="16" fill="url(#bg)" />
-  <rect x="1" y="1" width="398" height="248" rx="15" fill="none" stroke="#0f3460" stroke-width="2" />
-  <text x="24" y="40" font-family="monospace" font-size="18" font-weight="bold" fill="#e94560">${name}</text>
-  <text x="24" y="62" font-family="monospace" font-size="11" fill="#888">${shortAddr}</text>
-  <line x1="24" y1="100" x2="376" y2="100" stroke="#0f3460" stroke-width="1" />
-  <text x="24" y="130" font-family="monospace" font-size="13" fill="#ccc">Rounds Played</text>
-  <text x="376" y="130" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${rounds}</text>
-  <text x="24" y="158" font-family="monospace" font-size="13" fill="#ccc">Avg Alpha</text>
-  <text x="376" y="158" font-family="monospace" font-size="13" fill="#e94560" text-anchor="end">${avgAlpha}%</text>
-  <text x="200" y="228" font-family="monospace" font-size="10" fill="#555" text-anchor="middle">foresightarena.xyz</text>
+  <rect width="400" height="400" rx="20" fill="url(#bg)" />
+  <rect x="1" y="1" width="398" height="398" rx="19" fill="none" stroke="#0f3460" stroke-width="2" />
+  <text x="32" y="52" font-family="monospace" font-size="22" font-weight="bold" fill="#e94560">${name}</text>
+  <text x="32" y="80" font-family="monospace" font-size="14" fill="#888">${shortAddr}</text>
+  <line x1="32" y1="110" x2="368" y2="110" stroke="#0f3460" stroke-width="1" />
+  <text x="32" y="155" font-family="monospace" font-size="16" fill="#ccc">Rounds Played</text>
+  <text x="368" y="155" font-family="monospace" font-size="20" fill="#e94560" text-anchor="end">${rounds}</text>
+  <text x="32" y="200" font-family="monospace" font-size="16" fill="#ccc">Avg Brier</text>
+  <text x="368" y="200" font-family="monospace" font-size="20" fill="#e94560" text-anchor="end">${avgBrier}%</text>
+  <text x="32" y="245" font-family="monospace" font-size="16" fill="#ccc">Avg Alpha</text>
+  <text x="368" y="245" font-family="monospace" font-size="20" fill="#e94560" text-anchor="end">${avgAlpha}%</text>
+  <text x="200" y="370" font-family="monospace" font-size="13" fill="#555" text-anchor="middle">foresightarena.xyz</text>
 </svg>`;
 }
 

@@ -50,11 +50,26 @@ const AGENT_NAME = process.env.AGENT_NAME || '';
 function buildAgentURI() {
   if (AGENT_URL) return AGENT_URL;
   if (AGENT_NAME) {
+    const addr = account.address.toLowerCase();
     const meta = {
+      type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
       name: AGENT_NAME,
-      description: `AI prediction agent competing in Foresight Arena`,
-      image: `https://api.foresightarena.xyz/agent/${account.address.toLowerCase()}/image`,
-      external_url: `https://foresightarena.xyz`,
+      description: 'AI prediction agent competing in Foresight Arena — an on-chain forecasting competition on Polygon',
+      image: `https://api.foresightarena.xyz/agent/${addr}/image`,
+      external_url: 'https://foresightarena.xyz',
+      active: true,
+      services: [
+        {
+          name: 'A2A',
+          endpoint: `https://api.foresightarena.xyz/agent/${addr}`,
+          version: '0.3.0',
+        },
+      ],
+      registrations: [
+        {
+          agentRegistry: 'eip155:137:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
+        },
+      ],
     };
     return 'data:application/json;base64,' + Buffer.from(JSON.stringify(meta)).toString('base64');
   }
