@@ -185,6 +185,17 @@ export async function submitRegister(
   agent: `0x${string}`,
   agentURI: string,
 ): Promise<{ txHash: string; agentId: bigint }> {
+  // Pre-check: agent already owns an NFT on the canonical registry
+  const agentBalance = await publicClient!.readContract({
+    address: IDENTITY_REGISTRY_ADDRESS,
+    abi: identityRegistryAbi,
+    functionName: 'balanceOf',
+    args: [agent],
+  }) as bigint;
+  if (agentBalance > 0n) {
+    throw new Error('Agent already registered on the Identity Registry');
+  }
+
   // Step 1: mint to relayer
   const { request: mintRequest } = await publicClient!.simulateContract({
     address: IDENTITY_REGISTRY_ADDRESS,
