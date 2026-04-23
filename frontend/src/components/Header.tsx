@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { Link } from 'react-router-dom';
 
 const headerStyle: CSSProperties = {
   display: 'flex',
@@ -11,6 +12,7 @@ const brandStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 'var(--space-sm)',
+  textDecoration: 'none',
 };
 
 const logoStyle: CSSProperties = {
@@ -36,10 +38,10 @@ const titleStyle: CSSProperties = {
 export default function Header() {
   return (
     <header style={headerStyle}>
-      <div style={brandStyle}>
+      <Link to="/" style={brandStyle}>
         <div style={logoStyle}>F</div>
         <span style={titleStyle}>Foresight Arena</span>
-      </div>
+      </Link>
     </header>
   );
 }
