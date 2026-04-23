@@ -34,7 +34,7 @@ const identityRegistryAbi = parseAbi([
   'function transferFrom(address from, address to, uint256 tokenId)',
   'function ownerOf(uint256 tokenId) view returns (address)',
   'function balanceOf(address owner) view returns (uint256)',
-  'event Registered(uint256 indexed agentId, address indexed owner, string agentURI)',
+  'event Registered(uint256 indexed agentId, string agentURI, address indexed owner)',
 ]);
 
 let publicClient: PublicClient | null = null;
@@ -216,7 +216,7 @@ export async function submitRegister(
     }
   }
   if (agentId == null) {
-    throw new Error('Failed to parse Registered event from mint receipt');
+    throw new Error(`Failed to parse Registered event from mint receipt (tx: ${mintTxHash})`);
   }
 
   // Step 3: transfer the freshly-minted NFT from the relayer to the agent
@@ -228,6 +228,39 @@ export async function submitRegister(
     account: walletClient!.account!,
   });
   const transferTxHash = await walletClient!.writeContract(transferRequest);
+  await publicClient!.waitForTransactionReceipt({ hash: transferTxHash });
 
   return { txHash: transferTxHash, agentId };
+}
+
+/**
+ * Recover a stranded mint — transfer an NFT that the relayer owns to the intended agent.
+ * Used when step 3 of submitRegister failed (timeout, RPC blip, nonce race).
+ */
+export async function recoverStrandedMint(
+  agent: `0x${string}`,
+  agentId: bigint,
+): Promise<string> {
+  // Verify the relayer actually owns this token
+  const owner = await publicClient!.readContract({
+    address: IDENTITY_REGISTRY_ADDRESS,
+    abi: identityRegistryAbi,
+    functionName: 'ownerOf',
+    args: [agentId],
+  }) as `0x${string}`;
+
+  if (owner.toLowerCase() !== relayerAddress.toLowerCase()) {
+    throw new Error(`Relayer does not own agentId ${agentId} (owner: ${owner})`);
+  }
+
+  const { request } = await publicClient!.simulateContract({
+    address: IDENTITY_REGISTRY_ADDRESS,
+    abi: identityRegistryAbi,
+    functionName: 'transferFrom',
+    args: [relayerAddress, agent, agentId],
+    account: walletClient!.account!,
+  });
+  const txHash = await walletClient!.writeContract(request);
+  await publicClient!.waitForTransactionReceipt({ hash: txHash });
+  return txHash;
 }

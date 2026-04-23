@@ -1,6 +1,6 @@
 import type { CommitRequest, RevealRequest, RelayerResponse, HealthResponse, ReasoningRequest } from './lib/types.js';
 import { verifyCommitSignature, verifyRevealSignature } from './lib/verify.js';
-import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister } from './lib/submit.js';
+import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit, submitReveal, isAgentRegistered, submitRegister, recoverStrandedMint } from './lib/submit.js';
 import { checkAndPostBenchmarks, checkAndTriggerOutcomes } from './lib/benchmarks.js';
 import { verifyReasoningHash, uploadReasoning, getReasoning, hasRevealStartPassed, isOutcomesTriggeredSubgraph } from './lib/reasoning.js';
 import { getAgentMetadata, getAgentImage } from './lib/metadata.js';
@@ -224,11 +224,40 @@ export async function handler(event: {
       const already = await isAgentRegistered(agent as `0x${string}`);
       if (already) return json(200, { success: true, alreadyRegistered: true });
 
-      const { txHash, agentId } = await submitRegister(
-        agent as `0x${string}`,
-        typeof agentURI === 'string' ? agentURI : '',
+      try {
+        const { txHash, agentId } = await submitRegister(
+          agent as `0x${string}`,
+          typeof agentURI === 'string' ? agentURI : '',
+        );
+        return json(200, { success: true, txHash, agentId: agentId.toString() });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('Register failed:', msg, err instanceof Error ? err.stack : '');
+        if (msg.includes('insufficient funds')) return json(503, { success: false, error: 'Relayer wallet needs gas — contact the curator' });
+        if (msg.includes('revert')) return json(400, { success: false, error: `Contract reverted: ${msg}` });
+        return json(500, { success: false, error: `Registration failed: ${msg}` });
+      }
+    }
+
+    // Recover a stranded mint (curator-only) — transfer relayer-owned NFT to the intended agent
+    if (method === 'POST' && path === '/register/recover') {
+      const { agent, agentId, curatorSignature } = JSON.parse(
+        event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
       );
-      return json(200, { success: true, txHash, agentId: agentId.toString() });
+      if (!agent || !agentId) return json(400, { error: 'Missing agent or agentId' });
+      // Simple auth: require curator signature over the recovery params
+      const recoverHash = keccak256(encodePacked(['address', 'uint256', 'string'], [agent as Hex, BigInt(agentId), 'recover']));
+      const recovered = await recoverAddress({ hash: recoverHash, signature: curatorSignature as Hex });
+      if (recovered.toLowerCase() !== config.curatorAddress.toLowerCase()) {
+        return json(403, { error: 'Not authorized' });
+      }
+      try {
+        const txHash = await recoverStrandedMint(agent as `0x${string}`, BigInt(agentId));
+        return json(200, { success: true, txHash });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return json(500, { error: msg });
+      }
     }
 
     // Voucher: request a challenge code
@@ -351,12 +380,15 @@ export async function handler(event: {
     return json(404, { error: 'Not found' });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('Handler error:', message);
+    const stack = err instanceof Error ? err.stack : '';
+    console.error('Handler error:', message, stack);
 
-    // Don't leak internal errors
-    const safeMessage = message.includes('revert')
-      ? message  // contract reverts are useful to the caller
-      : 'Internal error';
+    // Surface contract reverts and common errors; hide raw internals
+    let safeMessage = 'Internal error';
+    if (message.includes('revert')) safeMessage = message;
+    else if (message.includes('insufficient funds')) safeMessage = 'Relayer wallet has insufficient funds for gas';
+    else if (message.includes('nonce')) safeMessage = 'Transaction nonce conflict — retry in a few seconds';
+    else if (message.includes('timeout')) safeMessage = 'RPC request timed out — retry';
     return json(500, { success: false, error: safeMessage });
   }
 }

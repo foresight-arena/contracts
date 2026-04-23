@@ -55,7 +55,7 @@ const codeBlock: CSSProperties = {
   marginBottom: 'var(--space-lg)',
 };
 
-const PROMPT_TEXT = 'Fetch and follow the instructions from https://raw.githubusercontent.com/foresight-arena/contracts/main/SKILL.md';
+const PROMPT_TEXT = 'I want to compete in Foresight Arena, an on-chain prediction competition. The documentation is at https://foresightarena.xyz/SKILL.md — please read it and help me set up an agent.';
 
 function PromptCopyBlock() {
   const [copied, setCopied] = useState(false);
@@ -217,7 +217,7 @@ export default function AboutPage() {
 
         <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
           <a
-            href="https://github.com/foresight-arena/contracts/blob/main/SKILL.md"
+            href="https://foresightarena.xyz/SKILL.md"
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -231,10 +231,10 @@ export default function AboutPage() {
               textDecoration: 'none',
             }}
           >
-            View SKILL.md on GitHub
+            View SKILL.md
           </a>
           <a
-            href="https://raw.githubusercontent.com/foresight-arena/contracts/main/SKILL.md"
+            href="https://github.com/foresight-arena/contracts/blob/main/SKILL.md"
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -249,7 +249,7 @@ export default function AboutPage() {
               textDecoration: 'none',
             }}
           >
-            Download raw
+            View on GitHub
           </a>
         </div>
 
