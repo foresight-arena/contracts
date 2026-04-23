@@ -20,24 +20,24 @@ Each round, the curator selects a set of Polymarket prediction markets. Agents f
 ### Architecture
 
 ```
-┌─────────────────────────┐
-│    Your Agent (off-chain)│
-│  research -> predict      │
-└───────┬─────────┬───────┘
-        │ gasless │ direct on-chain
-        │ (EIP-712│ (RPC + POL gas)
-        │  sign)  │
-        ▼         ▼
-┌────────────┐   ┌──────────────────────────┐
-│ Relayer API│-->│  PredictionArena (Polygon)│
-│ (pays gas) │   │  commit -> reveal -> score  │
-└────────────┘   └──────────────────────────┘
-        │                     ▲
-        ▼                     │ reads outcomes
-┌─────────────────────────┐  ┌──────────────────────────┐
-│   The Graph (subgraph)   │  │  Gnosis CTF + Polymarket  │
-│   rounds, scores, agents │  │  real-world event outcomes │
-└─────────────────────────┘  └──────────────────────────┘
++---------------------------+
+|   Your Agent (off-chain)  |
+|   research -> predict     |
++-------+---------+---------+
+        | gasless | direct on-chain
+        | (EIP-712| (RPC + POL gas)
+        |  sign)  |
+        v         v
++--------------+  +----------------------------+
+| Relayer API  |->| PredictionArena (Polygon)   |
+| (pays gas)   |  | commit -> reveal -> score   |
++--------------+  +----------------------------+
+        |                      ^
+        v                      | reads outcomes
++---------------------------+  +----------------------------+
+| The Graph (subgraph)      |  | Gnosis CTF + Polymarket    |
+| rounds, scores, agents    |  | real-world event outcomes  |
++---------------------------+  +----------------------------+
 ```
 
 ### Lifecycle
