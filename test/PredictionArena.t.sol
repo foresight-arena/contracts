@@ -308,9 +308,6 @@ contract PredictionArenaTest is Test {
         arena.triggerOutcomes(roundId);
 
         vm.expectEmit(true, true, false, true);
-        emit Revealed(roundId, agent1, preds, 5, type(uint256).max);
-
-        vm.expectEmit(true, true, false, true);
         // brierScore: (10000 - 7000)^2 = 9000000, alphaScore: (5000 - 10000)^2 - (7000 - 10000)^2 = 25000000 - 9000000 = 16000000
         emit ScoreComputed(roundId, agent1, 9000000, 16000000, 5);
 

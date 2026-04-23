@@ -293,7 +293,7 @@ contract PredictionArena is IPredictionArena {
         uint16 scoredMarkets;
 
         for (uint256 i = 0; i < r.conditionIds.length; i++) {
-            if (o.resolvedBitmask & (1 << i) == 0) continue;
+            if ((o.resolvedBitmask & (1 << i)) == 0) continue;
 
             {
                 int256 outcome = o.cachedOutcomes[i];
@@ -320,7 +320,6 @@ contract PredictionArena is IPredictionArena {
             s.alphaScore = totalAlpha / int256(uint256(scoredMarkets));
         }
 
-        emit Revealed(roundId, agent, predictions, scoredMarkets, DIRECT_CALL_NONCE);
         emit ScoreComputed(roundId, agent, s.brierScore, s.alphaScore, scoredMarkets);
     }
 
