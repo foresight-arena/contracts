@@ -34,7 +34,7 @@ const identityRegistryAbi = parseAbi([
   'function transferFrom(address from, address to, uint256 tokenId)',
   'function ownerOf(uint256 tokenId) view returns (address)',
   'function balanceOf(address owner) view returns (uint256)',
-  'event Registered(uint256 indexed agentId, address indexed owner, string agentURI)',
+  'event Registered(uint256 indexed agentId, string agentURI, address indexed owner)',
 ]);
 
 let publicClient: PublicClient | null = null;
@@ -216,7 +216,7 @@ export async function submitRegister(
     }
   }
   if (agentId == null) {
-    throw new Error('Failed to parse Registered event from mint receipt');
+    throw new Error(`Failed to parse Registered event from mint receipt (tx: ${mintTxHash})`);
   }
 
   // Step 3: transfer the freshly-minted NFT from the relayer to the agent
