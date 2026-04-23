@@ -42,6 +42,7 @@ export interface LeaderboardEntry {
   totalBrierScore: number;
   totalAlphaScore: number;
   roundCount: number;
+  commitCount: number;
   lastActive: number;
 }
 

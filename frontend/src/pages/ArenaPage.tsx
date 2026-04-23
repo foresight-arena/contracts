@@ -92,8 +92,19 @@ const btnSecondary: CSSProperties = {
   transition: 'all 0.2s',
 };
 
+const refreshBtnStyle: CSSProperties = {
+  background: 'none',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-sm)',
+  padding: '4px 10px',
+  fontSize: '1rem',
+  cursor: 'pointer',
+  color: 'var(--text-secondary)',
+  transition: 'all 0.15s ease',
+};
+
 export default function ArenaPage() {
-  const { rounds, loading } = useDataContext();
+  const { rounds, loading, refresh } = useDataContext();
 
   if (loading) return <LoadingSpinner />;
 
@@ -143,7 +154,10 @@ export default function ArenaPage() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
-        <h2 style={{ marginBottom: 0 }}>Rounds</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+          <h2 style={{ marginBottom: 0 }}>Rounds</h2>
+          <button onClick={refresh} style={refreshBtnStyle} title="Refresh data">↻</button>
+        </div>
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           {sorted.length} total
         </span>

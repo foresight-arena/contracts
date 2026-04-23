@@ -181,7 +181,7 @@ function AgentRow({ agent, info, round }: { agent: AgentRoundData; info?: AgentI
 
 export default function RoundDetailPage() {
   const { roundId } = useParams<{ roundId: string }>();
-  const { rounds, agents: agentRegistry, loading } = useDataContext();
+  const { rounds, agents: agentRegistry, loading, refresh } = useDataContext();
 
   const round = rounds.find((r) => r.roundId === Number(roundId));
 
@@ -227,6 +227,7 @@ export default function RoundDetailPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
         <h1 style={{ marginBottom: 0 }}>Round #{round.roundId}</h1>
         <StatusBadge round={round} />
+        <button onClick={refresh} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontSize: '1rem', cursor: 'pointer', color: 'var(--text-secondary)' }} title="Refresh data">↻</button>
       </div>
 
       <div style={metaGridStyle}>

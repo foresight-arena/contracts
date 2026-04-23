@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useDataContext } from '../context/DataContext';
 import TimeFilter from '../components/TimeFilter';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -11,10 +11,6 @@ function truncAddr(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
 
-function formatBrier(score: number): string {
-  return ((score / 1e8) * 100).toFixed(2) + '%';
-}
-
 function formatAlpha(score: number): string {
   return ((score / 1e8) * 100).toFixed(2) + '%';
 }
@@ -24,35 +20,10 @@ function formatTs(ts: number): string {
   return new Date(ts * 1000).toLocaleString();
 }
 
-type SortMode = 'brier' | 'alpha';
-
-const toggleStyle: CSSProperties = {
-  display: 'flex',
-  gap: 'var(--space-xs)',
-  marginBottom: 'var(--space-lg)',
-};
-
-function sortBtnStyle(active: boolean): CSSProperties {
-  return {
-    padding: '6px 14px',
-    fontSize: '0.8125rem',
-    fontWeight: 600,
-    border: '1px solid',
-    borderColor: active ? 'var(--accent)' : 'var(--border)',
-    borderRadius: 'var(--radius-sm)',
-    backgroundColor: active ? 'var(--accent)' : 'var(--bg-tertiary)',
-    color: active ? '#000' : 'var(--text-secondary)',
-    cursor: 'pointer',
-    transition: 'all 0.15s ease',
-  };
-}
-
 export default function LeaderboardPage() {
-  const { rounds, agents: agentRegistry, loading } = useDataContext();
-  const [period, setPeriod] = useState<TimePeriod>('all');
-  const [sortMode, setSortMode] = useState<SortMode>('brier');
+  const { rounds, agents: agentRegistry, loading, refresh } = useDataContext();
+  const [period, setPeriod] = React.useState<TimePeriod>('30d');
 
-  // agentRegistry is Map<string, AgentInfo> keyed by address
   const agentMap = agentRegistry;
   const resolvedMeta = useAgentsMetadata(agentMap);
 
@@ -68,20 +39,21 @@ export default function LeaderboardPage() {
       filtered = rounds.filter((r) => r.commitDeadline >= cutoff);
     }
 
-    // Aggregate per agent
+    // Aggregate per agent: scored rounds + commit-only rounds
     const agg = new Map<
       string,
-      { totalBrier: number; totalAlpha: number; count: number; lastActive: number }
+      { totalAlpha: number; scoredCount: number; commitCount: number; lastActive: number }
     >();
 
     for (const round of filtered) {
       for (const [addr, agent] of round.agents) {
-        if (agent.scoredMarkets === 0) continue;
         const key = addr.toLowerCase();
-        const existing = agg.get(key) || { totalBrier: 0, totalAlpha: 0, count: 0, lastActive: 0 };
-        existing.totalBrier += agent.brierScore;
-        existing.totalAlpha += agent.alphaScore;
-        existing.count += 1;
+        const existing = agg.get(key) || { totalAlpha: 0, scoredCount: 0, commitCount: 0, lastActive: 0 };
+        existing.commitCount += 1;
+        if (agent.scoredMarkets > 0) {
+          existing.totalAlpha += agent.alphaScore;
+          existing.scoredCount += 1;
+        }
         existing.lastActive = Math.max(existing.lastActive, round.commitDeadline);
         agg.set(key, existing);
       }
@@ -95,43 +67,40 @@ export default function LeaderboardPage() {
         address: addr,
         name: meta?.name ?? info?.name ?? '',
         url: meta?.url ?? info?.url ?? '',
-        avgBrierScore: data.count > 0 ? data.totalBrier / data.count : 0,
-        avgAlphaScore: data.count > 0 ? data.totalAlpha / data.count : 0,
-        totalBrierScore: data.totalBrier,
+        avgBrierScore: 0,
+        avgAlphaScore: data.scoredCount > 0 ? data.totalAlpha / data.scoredCount : 0,
+        totalBrierScore: 0,
         totalAlphaScore: data.totalAlpha,
-        roundCount: data.count,
+        roundCount: data.scoredCount,
+        commitCount: data.commitCount,
         lastActive: data.lastActive,
       });
     }
 
-    if (sortMode === 'brier') {
-      result.sort((a, b) => a.avgBrierScore - b.avgBrierScore); // ascending, lower is better
-    } else {
-      result.sort((a, b) => b.avgAlphaScore - a.avgAlphaScore); // descending, higher is better
-    }
+    // Sort by alpha descending; unscored agents go to bottom
+    result.sort((a, b) => {
+      if (a.roundCount === 0 && b.roundCount === 0) return 0;
+      if (a.roundCount === 0) return 1;
+      if (b.roundCount === 0) return -1;
+      return b.avgAlphaScore - a.avgAlphaScore;
+    });
 
     return result;
-  }, [rounds, agentRegistry, period, sortMode, agentMap, resolvedMeta]);
+  }, [rounds, agentRegistry, period, agentMap, resolvedMeta]);
 
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="page">
-      <h1>Leaderboard</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+        <h1 style={{ marginBottom: 0 }}>Leaderboard</h1>
+        <button onClick={refresh} style={refreshBtnStyle} title="Refresh data">↻</button>
+      </div>
 
       <TimeFilter value={period} onChange={setPeriod} />
 
-      <div style={toggleStyle}>
-        <button style={sortBtnStyle(sortMode === 'brier')} onClick={() => setSortMode('brier')}>
-          By Brier Score
-        </button>
-        <button style={sortBtnStyle(sortMode === 'alpha')} onClick={() => setSortMode('alpha')}>
-          By Alpha Score
-        </button>
-      </div>
-
       {entries.length === 0 ? (
-        <p>No scored agents found for this period.</p>
+        <p>No agents found for this period.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table>
@@ -139,18 +108,19 @@ export default function LeaderboardPage() {
               <tr>
                 <th>Rank</th>
                 <th>Agent</th>
-                <th>Avg Brier</th>
                 <th>Avg Alpha</th>
-                <th>Rounds</th>
+                <th>Scored</th>
+                <th>Commits</th>
                 <th>Last Active</th>
               </tr>
             </thead>
             <tbody>
               {entries.map((entry, idx) => {
                 const isBenchmark = isBenchmarkAgent(entry.address);
+                const hasScore = entry.roundCount > 0;
                 return (
                 <tr key={entry.address} className={isBenchmark ? 'benchmark-row' : undefined}>
-                  <td>{idx + 1}</td>
+                  <td>{hasScore ? idx + 1 : '--'}</td>
                   <td>
                     {entry.name ? (
                       <span>
@@ -189,9 +159,9 @@ export default function LeaderboardPage() {
                       </span>
                     )}
                   </td>
-                  <td className="mono">{formatBrier(entry.avgBrierScore)}</td>
-                  <td className="mono">{formatAlpha(entry.avgAlphaScore)}</td>
+                  <td className="mono">{hasScore ? formatAlpha(entry.avgAlphaScore) : '--'}</td>
                   <td>{entry.roundCount}</td>
+                  <td>{entry.commitCount}</td>
                   <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                     {formatTs(entry.lastActive)}
                   </td>
@@ -205,3 +175,16 @@ export default function LeaderboardPage() {
     </div>
   );
 }
+
+import React from 'react';
+
+const refreshBtnStyle: CSSProperties = {
+  background: 'none',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-sm)',
+  padding: '4px 10px',
+  fontSize: '1rem',
+  cursor: 'pointer',
+  color: 'var(--text-secondary)',
+  transition: 'all 0.15s ease',
+};
