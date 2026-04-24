@@ -8,6 +8,7 @@ import type { AgentRoundData, AgentInfo, Round } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
 import { useReasoning, ReasoningToggle, ReasoningContent } from '../components/ReasoningPanel';
 import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
+import RoundTimeline from '../components/RoundTimeline';
 
 function formatCountdown(endDate: string | null): { text: string; isCountdown: boolean } {
   if (!endDate) return { text: '--', isCountdown: false };
@@ -24,11 +25,6 @@ function formatCountdown(endDate: string | null): { text: string; isCountdown: b
 
 function truncAddr(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
-}
-
-function formatTs(ts: number): string {
-  if (!ts) return '--';
-  return new Date(ts * 1000).toLocaleString();
 }
 
 function formatPct(value: number): string {
@@ -55,33 +51,6 @@ const sectionStyle: CSSProperties = {
   marginBottom: 'var(--space-xl)',
 };
 
-const metaGridStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-  gap: 'var(--space-md)',
-  marginBottom: 'var(--space-xl)',
-};
-
-const metaCardStyle: CSSProperties = {
-  backgroundColor: 'var(--bg-secondary)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-md)',
-  padding: 'var(--space-md)',
-};
-
-const metaLabelStyle: CSSProperties = {
-  fontSize: '0.75rem',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.05em',
-  color: 'var(--text-secondary)',
-  marginBottom: 'var(--space-xs)',
-};
-
-const metaValueStyle: CSSProperties = {
-  fontSize: '0.9375rem',
-  fontWeight: 600,
-  color: 'var(--text-primary)',
-};
 
 function AgentRow({ agent, info, round }: { agent: AgentRoundData; info?: AgentInfo; round: Round }) {
   const isBenchmark = isBenchmarkAgent(agent.address);
@@ -230,24 +199,21 @@ export default function RoundDetailPage() {
         <button onClick={refresh} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontSize: '1rem', cursor: 'pointer', color: 'var(--text-secondary)' }} title="Refresh data">↻</button>
       </div>
 
-      <div style={metaGridStyle}>
-        <div style={metaCardStyle}>
-          <div style={metaLabelStyle}>Commit Deadline</div>
-          <div style={metaValueStyle}>{formatTs(round.commitDeadline)}</div>
-        </div>
-        <div style={metaCardStyle}>
-          <div style={metaLabelStyle}>Reveal Start</div>
-          <div style={metaValueStyle}>{formatTs(round.revealStart)}</div>
-        </div>
-        <div style={metaCardStyle}>
-          <div style={metaLabelStyle}>Reveal Deadline</div>
-          <div style={metaValueStyle}>{formatTs(round.revealDeadline)}</div>
-        </div>
-        <div style={metaCardStyle}>
-          <div style={metaLabelStyle}>Markets</div>
-          <div style={metaValueStyle}>{round.conditionIds.length}</div>
-        </div>
-      </div>
+
+      {/* Timeline */}
+      <RoundTimeline
+        round={round}
+        agentNames={(() => {
+          const names = new Map<string, string>();
+          for (const [addr] of round.agents) {
+            const meta = resolvedMeta.get(addr);
+            const base = agentMap.get(addr);
+            const name = meta?.name || base?.name;
+            if (name) names.set(addr, name);
+          }
+          return names;
+        })()}
+      />
 
       {/* Markets Table */}
       <div style={sectionStyle}>

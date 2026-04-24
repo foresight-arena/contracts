@@ -75,6 +75,7 @@ export function handleRevealed(event: Revealed): void {
   if (ar == null) return
 
   ar.revealed = true
+  ar.revealTimestamp = event.block.timestamp
   ar.predictions = event.params.predictions
   ar.scoredMarkets = event.params.scoredMarkets
   ar.save()

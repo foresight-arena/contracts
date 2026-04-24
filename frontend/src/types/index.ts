@@ -1,8 +1,15 @@
+export interface MarketResolution {
+  outcome: string | null;
+  resolvedAt: number; // 0 if unresolved
+}
+
 export interface Round {
   roundId: number;
   conditionIds: string[];
   benchmarkPrices: number[];
   outcomes: (string | null)[]; // 'YES' | 'NO' | null (unresolved)
+  marketResolutions: MarketResolution[];
+  createdAt: number; // unix timestamp
   commitDeadline: number; // unix timestamp
   revealStart: number;
   revealDeadline: number;
@@ -17,6 +24,7 @@ export interface AgentRoundData {
   commitHash: string;
   commitTimestamp: number;
   revealed: boolean;
+  revealTimestamp: number;
   predictions: number[];
   brierScore: number;
   alphaScore: number;

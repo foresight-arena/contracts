@@ -28,6 +28,7 @@ export async function fetchAllData(): Promise<{
         commitDeadline
         revealStart
         revealDeadline
+        createdAtTimestamp
         benchmarksPosted
         invalidated
         marketCount
@@ -35,6 +36,7 @@ export async function fetchAllData(): Promise<{
           market {
             id
             outcome
+            resolvedAtTimestamp
           }
           marketIndex
           benchmarkPrice
@@ -49,6 +51,7 @@ export async function fetchAllData(): Promise<{
           commitHash
           commitTimestamp
           revealed
+          revealTimestamp
           predictions
           brierScore
           alphaScore
@@ -66,13 +69,18 @@ export async function fetchAllData(): Promise<{
   `);
 
   const rounds: Round[] = (data.rounds || []).map((r: any) => {
-    // Build outcomes array from roundMarkets
+    // Build outcomes + resolution timestamps from roundMarkets
     const outcomes: (string | null)[] = [];
+    const marketResolutions: { outcome: string | null; resolvedAt: number }[] = [];
     const sortedMarkets = [...(r.roundMarkets || [])].sort(
       (a: any, b: any) => a.marketIndex - b.marketIndex
     );
     for (const rm of sortedMarkets) {
       outcomes.push(rm.market?.outcome || null);
+      marketResolutions.push({
+        outcome: rm.market?.outcome || null,
+        resolvedAt: Number(rm.market?.resolvedAtTimestamp || 0),
+      });
     }
 
     // Build agents map
@@ -84,6 +92,7 @@ export async function fetchAllData(): Promise<{
         commitHash: ar.commitHash,
         commitTimestamp: Number(ar.commitTimestamp),
         revealed: ar.revealed,
+        revealTimestamp: Number(ar.revealTimestamp || 0),
         predictions: (ar.predictions || []).map(Number),
         brierScore: Number(ar.brierScore),
         alphaScore: Number(ar.alphaScore),
@@ -97,6 +106,8 @@ export async function fetchAllData(): Promise<{
       conditionIds: r.conditionIds,
       benchmarkPrices: r.benchmarkPrices.map(Number),
       outcomes,
+      marketResolutions,
+      createdAt: Number(r.createdAtTimestamp || 0),
       commitDeadline: Number(r.commitDeadline),
       revealStart: Number(r.revealStart),
       revealDeadline: Number(r.revealDeadline),

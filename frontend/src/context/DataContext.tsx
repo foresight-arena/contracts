@@ -13,7 +13,8 @@ import { fetchAllData } from '../services/subgraph';
 interface DataContextValue {
   rounds: Round[];
   agents: Map<string, AgentInfo>;
-  loading: boolean;
+  loading: boolean;      // true only on initial load (no data yet)
+  refreshing: boolean;   // true during background refresh (data still visible)
   error: string | null;
   refresh: () => void;
 }
@@ -25,8 +26,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [agents, setAgents] = useState<Map<string, AgentInfo>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const hasData = rounds.length > 0;
 
   const refresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -36,7 +39,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
+      if (hasData) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
       try {
@@ -51,6 +58,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       } finally {
         if (!cancelled) {
           setLoading(false);
+          setRefreshing(false);
         }
       }
     }
@@ -63,8 +71,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [refreshKey]);
 
   const value = useMemo<DataContextValue>(
-    () => ({ rounds, agents, loading, error, refresh }),
-    [rounds, agents, loading, error, refresh],
+    () => ({ rounds, agents, loading, refreshing, error, refresh }),
+    [rounds, agents, loading, refreshing, error, refresh],
   );
 
   return (
