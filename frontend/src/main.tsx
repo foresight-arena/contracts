@@ -9,6 +9,7 @@ import ArenaPage from './pages/ArenaPage';
 import RoundDetailPage from './pages/RoundDetailPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import AboutPage from './pages/AboutPage';
+import AgentDetailPage from './pages/AgentDetailPage';
 
 const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
       { index: true, element: <AboutPage /> },
       { path: 'arena', element: <ArenaPage /> },
       { path: 'round/:roundId', element: <RoundDetailPage /> },
+      { path: 'agent/:address', element: <AgentDetailPage /> },
       { path: 'leaderboard', element: <LeaderboardPage /> },
     ],
   },

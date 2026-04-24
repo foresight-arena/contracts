@@ -79,15 +79,15 @@ function AgentRow({ agent, info, round }: { agent: AgentRoundData; info?: AgentI
                 </>
               )}
               <br />
-              <a href={`https://polygonscan.com/address/${agent.address}`} target="_blank" rel="noopener noreferrer" className="address">
+              <Link to={`/agent/${agent.address}`} className="address">
                 {truncAddr(agent.address)}
-              </a>
+              </Link>
             </span>
           ) : (
             <span>
-              <a href={`https://polygonscan.com/address/${agent.address}`} target="_blank" rel="noopener noreferrer" className="address">
+              <Link to={`/agent/${agent.address}`} className="address">
                 {truncAddr(agent.address)}
-              </a>
+              </Link>
               {isBenchmark && (
                 <>
                   {' '}

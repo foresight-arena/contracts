@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useDataContext } from '../context/DataContext';
 import TimeFilter from '../components/TimeFilter';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -145,11 +146,11 @@ export default function LeaderboardPage() {
                           </>
                         )}
                         <br />
-                        <a href={`https://polygonscan.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer" className="address">{truncAddr(entry.address)}</a>
+                        <Link to={`/agent/${entry.address}`} className="address">{truncAddr(entry.address)}</Link>
                       </span>
                     ) : (
                       <span>
-                        <a href={`https://polygonscan.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer" className="address">{truncAddr(entry.address)}</a>
+                        <Link to={`/agent/${entry.address}`} className="address">{truncAddr(entry.address)}</Link>
                         {isBenchmark && (
                           <>
                             {' '}

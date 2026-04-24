@@ -1,4 +1,4 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, GetItemCommand, PutItemCommand, ScanCommand, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import { encodePacked, keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { config } from '../config.js';
@@ -167,6 +167,29 @@ async function signVoucher(agent: `0x${string}`): Promise<{ signature: string; e
   // Raw sign (no EIP-191 prefix) — matches handler's recoverAddress({ hash, signature })
   const signature = await account.sign({ hash: voucherHash });
   return { signature, expiry };
+}
+
+// ─── Twitter lookup ──────────────────────────────────────────────────────────
+
+export async function getTwitterForAgent(agent: string): Promise<{ username: string; tweetUrl: string } | null> {
+  const addr = agent.toLowerCase();
+  // Scan TWEET# items filtered by agent address (low volume — fine for now)
+  const resp = await getDdb().send(new ScanCommand({
+    TableName: tableName(),
+    FilterExpression: 'begins_with(pk, :prefix) AND agent = :agent',
+    ExpressionAttributeValues: {
+      ':prefix': { S: 'TWEET#' },
+      ':agent': { S: addr },
+    },
+    Limit: 1,
+  }));
+  const items = resp.Items || [];
+  if (items.length === 0) return null;
+  const item = items[0];
+  return {
+    username: item.username?.S || '',
+    tweetUrl: item.tweetUrl?.S || '',
+  };
 }
 
 // ─── Error helper ────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { init, getRelayerAddress, getRelayerBalance, getAgentNonce, submitCommit
 import { checkAndPostBenchmarks, checkAndTriggerOutcomes } from './lib/benchmarks.js';
 import { verifyReasoningHash, uploadReasoning, getReasoning, hasRevealStartPassed, isOutcomesTriggeredSubgraph } from './lib/reasoning.js';
 import { getAgentMetadata, getAgentImage } from './lib/metadata.js';
-import { createChallenge, verifyTweetAndSign, VoucherError } from './lib/voucher.js';
+import { createChallenge, verifyTweetAndSign, getTwitterForAgent, VoucherError } from './lib/voucher.js';
 import { config } from './config.js';
 import { keccak256, encodePacked, recoverAddress, type Hex } from 'viem';
 
@@ -336,6 +336,14 @@ export async function handler(event: {
         },
         body: svg,
       };
+    }
+
+    // Agent Twitter handle (from voucher registration)
+    if (method === 'GET' && path.match(/^\/agent\/0x[0-9a-fA-F]{40}\/twitter$/)) {
+      const address = path.replace('/agent/', '').replace('/twitter', '');
+      const twitter = await getTwitterForAgent(address);
+      if (!twitter) return json(404, { error: 'No Twitter verification found' });
+      return json(200, twitter);
     }
 
     // Polymarket API proxy (avoids CORS for frontend)
