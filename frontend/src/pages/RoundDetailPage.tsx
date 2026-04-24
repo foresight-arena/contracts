@@ -63,19 +63,11 @@ function AgentRow({ agent, info, round }: { agent: AgentRoundData; info?: AgentI
         <td>
           {info?.name ? (
             <span>
-              <span style={{ fontWeight: 600 }}>{info.name}</span>
+              <Link to={`/agent/${agent.address}`} style={{ fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'none' }}>{info.name}</Link>
               {isBenchmark && (
                 <>
                   {' '}
                   <span className="badge benchmark" title="Benchmark agent">benchmark</span>
-                </>
-              )}
-              {info.url && (
-                <>
-                  {' '}
-                  <a href={info.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.75rem' }}>
-                    [link]
-                  </a>
                 </>
               )}
               <br />

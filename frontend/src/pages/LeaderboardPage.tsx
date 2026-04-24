@@ -125,7 +125,7 @@ export default function LeaderboardPage() {
                   <td>
                     {entry.name ? (
                       <span>
-                        <span style={{ fontWeight: 600 }}>{entry.name}</span>
+                        <Link to={`/agent/${entry.address}`} style={{ fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'none' }}>{entry.name}</Link>
                         {isBenchmark && (
                           <>
                             {' '}
