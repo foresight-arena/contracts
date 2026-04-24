@@ -1,4 +1,4 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand, ScanCommand, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, GetItemCommand, PutItemCommand, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import { encodePacked, keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { config } from '../config.js';
@@ -115,17 +115,31 @@ export async function verifyTweetAndSign(agent: string, tweetUrl: string): Promi
   // Extract plain text from oEmbed HTML (strip tags)
   const tweetText = oembed.html.replace(/<[^>]+>/g, '').trim();
 
-  // Mark tweet as used (atomic — fails if already used). Store metadata.
+  const resolvedUsername = oembed.authorName || username;
   const now = Math.floor(Date.now() / 1000);
+
+  // Check if this Twitter account already registered a different agent
+  const existingTwitter = await getDdb().send(new GetItemCommand({
+    TableName: tableName(),
+    Key: { pk: { S: `TWITTER#${resolvedUsername.toLowerCase()}` } },
+  }));
+  if (existingTwitter.Item) {
+    const existingAgent = existingTwitter.Item.agent?.S || '';
+    if (existingAgent && existingAgent !== addr) {
+      throw new VoucherError(409, `Twitter account @${resolvedUsername} is already linked to another agent`);
+    }
+  }
+
+  // Mark tweet as used (atomic — fails if already used)
   try {
     await getDdb().send(new PutItemCommand({
       TableName: tableName(),
       Item: {
         pk: { S: `TWEET#${tweetId}` },
         agent: { S: addr },
-        username: { S: oembed.authorName || username },
+        username: { S: resolvedUsername },
         tweetUrl: { S: tweetUrl },
-        tweetText: { S: tweetText },
+        tweetText: { S: tweetText.slice(0, 500) },
         usedAt: { N: String(now) },
         ttl: { N: String(now + USED_TWEET_TTL_DAYS * 86400) },
       },
@@ -137,6 +151,26 @@ export async function verifyTweetAndSign(agent: string, tweetUrl: string): Promi
     }
     throw err;
   }
+
+  // Store Twitter→agent mapping (duplicate check) and agent→Twitter mapping (lookup)
+  await getDdb().send(new PutItemCommand({
+    TableName: tableName(),
+    Item: {
+      pk: { S: `TWITTER#${resolvedUsername.toLowerCase()}` },
+      agent: { S: addr },
+      tweetUrl: { S: tweetUrl },
+      usedAt: { N: String(now) },
+    },
+  }));
+  await getDdb().send(new PutItemCommand({
+    TableName: tableName(),
+    Item: {
+      pk: { S: `AGENT_TWITTER#${addr}` },
+      username: { S: resolvedUsername },
+      tweetUrl: { S: tweetUrl },
+      usedAt: { N: String(now) },
+    },
+  }));
 
   // Sign voucher
   const voucher = await signVoucher(addr);
@@ -173,22 +207,14 @@ async function signVoucher(agent: `0x${string}`): Promise<{ signature: string; e
 
 export async function getTwitterForAgent(agentAddr: string): Promise<{ username: string; tweetUrl: string } | null> {
   const addr = agentAddr.toLowerCase();
-  // Scan TWEET# items filtered by agent address (low volume — fine for now)
-  const resp = await getDdb().send(new ScanCommand({
+  const resp = await getDdb().send(new GetItemCommand({
     TableName: tableName(),
-    FilterExpression: 'begins_with(pk, :prefix) AND #a = :agent',
-    ExpressionAttributeNames: { '#a': 'agent' },
-    ExpressionAttributeValues: {
-      ':prefix': { S: 'TWEET#' },
-      ':agent': { S: addr },
-    },
+    Key: { pk: { S: `AGENT_TWITTER#${addr}` } },
   }));
-  const items = resp.Items || [];
-  if (items.length === 0) return null;
-  const item = items[0];
+  if (!resp.Item) return null;
   return {
-    username: item.username?.S || '',
-    tweetUrl: item.tweetUrl?.S || '',
+    username: resp.Item.username?.S || '',
+    tweetUrl: resp.Item.tweetUrl?.S || '',
   };
 }
 
