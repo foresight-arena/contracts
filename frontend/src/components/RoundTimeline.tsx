@@ -291,36 +291,6 @@ export default function RoundTimeline({ round, agentNames }: {
         )}
       </div>
 
-      {/* Milestone list (no commits -- those are hover-only) */}
-      <div style={eventListStyle}>
-        {milestones.map((evt, i) => (
-          <div key={i} style={eventRowStyle}>
-            <div style={{ ...dotStyle, backgroundColor: evt.color }} />
-            <span style={eventTimeStyle}>{shortTime(evt.time)}</span>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>{evt.label}</span>
-          </div>
-        ))}
-        {commits.length > 0 && (
-          <div style={eventRowStyle}>
-            <div style={{ ...dotStyle, backgroundColor: COLORS.commit }} />
-            <span style={eventTimeStyle}>{shortTime(commits[0].time)}{commits.length > 1 ? ` -- ${shortTime(commits[commits.length - 1].time)}` : ''}</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              {commits.length} agent{commits.length !== 1 ? 's' : ''} committed
-              <span style={{ color: 'var(--text-muted)' }}> (hover for details)</span>
-            </span>
-          </div>
-        )}
-        {reveals.length > 0 && (
-          <div style={eventRowStyle}>
-            <div style={{ ...dotStyle, backgroundColor: COLORS.reveal }} />
-            <span style={eventTimeStyle}>{shortTime(reveals[0].time)}{reveals.length > 1 ? ` -- ${shortTime(reveals[reveals.length - 1].time)}` : ''}</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              {reveals.length} agent{reveals.length !== 1 ? 's' : ''} revealed
-              <span style={{ color: 'var(--text-muted)' }}> (hover for details)</span>
-            </span>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -360,12 +330,3 @@ const tooltipStyle: CSSProperties = {
   boxShadow: '0 4px 12px rgba(0,0,0,0.3)', pointerEvents: 'none',
 };
 
-const eventListStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4 };
-
-const eventRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' };
-
-const dotStyle: CSSProperties = { width: 6, height: 6, borderRadius: '50%', flexShrink: 0 };
-
-const eventTimeStyle: CSSProperties = {
-  fontSize: '0.6875rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', minWidth: 140,
-};
