@@ -171,17 +171,17 @@ async function signVoucher(agent: `0x${string}`): Promise<{ signature: string; e
 
 // ─── Twitter lookup ──────────────────────────────────────────────────────────
 
-export async function getTwitterForAgent(agent: string): Promise<{ username: string; tweetUrl: string } | null> {
-  const addr = agent.toLowerCase();
+export async function getTwitterForAgent(agentAddr: string): Promise<{ username: string; tweetUrl: string } | null> {
+  const addr = agentAddr.toLowerCase();
   // Scan TWEET# items filtered by agent address (low volume — fine for now)
   const resp = await getDdb().send(new ScanCommand({
     TableName: tableName(),
-    FilterExpression: 'begins_with(pk, :prefix) AND agent = :agent',
+    FilterExpression: 'begins_with(pk, :prefix) AND #a = :agent',
+    ExpressionAttributeNames: { '#a': 'agent' },
     ExpressionAttributeValues: {
       ':prefix': { S: 'TWEET#' },
       ':agent': { S: addr },
     },
-    Limit: 1,
   }));
   const items = resp.Items || [];
   if (items.length === 0) return null;
