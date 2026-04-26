@@ -16,6 +16,7 @@ export interface Round {
   benchmarksPosted: boolean;
   invalidated: boolean;
   outcomesTriggered: boolean;
+  resolvedBitmask: number;
   agents: Map<string, AgentRoundData>;
 }
 

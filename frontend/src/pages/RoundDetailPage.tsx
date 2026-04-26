@@ -218,14 +218,16 @@ export default function RoundDetailPage() {
                 <th>Market</th>
                 <th>Benchmark</th>
                 <th>Outcome</th>
+                {round.outcomesTriggered && <th>Scored</th>}
               </tr>
             </thead>
             <tbody>
               {round.conditionIds.map((cid, idx) => {
                 const meta = marketMeta.get(cid);
                 const outcome = round.outcomes?.[idx];
+                const inBitmask = round.outcomesTriggered && (round.resolvedBitmask & (1 << idx)) !== 0;
                 return (
-                  <tr key={idx}>
+                  <tr key={idx} style={round.outcomesTriggered && !inBitmask ? { opacity: 0.5 } : undefined}>
                     <td>{idx + 1}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 2 }}>
@@ -294,6 +296,19 @@ export default function RoundDetailPage() {
                         return <span className="badge" style={{ cursor: 'help' }} title="Resolution time unknown">Pending</span>;
                       })()}
                     </td>
+                    {round.outcomesTriggered && (
+                      <td>
+                        {inBitmask ? (
+                          <span className="badge success" style={{ cursor: 'help' }} title="Included in scoring bitmask">Scored</span>
+                        ) : outcome === 'VOID' ? (
+                          <span className="badge warning" style={{ cursor: 'help' }} title="Market resolved as void (50/50 split) -- excluded from scoring">Void (50/50)</span>
+                        ) : outcome ? (
+                          <span className="badge warning" style={{ cursor: 'help' }} title="Market resolved after outcomes were triggered -- excluded from scoring">Late resolution</span>
+                        ) : (
+                          <span className="badge" style={{ cursor: 'help' }} title="Market was not resolved when outcomes were triggered -- excluded from scoring">Not resolved</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
