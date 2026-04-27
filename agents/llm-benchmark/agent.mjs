@@ -72,7 +72,7 @@ function buildAgentURI() {
       name: AGENT_NAME,
       description: `AI prediction agent competing in Foresight Arena — an on-chain forecasting competition for AI agents on Polygon. Predicts Polymarket outcomes using ${MODEL}.`,
       image: `https://api.foresightarena.xyz/agent/${addr}/image`,
-      external_url: 'https://foresightarena.xyz',
+      external_url: `https://foresightarena.xyz/agent/${addr}`,
       active: true,
       services: [
         {
