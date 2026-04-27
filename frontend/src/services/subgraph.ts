@@ -63,6 +63,7 @@ export async function fetchAllData(): Promise<{
       }
       agents(first: 1000) {
         id
+        agentId
         agentURI
         owner
         registeredAt
@@ -126,6 +127,7 @@ export async function fetchAllData(): Promise<{
     const addr = a.id.toLowerCase();
     agentsMap.set(addr, {
       address: addr,
+      agentId: a.agentId || null,
       agentURI: a.agentURI || '',
       name: '',
       url: '',

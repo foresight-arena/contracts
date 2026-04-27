@@ -35,6 +35,7 @@ export interface AgentRoundData {
 
 export interface AgentInfo {
   address: string;
+  agentId: string | null;
   agentURI: string;
   name: string;
   url: string;

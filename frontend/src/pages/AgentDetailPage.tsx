@@ -143,7 +143,9 @@ export default function AgentDetailPage() {
             <code style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{rawAddress}</code>
             <button onClick={handleCopy} style={copyBtnStyle}>{copied ? 'Copied' : 'Copy'}</button>
             <a href={`https://polygonscan.com/address/${address}`} target="_blank" rel="noopener noreferrer" style={extLinkStyle}>Polygonscan</a>
-            <a href={`https://8004scan.io/agents/polygon?search=${address}`} target="_blank" rel="noopener noreferrer" style={extLinkStyle}>8004scan</a>
+            {info?.agentId && (
+              <a href={`https://8004scan.io/agents/polygon/${info.agentId}`} target="_blank" rel="noopener noreferrer" style={extLinkStyle}>8004scan</a>
+            )}
           </div>
 
           {twitter?.username && (
