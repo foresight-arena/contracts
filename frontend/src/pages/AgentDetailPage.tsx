@@ -33,7 +33,7 @@ export default function AgentDetailPage() {
   const { rounds, agents: agentMap, loading, refresh } = useDataContext();
   const resolvedMeta = useAgentsMetadata(agentMap);
 
-  const [twitter, setTwitter] = useState<{ username: string; tweetUrl: string } | null>(null);
+  const [twitter, setTwitter] = useState<{ handle: string; displayName: string; tweetUrl: string } | null>(null);
   const [period, setPeriod] = useState<TimePeriod>('30d');
   const [copied, setCopied] = useState(false);
 
@@ -148,14 +148,15 @@ export default function AgentDetailPage() {
             )}
           </div>
 
-          {twitter?.username && (
+          {twitter?.handle && (
             <div style={{ marginTop: 'var(--space-xs)', display: 'flex', alignItems: 'center', gap: 6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--text-secondary)">
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
               </svg>
-              <a href={`https://x.com/${twitter.username}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', textDecoration: 'none' }}>
-                @{twitter.username}
+              <a href={`https://x.com/${twitter.handle}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', textDecoration: 'none' }}>
+                {twitter.displayName}
               </a>
+              <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>@{twitter.handle}</span>
               <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>verified</span>
             </div>
           )}

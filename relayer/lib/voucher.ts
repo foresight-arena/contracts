@@ -115,18 +115,19 @@ export async function verifyTweetAndSign(agent: string, tweetUrl: string): Promi
   // Extract plain text from oEmbed HTML (strip tags)
   const tweetText = oembed.html.replace(/<[^>]+>/g, '').trim();
 
-  const resolvedUsername = oembed.authorName || username;
+  const handle = username; // from URL: mresearch_bro
+  const displayName = oembed.authorName || username; // from oEmbed: MarketResearchBro
   const now = Math.floor(Date.now() / 1000);
 
   // Check if this Twitter account already registered a different agent
   const existingTwitter = await getDdb().send(new GetItemCommand({
     TableName: tableName(),
-    Key: { pk: { S: `TWITTER#${resolvedUsername.toLowerCase()}` } },
+    Key: { pk: { S: `TWITTER#${handle.toLowerCase()}` } },
   }));
   if (existingTwitter.Item) {
     const existingAgent = existingTwitter.Item.agent?.S || '';
     if (existingAgent && existingAgent !== addr) {
-      throw new VoucherError(409, `Twitter account @${resolvedUsername} is already linked to another agent`);
+      throw new VoucherError(409, `Twitter account @${handle} is already linked to another agent`);
     }
   }
 
@@ -137,7 +138,8 @@ export async function verifyTweetAndSign(agent: string, tweetUrl: string): Promi
       Item: {
         pk: { S: `TWEET#${tweetId}` },
         agent: { S: addr },
-        username: { S: resolvedUsername },
+        handle: { S: handle },
+        displayName: { S: displayName },
         tweetUrl: { S: tweetUrl },
         tweetText: { S: tweetText.slice(0, 500) },
         usedAt: { N: String(now) },
@@ -152,11 +154,11 @@ export async function verifyTweetAndSign(agent: string, tweetUrl: string): Promi
     throw err;
   }
 
-  // Store Twitter→agent mapping (duplicate check) and agent→Twitter mapping (lookup)
+  // Store handle→agent mapping (duplicate check) and agent→Twitter mapping (lookup)
   await getDdb().send(new PutItemCommand({
     TableName: tableName(),
     Item: {
-      pk: { S: `TWITTER#${resolvedUsername.toLowerCase()}` },
+      pk: { S: `TWITTER#${handle.toLowerCase()}` },
       agent: { S: addr },
       tweetUrl: { S: tweetUrl },
       usedAt: { N: String(now) },
@@ -166,7 +168,8 @@ export async function verifyTweetAndSign(agent: string, tweetUrl: string): Promi
     TableName: tableName(),
     Item: {
       pk: { S: `AGENT_TWITTER#${addr}` },
-      username: { S: resolvedUsername },
+      handle: { S: handle },
+      displayName: { S: displayName },
       tweetUrl: { S: tweetUrl },
       usedAt: { N: String(now) },
     },
@@ -205,7 +208,7 @@ async function signVoucher(agent: `0x${string}`): Promise<{ signature: string; e
 
 // ─── Twitter lookup ──────────────────────────────────────────────────────────
 
-export async function getTwitterForAgent(agentAddr: string): Promise<{ username: string; tweetUrl: string } | null> {
+export async function getTwitterForAgent(agentAddr: string): Promise<{ handle: string; displayName: string; tweetUrl: string } | null> {
   const addr = agentAddr.toLowerCase();
   const resp = await getDdb().send(new GetItemCommand({
     TableName: tableName(),
@@ -213,7 +216,8 @@ export async function getTwitterForAgent(agentAddr: string): Promise<{ username:
   }));
   if (!resp.Item) return null;
   return {
-    username: resp.Item.username?.S || '',
+    handle: resp.Item.handle?.S || resp.Item.username?.S || '', // fallback for old records
+    displayName: resp.Item.displayName?.S || resp.Item.username?.S || '',
     tweetUrl: resp.Item.tweetUrl?.S || '',
   };
 }
