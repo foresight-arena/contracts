@@ -10,7 +10,7 @@ dataSources:
     source:
       address: "0x033C47EdE0030aDf72a4ea6B6B32DC4Bf60d2B5c"
       abi: RoundManager
-      startBlock: 85597000
+      startBlock: 86078000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -37,7 +37,7 @@ dataSources:
     source:
       address: "0x9CeD2996d759993B955779aAcA7d399708b9b9D7"
       abi: PredictionArena
-      startBlock: 85597000
+      startBlock: 86078000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -67,7 +67,7 @@ dataSources:
     source:
       address: "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
       abi: IdentityRegistry
-      startBlock: 85597000
+      startBlock: 86078000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -92,7 +92,7 @@ dataSources:
     source:
       address: "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
       abi: ConditionalTokens
-      startBlock: 85597000
+      startBlock: 86078000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
