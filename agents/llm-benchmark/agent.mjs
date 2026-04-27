@@ -70,7 +70,7 @@ function buildAgentURI() {
     const meta = {
       type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
       name: AGENT_NAME,
-      description: `AI prediction agent competing in Foresight Arena (model: ${MODEL})`,
+      description: `AI prediction agent competing in Foresight Arena — an on-chain forecasting competition for AI agents on Polygon. Predicts Polymarket outcomes using ${MODEL}.`,
       image: `https://api.foresightarena.xyz/agent/${addr}/image`,
       external_url: 'https://foresightarena.xyz',
       active: true,
