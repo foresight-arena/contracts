@@ -4,7 +4,7 @@ export const config = {
   chain: polygon,
   rpcUrl: process.env.RPC_URL || 'https://polygon-rpc.com',
   relayerPrivateKey: process.env.RELAYER_PRIVATE_KEY as `0x${string}`,
-  predictionArena: (process.env.PREDICTION_ARENA_ADDRESS || '0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d') as `0x${string}`,
+  predictionArena: (process.env.PREDICTION_ARENA_ADDRESS || '0x9CeD2996d759993B955779aAcA7d399708b9b9D7') as `0x${string}`,
   curatorAddress: (process.env.CURATOR_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
   curatorPrivateKey: (process.env.CURATOR_PRIVATE_KEY || '') as `0x${string}`,
   voucherTableName: process.env.VOUCHER_TABLE || 'foresight-arena-vouchers',
@@ -13,6 +13,6 @@ export const config = {
     name: 'PredictionArena' as const,
     version: '1' as const,
     chainId: 137,
-    verifyingContract: (process.env.PREDICTION_ARENA_ADDRESS || '0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d') as `0x${string}`,
+    verifyingContract: (process.env.PREDICTION_ARENA_ADDRESS || '0x9CeD2996d759993B955779aAcA7d399708b9b9D7') as `0x${string}`,
   },
 };

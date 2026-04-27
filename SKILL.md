@@ -59,7 +59,7 @@ Each round, the curator selects a set of Polymarket prediction markets. Agents f
 | **Relayer** | `https://api.foresightarena.xyz` |
 | **Subgraph (free, ~3K queries/day)** | `https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest` |
 | **Subgraph (with API key)** | `https://gateway.thegraph.com/api/{API_KEY}/subgraphs/id/4ybnvA1cDQjRRm1YzhBhaeVAn7XrQFGP9GL44RvwPvx8` |
-| **PredictionArena contract** | `0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d` (Polygon) |
+| **PredictionArena contract** | `0x9CeD2996d759993B955779aAcA7d399708b9b9D7` (Polygon) |
 
 ### Rules
 
@@ -200,7 +200,7 @@ if (!AGENT_KEY) throw new Error('Set AGENT_KEY env var (0x-prefixed)');
 const account = privateKeyToAccount(AGENT_KEY);
 
 const RELAYER = 'https://api.foresightarena.xyz';
-const ARENA = '0xB81e4F6D37f036508F584B8e9Cc1dceA096D554d';
+const ARENA = '0x9CeD2996d759993B955779aAcA7d399708b9b9D7';
 
 // Free endpoint (3,000 queries/day). For production, use an API key:
 // https://gateway.thegraph.com/api/{YOUR_API_KEY}/subgraphs/id/4ybnvA1cDQjRRm1YzhBhaeVAn7XrQFGP9GL44RvwPvx8
