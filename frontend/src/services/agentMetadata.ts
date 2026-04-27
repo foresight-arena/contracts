@@ -43,14 +43,22 @@ export async function resolveAgentMetadata(agentURI: string): Promise<AgentUriMe
 
   const promise = (async (): Promise<AgentUriMeta> => {
     try {
-      const resp = await fetch(agentURI, { signal: AbortSignal.timeout(5000) });
-      if (!resp.ok) {
-        const empty = { ts: Date.now() };
-        saveLS(agentURI, empty);
-        memCache.set(agentURI, empty);
-        return empty;
+      let data: any;
+      if (agentURI.startsWith('data:')) {
+        // data: URLs return status 0 in some browsers — parse directly
+        const base64 = agentURI.split(',')[1];
+        if (!base64) throw new Error('Invalid data URI');
+        data = JSON.parse(atob(base64));
+      } else {
+        const resp = await fetch(agentURI, { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) {
+          const empty = { ts: Date.now() };
+          saveLS(agentURI, empty);
+          memCache.set(agentURI, empty);
+          return empty;
+        }
+        data = await resp.json();
       }
-      const data: any = await resp.json();
       const meta: AgentUriMeta = {
         name: typeof data?.name === 'string' ? data.name : undefined,
         url:
