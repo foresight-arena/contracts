@@ -365,19 +365,12 @@ async function predictRound(roundId, round) {
   };
 }
 
-function buildReasoningPayload({ roundId, summaries, result, autoResolved }) {
-  return {
-    roundId,
-    agent: account.address,
-    model: MODEL,
-    timestamp: new Date().toISOString(),
-    markets: summaries,
-    predictions: result.predictions,
-    perMarketReasoning: result.perMarketReasoning,
-    autoResolved: autoResolved || [],
-    trace: result.trace,
-    usage: result.usage || null,
-  };
+function buildReasoningPayload({ result }) {
+  // Just an array of reasoning strings, one per market (sorted by marketIndex).
+  // The hash of this array is committed on-chain, binding it to the round and predictions.
+  return (result.perMarketReasoning || [])
+    .sort((a, b) => a.marketIndex - b.marketIndex)
+    .map((p) => p.reasoning || '');
 }
 
 // ─── Commit ───────────────────────────────────────────────────────────────────
@@ -415,7 +408,7 @@ async function tryCommit(roundId, round) {
   const commitHash = computeCommitHash(roundId, predictions, salt);
 
   const reasoningPayload = RELAYER_URL
-    ? buildReasoningPayload({ roundId, summaries, result, autoResolved })
+    ? buildReasoningPayload({ result })
     : undefined;
 
   const reasoningHash = reasoningPayload

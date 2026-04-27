@@ -146,7 +146,7 @@ export function ReasoningToggle({ open, setOpen }: { open: boolean; setOpen: (v:
   );
 }
 
-/** Expanded reasoning content — meant to be placed in a full-width row below */
+/** Expanded reasoning content — handles both old format (object) and new format (string array) */
 export function ReasoningContent({ data, loading }: { data: ReasoningData | null; loading: boolean }) {
   if (loading) {
     return <div style={{ ...panelStyle, color: 'var(--text-muted)' }}>Loading...</div>;
@@ -154,6 +154,23 @@ export function ReasoningContent({ data, loading }: { data: ReasoningData | null
   if (!data) {
     return <div style={{ ...panelStyle, color: 'var(--text-muted)', fontStyle: 'italic' }}>No reasoning data available</div>;
   }
+
+  // New format: plain array of strings
+  if (Array.isArray(data)) {
+    return (
+      <div style={panelStyle}>
+        <div style={sectionTitleStyle}>Reasoning</div>
+        {(data as string[]).map((r, i) => (
+          <div key={i} style={reasoningItemStyle}>
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>[{i}]</span>
+            <span style={{ marginLeft: 'var(--space-sm)', color: 'var(--text-secondary)' }}>{r}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Old format: object with model, perMarketReasoning, trace, etc.
   return (
     <div style={panelStyle}>
       <div style={headerStyle}>
@@ -172,12 +189,12 @@ export function ReasoningContent({ data, loading }: { data: ReasoningData | null
 
       {data.autoResolved?.length > 0 && (
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
-          Auto-resolved: {data.autoResolved.map((a) => `Market ${a.index} = ${a.outcome}`).join(', ')}
+          Auto-resolved: {data.autoResolved.map((a: any) => `Market ${a.index} = ${a.outcome}`).join(', ')}
         </div>
       )}
 
       <div style={sectionTitleStyle}>Per-Market Reasoning</div>
-      {(data.perMarketReasoning || []).map((r) => (
+      {(data.perMarketReasoning || []).map((r: any) => (
         <div key={r.marketIndex} style={reasoningItemStyle}>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
             [{r.marketIndex}] {formatBps(r.probabilityBps)}

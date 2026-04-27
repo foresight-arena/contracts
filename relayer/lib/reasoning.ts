@@ -3,7 +3,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand, NoSuchKey } from '@aws-sd
 
 const SUBGRAPH = 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
 
-const MAX_CONTENT_BYTES = 256 * 1024; // 256 KB cap
+const MAX_CONTENT_BYTES = 64 * 1024; // 64 KB cap (reasoning is just an array of strings)
 
 let s3: S3Client | null = null;
 function getS3(): S3Client {
