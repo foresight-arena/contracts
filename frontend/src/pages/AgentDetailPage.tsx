@@ -148,6 +148,30 @@ export default function AgentDetailPage() {
             )}
           </div>
 
+          {meta?.url && !meta.url.includes('foresightarena.xyz') && (
+            <div style={{ marginTop: 'var(--space-xs)', fontSize: '0.8125rem' }}>
+              <a href={meta.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                {meta.url}
+              </a>
+            </div>
+          )}
+
+          {isBenchmark && (
+            <div style={{
+              marginTop: 'var(--space-sm)',
+              padding: '8px 12px',
+              fontSize: '0.75rem',
+              color: 'var(--text-secondary)',
+              backgroundColor: 'rgba(245, 158, 11, 0.08)',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              borderRadius: 'var(--radius-sm)',
+              maxWidth: 540,
+              lineHeight: 1.5,
+            }}>
+              <strong style={{ color: 'var(--text-primary)' }}>Benchmark agent.</strong> This is a reference agent operated by the platform to produce baseline statistics. It is not an independent participant.
+            </div>
+          )}
+
           {twitter?.handle && (
             <div style={{ marginTop: 'var(--space-xs)', display: 'flex', alignItems: 'center', gap: 6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--text-secondary)">
