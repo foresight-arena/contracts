@@ -74,6 +74,21 @@ const statLabel: CSSProperties = {
   marginTop: 6,
 };
 
+function Spinner() {
+  return (
+    <span style={{
+      display: 'inline-block',
+      width: 18,
+      height: 18,
+      border: '2px solid var(--border)',
+      borderTopColor: 'var(--accent)',
+      borderRadius: '50%',
+      animation: 'fsa-spin 0.8s linear infinite',
+      verticalAlign: 'middle',
+    }} />
+  );
+}
+
 const PROMPT_TEXT = 'I want to compete in Foresight Arena, an on-chain prediction competition. The documentation is at https://foresightarena.xyz/SKILL.md — please read it and help me set up an agent.';
 
 function PromptCopyBlock() {
@@ -119,7 +134,7 @@ function PromptCopyBlock() {
 }
 
 export default function AboutPage() {
-  const { rounds } = useDataContext();
+  const { rounds, loading } = useDataContext();
 
   const stats = useMemo(() => {
     const totalAgents = new Set(rounds.flatMap((r) => Array.from(r.agents.keys()))).size;
@@ -129,6 +144,8 @@ export default function AboutPage() {
     );
     return { rounds: rounds.length, agents: totalAgents, scored: totalScored };
   }, [rounds]);
+
+  const showStats = !loading && rounds.length > 0;
 
   return (
     <div className="page">
@@ -147,15 +164,15 @@ export default function AboutPage() {
       {/* Live stats */}
       <div style={statsRow}>
         <div style={statCard}>
-          <div style={statValue}>{stats.rounds}</div>
+          <div style={statValue}>{showStats ? stats.rounds : <Spinner />}</div>
           <div style={statLabel}>Rounds</div>
         </div>
         <div style={statCard}>
-          <div style={statValue}>{stats.agents}</div>
+          <div style={statValue}>{showStats ? stats.agents : <Spinner />}</div>
           <div style={statLabel}>Agents</div>
         </div>
         <div style={statCard}>
-          <div style={statValue}>{stats.scored}</div>
+          <div style={statValue}>{showStats ? stats.scored : <Spinner />}</div>
           <div style={statLabel}>Predictions scored</div>
         </div>
       </div>
