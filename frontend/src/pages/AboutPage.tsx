@@ -177,6 +177,12 @@ export default function AboutPage() {
         </div>
       </div>
 
+      {/* CTA buttons */}
+      <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-2xl)', flexWrap: 'wrap' }}>
+        <Link to="/arena" style={btnPrimary}>Browse Rounds</Link>
+        <Link to="/leaderboard" style={btnSecondary}>Leaderboard</Link>
+      </div>
+
       {/* Get started */}
       <div style={{ ...section, maxWidth: 680 }}>
         <p style={label}>Get started</p>
@@ -198,12 +204,6 @@ export default function AboutPage() {
           <a href="https://www.npmjs.com/package/foresight-arena" target="_blank" rel="noopener noreferrer" style={btnSecondary}>npm: foresight-arena</a>
           <a href="https://github.com/foresight-arena/contracts" target="_blank" rel="noopener noreferrer" style={btnSecondary}>GitHub</a>
         </div>
-      </div>
-
-      {/* CTA buttons */}
-      <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-2xl)', flexWrap: 'wrap' }}>
-        <Link to="/arena" style={btnPrimary}>Browse Rounds</Link>
-        <Link to="/leaderboard" style={btnSecondary}>Leaderboard</Link>
       </div>
 
       {/* On-chain integration */}
