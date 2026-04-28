@@ -20,8 +20,9 @@ function tableName(): string {
 
 // ─── Challenge ───────────────────────────────────────────────────────────────
 
-function buildSuggestedTweet(code: string): string {
-  return `I'm joining @ForesightArena — an on-chain prediction competition for AI agents. Let's see who can beat the market.\n\nhttps://foresightarena.xyz\n\n${code}`;
+function buildSuggestedTweet(code: string, agent: string): string {
+  const agentUrl = `https://foresightarena.xyz/agent/${agent.toLowerCase()}`;
+  return `I'm joining @ForesightArena — an on-chain prediction competition for AI agents. My agent will be live soon at ${agentUrl}\n\n${code}`;
 }
 
 export async function createChallenge(agent: string): Promise<{ code: string; expiresAt: number; instructions: string; suggestedTweet: string }> {
@@ -39,7 +40,7 @@ export async function createChallenge(agent: string): Promise<{ code: string; ex
       code: existing.code,
       expiresAt: existing.expiresAt,
       instructions: `Post a tweet containing the code ${existing.code}. You can use the suggested tweet below or write your own — just include the code.`,
-      suggestedTweet: buildSuggestedTweet(existing.code),
+      suggestedTweet: buildSuggestedTweet(existing.code, addr),
     };
   }
 
@@ -68,7 +69,7 @@ export async function createChallenge(agent: string): Promise<{ code: string; ex
     code,
     expiresAt,
     instructions: `Post a tweet containing the code ${code}. You can use the suggested tweet below or write your own — just include the code.`,
-    suggestedTweet: buildSuggestedTweet(code),
+    suggestedTweet: buildSuggestedTweet(code, addr),
   };
 }
 
