@@ -61,7 +61,7 @@ export async function fetchAllData(): Promise<{
           totalMarkets
         }
       }
-      agents(first: 1000) {
+      agents(first: 1000, where: { lastActiveTimestamp_gt: 0 }) {
         id
         agentId
         agentURI

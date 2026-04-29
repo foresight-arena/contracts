@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type CSSProperties } from 'react';
+import React, { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDataContext } from '../context/DataContext';
 import StatusBadge from '../components/StatusBadge';
@@ -159,7 +159,17 @@ export default function RoundDetailPage() {
   }, [round]);
 
   const agentMap = agentRegistry;
-  const resolvedMeta = useAgentsMetadata(agentMap);
+  // Only resolve metadata for agents that participated in THIS round
+  const roundAgentMap = useMemo(() => {
+    const m = new Map();
+    if (!round) return m;
+    for (const addr of round.agents.keys()) {
+      const info = agentMap.get(addr.toLowerCase());
+      if (info) m.set(addr.toLowerCase(), info);
+    }
+    return m;
+  }, [round, agentMap]);
+  const resolvedMeta = useAgentsMetadata(roundAgentMap);
 
   if (loading) return <LoadingSpinner />;
 

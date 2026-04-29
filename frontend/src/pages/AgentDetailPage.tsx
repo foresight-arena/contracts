@@ -31,7 +31,14 @@ export default function AgentDetailPage() {
   const { address: rawAddress } = useParams<{ address: string }>();
   const address = (rawAddress || '').toLowerCase();
   const { rounds, agents: agentMap, loading, refresh } = useDataContext();
-  const resolvedMeta = useAgentsMetadata(agentMap);
+  // Only resolve metadata for THIS agent
+  const singleAgentMap = useMemo(() => {
+    const m = new Map();
+    const info = agentMap.get(address);
+    if (info) m.set(address, info);
+    return m;
+  }, [address, agentMap]);
+  const resolvedMeta = useAgentsMetadata(singleAgentMap);
 
   const [twitter, setTwitter] = useState<{ handle: string; displayName: string; tweetUrl: string } | null>(null);
   const [period, setPeriod] = useState<TimePeriod>('30d');
