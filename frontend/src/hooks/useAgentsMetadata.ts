@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { resolveAgentMetadata } from '../services/agentMetadata';
 import type { AgentInfo } from '../types';
 
-export type ResolvedAgentsMeta = Map<string, { name?: string; url?: string }>;
+export type ResolvedAgentsMeta = Map<string, { name?: string; url?: string; image?: string }>;
 
 /**
  * Resolves off-chain metadata (JSON at agentURI) for a set of agents.
@@ -27,7 +27,7 @@ export function useAgentsMetadata(agents: Map<string, AgentInfo>): ResolvedAgent
       setResolved((prev) => {
         const next = new Map(prev);
         for (const { addr, meta } of results) {
-          if (meta.name || meta.url) next.set(addr, { name: meta.name, url: meta.url });
+          if (meta.name || meta.url || meta.image) next.set(addr, { name: meta.name, url: meta.url, image: meta.image });
         }
         return next;
       });

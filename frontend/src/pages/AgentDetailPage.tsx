@@ -125,11 +125,22 @@ export default function AgentDetailPage() {
 
       {/* Header */}
       <div style={headerStyle}>
-        <img
-          src={`${RELAYER}/agent/${address}/image`}
-          alt="Agent"
-          style={avatarStyle}
-        />
+        {info?.agentURI && !meta ? (
+          <div style={{ ...avatarStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: '3rem', fontWeight: 700 }}>?</div>
+        ) : (
+          <img
+            src={meta?.image || `${RELAYER}/agent/${address}/image`}
+            alt="Agent"
+            style={avatarStyle}
+            onError={(e) => {
+              // Fallback to dynamic SVG if NFT image fails to load
+              const img = e.currentTarget;
+              if (img.src !== `${RELAYER}/agent/${address}/image`) {
+                img.src = `${RELAYER}/agent/${address}/image`;
+              }
+            }}
+          />
+        )}
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
             <h1 style={{ marginBottom: 0, fontSize: '1.5rem' }}>

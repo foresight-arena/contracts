@@ -4,6 +4,7 @@ const CACHE_KEY_PREFIX = 'agent-meta:';
 export interface AgentUriMeta {
   name?: string;
   url?: string;
+  image?: string;
   ts: number;
 }
 
@@ -67,6 +68,7 @@ export async function resolveAgentMetadata(agentURI: string): Promise<AgentUriMe
             : typeof data?.external_url === 'string'
               ? data.external_url
               : undefined,
+        image: typeof data?.image === 'string' ? data.image : undefined,
         ts: Date.now(),
       };
       saveLS(agentURI, meta);
