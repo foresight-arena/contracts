@@ -73,8 +73,8 @@ export default function RoundTimeline({ round, agentNames }: {
       }
     }
 
-    if (round.outcomesTriggered) {
-      ms.push({ time: round.revealStart + 1, label: 'Outcomes triggered', type: 'milestone', color: COLORS.triggered });
+    if (round.outcomesTriggered && round.outcomesTriggeredAt) {
+      ms.push({ time: round.outcomesTriggeredAt, label: 'Outcomes triggered', type: 'milestone', color: COLORS.triggered });
     }
 
     let nw: TimelineEvent | null = null;

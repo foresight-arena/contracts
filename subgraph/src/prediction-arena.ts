@@ -128,6 +128,7 @@ export function handleOutcomesTriggered(event: OutcomesTriggered): void {
   if (round == null) return
 
   round.outcomesTriggered = true
+  round.outcomesTriggeredAt = event.block.timestamp
   round.resolvedBitmask = event.params.resolvedBitmask
   round.save()
 

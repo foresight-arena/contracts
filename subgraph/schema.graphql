@@ -9,6 +9,7 @@ type Round @entity {
   benchmarksPosted: Boolean!
   invalidated: Boolean!
   outcomesTriggered: Boolean!
+  outcomesTriggeredAt: BigInt
   resolvedBitmask: BigInt
   createdAtBlock: BigInt!
   createdAtTimestamp: BigInt!

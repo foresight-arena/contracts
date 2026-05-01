@@ -32,6 +32,7 @@ export async function fetchAllData(): Promise<{
         benchmarksPosted
         invalidated
         outcomesTriggered
+        outcomesTriggeredAt
         resolvedBitmask
         marketCount
         roundMarkets(orderBy: marketIndex) {
@@ -117,6 +118,7 @@ export async function fetchAllData(): Promise<{
       benchmarksPosted: r.benchmarksPosted,
       invalidated: r.invalidated,
       outcomesTriggered: r.outcomesTriggered ?? false,
+      outcomesTriggeredAt: Number(r.outcomesTriggeredAt || 0),
       resolvedBitmask: Number(r.resolvedBitmask || 0),
       agents,
     } as Round;
