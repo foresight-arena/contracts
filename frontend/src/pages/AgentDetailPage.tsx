@@ -291,6 +291,18 @@ export default function AgentDetailPage() {
             )}
           </div>
 
+          {/* Edge anatomy: how avg α breaks down */}
+          <div style={edgeAnatomyStyle}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 'var(--space-sm)' }}>
+              <span style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Edge anatomy</span>
+              <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }} title="Corollary 1 in the paper: α decomposes into how much sharper your sorting is (resolution gain) plus how much better-calibrated you are (reliability gap).">α = (RES_agent − RES_base) + (REL_base − REL_agent) ⓘ</span>
+            </div>
+            <EdgeAnatomyBars
+              resolutionGainPct={scoring.resolutionGain * 100}
+              reliabilityGapPct={scoring.reliabilityGap * 100}
+            />
+          </div>
+
           {/* 6 other metrics in 3×2 grid */}
           <div style={metricsGridStyle}>
             <StatCard
@@ -546,6 +558,68 @@ function AlphaHistogram({ deltas, mean }: { deltas: number[]; mean: number }) {
   );
 }
 
+/**
+ * Two diverging bars showing the two contributions to avg α:
+ * resolution gain (RES_agent − RES_base) and reliability gap
+ * (REL_base − REL_agent). Both share the same x-scale, anchored
+ * at zero. Positive contributions extend right (green), negative
+ * extend left (red).
+ */
+function EdgeAnatomyBars({ resolutionGainPct, reliabilityGapPct }: { resolutionGainPct: number; reliabilityGapPct: number }) {
+  const items = [
+    {
+      label: 'Resolution gain',
+      sub: 'sharper sorting of YES vs NO than the market',
+      value: resolutionGainPct,
+    },
+    {
+      label: 'Reliability gap',
+      sub: 'better calibration than the market',
+      value: reliabilityGapPct,
+    },
+  ];
+  const maxAbs = Math.max(0.5, Math.abs(resolutionGainPct), Math.abs(reliabilityGapPct));
+  const range = maxAbs * 1.15;
+
+  const W = 480, BAR_H = 14, ROW_GAP = 4;
+  const ROW_H = BAR_H + ROW_GAP + 16; // bar + gap + label row
+  const H = items.length * ROW_H + 12;
+  const xToSvg = (v: number) => W / 2 + (v / range) * (W / 2);
+  const zeroX = W / 2;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto', display: 'block' }}>
+      {items.map((it, idx) => {
+        const yLabel = idx * ROW_H + 12;
+        const yBar = yLabel + 4;
+        const color = it.value >= 0 ? '#10b981' : '#ef4444';
+        const x0 = it.value >= 0 ? zeroX : xToSvg(it.value);
+        const w = Math.max(2, Math.abs(xToSvg(it.value) - zeroX));
+        return (
+          <g key={it.label}>
+            {/* Label row: name on left, value on right */}
+            <text x={4} y={yLabel} fontSize={11} fill="var(--text-secondary)" fontWeight={600}>{it.label}</text>
+            <text x={4 + 120} y={yLabel} fontSize={10} fill="var(--text-muted)">— {it.sub}</text>
+            <text x={W - 4} y={yLabel} fontSize={11} fill={color} textAnchor="end" fontWeight={700} style={{ fontFamily: 'var(--font-mono)' }}>
+              {(it.value >= 0 ? '+' : '') + it.value.toFixed(2) + '%'}
+            </text>
+            {/* Bar track */}
+            <line x1={0} y1={yBar + BAR_H / 2} x2={W} y2={yBar + BAR_H / 2} stroke="var(--border)" strokeWidth={1} />
+            {/* Filled bar */}
+            <rect x={x0} y={yBar} width={w} height={BAR_H} fill={color} opacity={0.5} rx={2} />
+            {/* Zero tick */}
+            <line x1={zeroX} y1={yBar - 2} x2={zeroX} y2={yBar + BAR_H + 2} stroke="var(--text-muted)" strokeWidth={1} />
+          </g>
+        );
+      })}
+      {/* Bottom range labels */}
+      <text x={4} y={H - 2} fontSize={9} fill="var(--text-muted)">{(-range).toFixed(1)}%</text>
+      <text x={zeroX} y={H - 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle">0</text>
+      <text x={W - 4} y={H - 2} fontSize={9} fill="var(--text-muted)" textAnchor="end">+{range.toFixed(1)}%</text>
+    </svg>
+  );
+}
+
 function AlphaChart({ data }: { data: { roundId: number; alpha: number }[] }) {
   if (data.length === 0) return null;
 
@@ -630,5 +704,11 @@ const statCardStyle: CSSProperties = {
 const alphaHeroStyle: CSSProperties = {
   backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)',
   borderRadius: 'var(--radius-md)', padding: 'var(--space-lg)',
+  marginBottom: 'var(--space-sm)',
+};
+
+const edgeAnatomyStyle: CSSProperties = {
+  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-md)', padding: 'var(--space-md)',
   marginBottom: 'var(--space-sm)',
 };
