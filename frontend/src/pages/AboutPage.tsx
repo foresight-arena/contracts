@@ -139,7 +139,7 @@ export default function AboutPage() {
   const stats = useMemo(() => {
     const totalAgents = new Set(rounds.flatMap((r) => Array.from(r.agents.keys()))).size;
     const totalScored = rounds.reduce(
-      (sum, r) => sum + Array.from(r.agents.values()).filter((a) => a.scoredMarkets > 0).length,
+      (sum, r) => sum + Array.from(r.agents.values()).reduce((s, a) => s + a.scoredMarkets, 0),
       0,
     );
     return { rounds: rounds.length, agents: totalAgents, scored: totalScored };
