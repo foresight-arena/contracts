@@ -249,11 +249,22 @@ export async function checkAndTriggerOutcomes(): Promise<string[]> {
     transport: http(rpcUrl),
   });
 
+  // Grace period after revealDeadline before we trigger with partial outcomes.
+  // Configurable via env so we can dial it down in incidents; default 24h.
+  // The contract still lets anyone trigger after revealDeadline -- this only
+  // controls our own scheduler, so we don't VOID late-resolving markets that
+  // would have settled if we'd waited.
+  const GRACE_HOURS = Number(process.env.PARTIAL_TRIGGER_GRACE_HOURS || '24');
+  const GRACE_SECONDS = Math.max(0, Math.floor(GRACE_HOURS * 3600));
+
   for (const round of ready) {
     const roundId = Number(round.roundId);
     const conditionIds: string[] = round.conditionIds || [];
     const marketCount = conditionIds.length;
-    const pastDeadline = now >= Number(round.revealDeadline);
+    const revealDeadline = Number(round.revealDeadline);
+    const pastDeadline = now >= revealDeadline;
+    const partialTriggerAt = revealDeadline + GRACE_SECONDS;
+    const partialAllowed = now >= partialTriggerAt;
 
     // Check how many markets are resolved on the CTF
     let resolvedCount = 0;
@@ -273,11 +284,16 @@ export async function checkAndTriggerOutcomes(): Promise<string[]> {
 
     results.push(`Round ${roundId}: ${resolvedCount}/${marketCount} markets resolved on CTF`);
 
-    // Trigger when ALL markets are resolved, or after revealDeadline with at least one
+    // Trigger when ALL markets are resolved, or after revealDeadline + grace with at least one
     if (resolvedCount === marketCount) {
       results.push(`  All markets resolved — triggering outcomes`);
-    } else if (pastDeadline && resolvedCount > 0) {
-      results.push(`  Past reveal deadline with ${resolvedCount} resolved — triggering with partial outcomes`);
+    } else if (partialAllowed && resolvedCount > 0) {
+      results.push(`  ${GRACE_HOURS}h grace expired (${resolvedCount}/${marketCount} resolved) — triggering with partial outcomes`);
+    } else if (pastDeadline) {
+      const waitSec = Math.max(0, partialTriggerAt - now);
+      const waitH = (waitSec / 3600).toFixed(1);
+      results.push(`  Past reveal deadline, waiting ${waitH}h grace for late resolutions (${resolvedCount}/${marketCount} resolved)`);
+      continue;
     } else {
       results.push(`  Waiting for more markets to resolve`);
       continue;
