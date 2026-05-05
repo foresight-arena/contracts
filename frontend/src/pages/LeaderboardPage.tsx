@@ -23,88 +23,11 @@ interface LeaderboardRow {
   alphaShrunkPct: number;     // (n / (n + κ)) · avgAlpha — used for ranking
   alphaCIHalfPct: number;     // 1.96 * SE in %
   deltasPct: number[];        // per-market δ in %
-  resolutionGainPct: number;  // RES_agent − RES_base, in %
-  reliabilityGapPct: number;  // REL_base − REL_agent, in %
   scoredMarkets: number;
   scoredRounds: number;
   commitCount: number;
   lastActive: number;
   provisional: boolean;       // n < 140
-}
-
-type EdgeKind = 'D' | 'C' | 'B' | '–';
-
-interface EdgeType {
-  letter: EdgeKind;
-  label: string;
-  tooltip: string;
-  color: string;
-  bg: string;
-}
-
-/**
- * Classify how an agent earns its α: from sharper resolution (D),
- * better calibration (C), both (B), or neither (–).
- */
-function classifyEdge(resolutionGainPct: number, reliabilityGapPct: number): EdgeType {
-  const r = resolutionGainPct;
-  const c = reliabilityGapPct;
-
-  if (r <= 0 && c <= 0) {
-    return {
-      letter: '–',
-      label: 'Below market',
-      tooltip: `Worse than the market on both axes: resolution gain ${r.toFixed(2)}%, reliability gap ${c.toFixed(2)}%.`,
-      color: '#ef4444',
-      bg: 'rgba(239, 68, 68, 0.15)',
-    };
-  }
-  if (r > 0 && c <= 0) {
-    return {
-      letter: 'D',
-      label: 'Discriminator',
-      tooltip: `Edge from sharper sorting only: resolution gain +${r.toFixed(2)}%, reliability gap ${c.toFixed(2)}% (less calibrated than the market).`,
-      color: '#3b82f6',
-      bg: 'rgba(59, 130, 246, 0.15)',
-    };
-  }
-  if (c > 0 && r <= 0) {
-    return {
-      letter: 'C',
-      label: 'Calibrator',
-      tooltip: `Edge from better calibration only: reliability gap +${c.toFixed(2)}%, resolution gain ${r.toFixed(2)}% (sorts no sharper than the market).`,
-      color: '#a855f7',
-      bg: 'rgba(168, 85, 247, 0.15)',
-    };
-  }
-  // Both positive — split by share
-  const total = r + c;
-  const rShare = r / total;
-  if (rShare >= 0.65) {
-    return {
-      letter: 'D',
-      label: 'Discriminator',
-      tooltip: `Edge dominated by sharper sorting: ${(rShare * 100).toFixed(0)}% of α from resolution gain (+${r.toFixed(2)}%), ${((1 - rShare) * 100).toFixed(0)}% from reliability gap (+${c.toFixed(2)}%).`,
-      color: '#3b82f6',
-      bg: 'rgba(59, 130, 246, 0.15)',
-    };
-  }
-  if (rShare <= 0.35) {
-    return {
-      letter: 'C',
-      label: 'Calibrator',
-      tooltip: `Edge dominated by better calibration: ${((1 - rShare) * 100).toFixed(0)}% of α from reliability gap (+${c.toFixed(2)}%), ${(rShare * 100).toFixed(0)}% from resolution gain (+${r.toFixed(2)}%).`,
-      color: '#a855f7',
-      bg: 'rgba(168, 85, 247, 0.15)',
-    };
-  }
-  return {
-    letter: 'B',
-    label: 'Balanced',
-    tooltip: `Edge balanced across both axes: resolution gain +${r.toFixed(2)}%, reliability gap +${c.toFixed(2)}%.`,
-    color: '#10b981',
-    bg: 'rgba(16, 185, 129, 0.15)',
-  };
 }
 
 function truncAddr(addr: string): string {
@@ -189,8 +112,6 @@ export default function LeaderboardPage() {
         alphaShrunkPct,
         alphaCIHalfPct: scoring.alphaSE * 1.96 * 100,
         deltasPct: scoring.deltas.map((d) => d * 100),
-        resolutionGainPct: scoring.resolutionGain * 100,
-        reliabilityGapPct: scoring.reliabilityGap * 100,
         scoredMarkets: scoring.n,
         scoredRounds: data.scoredRounds,
         commitCount: data.commitCount,
@@ -245,14 +166,6 @@ export default function LeaderboardPage() {
 
       <TimeFilter value={period} onChange={setPeriod} />
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-sm)', margin: 'var(--space-sm) 0 var(--space-md)', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-        <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Edge type:</span>
-        <span><EdgeTypeChip edge={classifyEdge(5, 1)} /> Discriminator — α from sharper sorting</span>
-        <span><EdgeTypeChip edge={classifyEdge(1, 5)} /> Calibrator — α from better calibration</span>
-        <span><EdgeTypeChip edge={classifyEdge(3, 3)} /> Balanced</span>
-        <span><EdgeTypeChip edge={classifyEdge(-1, -1)} /> Below market</span>
-      </div>
-
       {entries.length === 0 ? (
         <p>No agents found for this period.</p>
       ) : (
@@ -277,7 +190,6 @@ export default function LeaderboardPage() {
                 const alphaColor = !hasScore || crossesZero
                   ? 'var(--text-primary)'
                   : (entry.avgAlphaPct >= 0 ? '#10b981' : '#ef4444');
-                const edge = hasScore ? classifyEdge(entry.resolutionGainPct, entry.reliabilityGapPct) : null;
                 return (
                 <tr key={entry.address} className={isBenchmark ? 'benchmark-row' : undefined}>
                   <td>{hasScore ? idx + 1 : '--'}</td>
@@ -285,12 +197,6 @@ export default function LeaderboardPage() {
                     {entry.name ? (
                       <span>
                         <Link to={`/agent/${entry.address}`} style={{ fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'none' }}>{entry.name}</Link>
-                        {edge && (
-                          <>
-                            {' '}
-                            <EdgeTypeChip edge={edge} />
-                          </>
-                        )}
                         {isBenchmark && (
                           <>
                             {' '}
@@ -322,12 +228,6 @@ export default function LeaderboardPage() {
                     ) : (
                       <span>
                         <Link to={`/agent/${entry.address}`} className="address">{truncAddr(entry.address)}</Link>
-                        {edge && (
-                          <>
-                            {' '}
-                            <EdgeTypeChip edge={edge} />
-                          </>
-                        )}
                         {isBenchmark && (
                           <>
                             {' '}
@@ -382,33 +282,6 @@ export default function LeaderboardPage() {
 }
 
 import React from 'react';
-
-/**
- * Single-letter chip indicating where an agent's edge comes from
- * (Discriminator / Calibrator / Balanced / below-market).
- */
-function EdgeTypeChip({ edge }: { edge: EdgeType }) {
-  return (
-    <span
-      title={`${edge.label}: ${edge.tooltip}`}
-      style={{
-        display: 'inline-block',
-        minWidth: 16,
-        textAlign: 'center',
-        fontSize: '0.6875rem',
-        fontWeight: 700,
-        padding: '1px 5px',
-        borderRadius: 'var(--radius-sm)',
-        backgroundColor: edge.bg,
-        color: edge.color,
-        cursor: 'help',
-        verticalAlign: 'baseline',
-      }}
-    >
-      {edge.letter}
-    </span>
-  );
-}
 
 /**
  * Compact gaussian-KDE sparkline for per-market α distribution.
