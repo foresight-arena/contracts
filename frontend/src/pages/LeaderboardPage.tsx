@@ -15,6 +15,7 @@ interface LeaderboardRow {
   url: string;
   avgAlphaPct: number;        // mean δ in %, from per-market computation
   alphaCIHalfPct: number;     // 1.96 * SE in %
+  deltasPct: number[];        // per-market δ in %
   scoredMarkets: number;
   scoredRounds: number;
   commitCount: number;
@@ -41,7 +42,7 @@ export default function LeaderboardPage() {
   const agentMap = agentRegistry;
   const resolvedMeta = useAgentsMetadata(agentMap);
 
-  const entries = useMemo(() => {
+  const data = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
     let filtered = rounds;
 
@@ -97,6 +98,7 @@ export default function LeaderboardPage() {
         url: meta?.url ?? info?.url ?? '',
         avgAlphaPct: scoring.avgAlpha * 100,
         alphaCIHalfPct: scoring.alphaSE * 1.96 * 100,
+        deltasPct: scoring.deltas.map((d) => d * 100),
         scoredMarkets: scoring.n,
         scoredRounds: data.scoredRounds,
         commitCount: data.commitCount,
@@ -112,8 +114,21 @@ export default function LeaderboardPage() {
       return b.avgAlphaPct - a.avgAlphaPct;
     });
 
-    return result;
+    // Global x-range so all sparkline charts share a comparable scale
+    let globalMaxAbs = 1;
+    for (const r of result) {
+      for (const d of r.deltasPct) {
+        const a = Math.abs(d);
+        if (a > globalMaxAbs) globalMaxAbs = a;
+      }
+      const ci = Math.abs(r.avgAlphaPct) + r.alphaCIHalfPct;
+      if (ci > globalMaxAbs) globalMaxAbs = ci;
+    }
+
+    return { entries: result, globalMaxAbs };
   }, [rounds, agentRegistry, period, agentMap, resolvedMeta]);
+
+  const { entries, globalMaxAbs } = data;
 
   if (loading) return <LoadingSpinner />;
 
@@ -135,9 +150,8 @@ export default function LeaderboardPage() {
               <tr>
                 <th>Rank</th>
                 <th>Agent</th>
-                <th title="Mean per-market α (Brier reduction vs Polymarket benchmark) ± 95% CI. Computed across all scored markets in the period.">Avg Alpha (95% CI)</th>
+                <th title="Mean per-market α (Brier reduction vs Polymarket benchmark) ± 95% CI. Bottom curve is the kernel density of per-market α — red on the negative side, green on the positive.">Avg Alpha (95% CI)</th>
                 <th>Scored</th>
-                <th>Commits</th>
                 <th>Last Active</th>
               </tr>
             </thead>
@@ -192,18 +206,24 @@ export default function LeaderboardPage() {
                       </span>
                     )}
                   </td>
-                  <td className="mono" style={{ whiteSpace: 'nowrap' }}>
+                  <td className="mono" style={{ whiteSpace: 'nowrap', minWidth: 180 }}>
                     {hasScore ? (
-                      <>
-                        <span style={{ color: alphaColor, fontWeight: 600 }}>{formatSignedPct(entry.avgAlphaPct)}</span>
-                        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> ± {entry.alphaCIHalfPct.toFixed(2)}%</span>
-                      </>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div>
+                          <span style={{ color: alphaColor, fontWeight: 600 }}>{formatSignedPct(entry.avgAlphaPct)}</span>
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> ± {entry.alphaCIHalfPct.toFixed(2)}%</span>
+                        </div>
+                        <MiniAlphaDist
+                          deltas={entry.deltasPct}
+                          mean={entry.avgAlphaPct}
+                          range={globalMaxAbs}
+                        />
+                      </div>
                     ) : '--'}
                   </td>
                   <td title={hasScore ? `${entry.scoredMarkets} markets across ${entry.scoredRounds} rounds` : ''}>
                     {hasScore ? `${entry.scoredRounds}r / ${entry.scoredMarkets}m` : '--'}
                   </td>
-                  <td>{entry.commitCount}</td>
                   <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                     {formatTs(entry.lastActive)}
                   </td>
@@ -219,6 +239,92 @@ export default function LeaderboardPage() {
 }
 
 import React from 'react';
+
+/**
+ * Compact gaussian-KDE sparkline for per-market α distribution.
+ * Symmetric x-range around 0 (shared across rows for visual comparison).
+ * Curve is filled red on the negative side, green on the positive.
+ * A rug plot underneath shows individual market deltas.
+ */
+function MiniAlphaDist({ deltas, mean, range }: { deltas: number[]; mean: number; range: number }) {
+  if (deltas.length === 0) return null;
+
+  const W = 160;
+  const H = 32;
+  const PAD_X = 2;
+  const baseY = H - 4;       // leaves room for rug ticks
+  const topY = 4;
+  const plotW = W - 2 * PAD_X;
+  const plotH = baseY - topY;
+
+  const xToSvg = (x: number) => PAD_X + ((x + range) / (2 * range)) * plotW;
+
+  // Gaussian KDE with Silverman bandwidth, clamped so very narrow distributions still render
+  const n = deltas.length;
+  const m = deltas.reduce((s, v) => s + v, 0) / n;
+  const variance = n > 1 ? deltas.reduce((s, v) => s + (v - m) ** 2, 0) / (n - 1) : 0;
+  const sigma = Math.sqrt(variance);
+  const h = Math.max(range * 0.06, 1.06 * sigma * Math.pow(Math.max(n, 2), -1 / 5));
+  const norm = 1 / (n * h * Math.sqrt(2 * Math.PI));
+
+  const N_POINTS = 41;            // odd so x = 0 is sampled exactly
+  const zeroIdx = (N_POINTS - 1) / 2;
+  const xs: number[] = new Array(N_POINTS);
+  const densities: number[] = new Array(N_POINTS);
+  for (let i = 0; i < N_POINTS; i++) {
+    const x = -range + (2 * range) * (i / (N_POINTS - 1));
+    xs[i] = x;
+    let s = 0;
+    for (const xi of deltas) {
+      const u = (x - xi) / h;
+      s += Math.exp(-0.5 * u * u);
+    }
+    densities[i] = norm * s;
+  }
+  const maxD = Math.max(1e-9, ...densities);
+  const yToSvg = (d: number) => baseY - (d / maxD) * plotH;
+
+  // Build two filled paths split at x=0 for the bicolor fill
+  let negPath = `M ${xToSvg(xs[0])} ${baseY}`;
+  for (let i = 0; i <= zeroIdx; i++) negPath += ` L ${xToSvg(xs[i]).toFixed(2)} ${yToSvg(densities[i]).toFixed(2)}`;
+  negPath += ` L ${xToSvg(0)} ${baseY} Z`;
+
+  let posPath = `M ${xToSvg(0)} ${baseY}`;
+  for (let i = zeroIdx; i < N_POINTS; i++) posPath += ` L ${xToSvg(xs[i]).toFixed(2)} ${yToSvg(densities[i]).toFixed(2)}`;
+  posPath += ` L ${xToSvg(xs[N_POINTS - 1])} ${baseY} Z`;
+
+  const meanX = xToSvg(mean);
+  const meanColor = mean >= 0 ? '#10b981' : '#ef4444';
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      style={{ width: '100%', maxWidth: W, height: H, display: 'block' }}
+    >
+      <title>{`${n} markets, KDE of per-market α (range ±${range.toFixed(1)}%)`}</title>
+      {/* Filled KDE curves */}
+      <path d={negPath} fill="#ef4444" opacity={0.4} />
+      <path d={posPath} fill="#10b981" opacity={0.4} />
+      {/* Zero line */}
+      <line x1={xToSvg(0)} y1={topY} x2={xToSvg(0)} y2={baseY} stroke="var(--text-muted)" strokeWidth={1} strokeDasharray="2 2" />
+      {/* Mean marker */}
+      <line x1={meanX} y1={topY} x2={meanX} y2={baseY} stroke={meanColor} strokeWidth={1.5} />
+      {/* Rug plot: one tick per market delta */}
+      {deltas.map((d, i) => (
+        <line
+          key={i}
+          x1={xToSvg(d)}
+          y1={baseY}
+          x2={xToSvg(d)}
+          y2={baseY + 3}
+          stroke={d >= 0 ? '#10b981' : '#ef4444'}
+          strokeWidth={1}
+          opacity={0.7}
+        />
+      ))}
+    </svg>
+  );
+}
 
 const refreshBtnStyle: CSSProperties = {
   background: 'none',
