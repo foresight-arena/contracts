@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import TimeFilter from '../components/TimeFilter';
 import type { TimePeriod } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
+import { computeAgentScoring, type MarketSample } from '../lib/scoring';
 
 const RELAYER = 'https://api.foresightarena.xyz';
 
@@ -15,6 +16,14 @@ function truncAddr(addr: string): string {
 
 function formatAlpha(score: number): string {
   return ((score / 1e8) * 100).toFixed(2) + '%';
+}
+
+function formatPct(value: number): string {
+  return value.toFixed(2) + '%';
+}
+
+function formatSigned(value: number): string {
+  return (value >= 0 ? '+' : '') + value.toFixed(2) + '%';
 }
 
 function formatDate(ts: number): string {
@@ -105,6 +114,28 @@ export default function AgentDetailPage() {
       firstRoundTs: firstRoundTs === Infinity ? 0 : firstRoundTs,
       lastRoundTs,
     };
+  }, [agentRounds, address]);
+
+  // Per-market samples for Murphy decomposition (skip VOID and unscored markets)
+  const scoring = useMemo(() => {
+    const samples: MarketSample[] = [];
+    for (const round of agentRounds) {
+      const agent = round.agents.get(address);
+      if (!agent || !agent.revealed || agent.scoredMarkets === 0) continue;
+      const benchmarks = round.benchmarkPrices;
+      const preds = agent.predictions;
+      for (let i = 0; i < round.conditionIds.length; i++) {
+        const outcome = round.outcomes?.[i];
+        if (outcome !== 'YES' && outcome !== 'NO') continue;
+        if (preds[i] == null || benchmarks[i] == null) continue;
+        samples.push({
+          p: preds[i] / 10000,
+          b: benchmarks[i] / 10000,
+          x: outcome === 'YES' ? 1 : 0,
+        });
+      }
+    }
+    return computeAgentScoring(samples);
   }, [agentRounds, address]);
 
   // Chart data
@@ -218,8 +249,33 @@ export default function AgentDetailPage() {
         <StatCard label="Committed" value={`${stats.commitCount} rounds`} />
         <StatCard label="Scored" value={`${stats.scoredCount} rounds, ${stats.scoredMarkets} markets`} />
         <StatCard label="Non-reveals" value={String(stats.nonReveals)} accent={stats.nonReveals > 0} />
-        <StatCard label="Avg Alpha" value={stats.scoredCount > 0 ? formatAlpha(stats.avgAlpha) : '--'} />
       </div>
+
+      {/* Murphy decomposition + Alpha anatomy */}
+      {scoring.n > 0 && (
+        <div style={{ marginBottom: 'var(--space-xl)' }}>
+          <h2 style={{ marginBottom: 'var(--space-sm)' }}>Forecasting metrics</h2>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)', lineHeight: 1.6 }}>
+            Murphy decomposition: <code>Brier = UNC + REL − RES</code>. Alpha = <code>(RES_agent − RES_base) + (REL_base − REL_agent)</code>. Computed across {scoring.n} resolved markets.
+            {scoring.n < 140 && <> <span style={{ color: 'var(--warning)' }}>⚠ Limited data</span> — paper recommends 140+ predictions before drawing conclusions.</>}
+          </p>
+          <div style={statsGridStyle}>
+            <StatCard
+              label="Avg Alpha (95% CI)"
+              value={`${formatPct(scoring.avgAlpha * 100)} ± ${formatPct(scoring.alphaSE * 1.96 * 100)}`}
+            />
+            <StatCard label="Avg Brier" value={formatPct(scoring.agent.brier * 100)} />
+            <StatCard label="REL (calibration error)" value={formatPct(scoring.agent.rel * 100)} accent={scoring.agent.rel > scoring.baseline.rel} />
+            <StatCard label="RES (resolution)" value={formatPct(scoring.agent.res * 100)} />
+            <StatCard label="UNC (irreducible)" value={formatPct(scoring.agent.unc * 100)} />
+            <StatCard label="Resolution gain" value={formatSigned(scoring.resolutionGain * 100)} />
+            <StatCard label="Reliability gap" value={formatSigned(scoring.reliabilityGap * 100)} />
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 'var(--space-sm)', lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--text-secondary)' }}>How to read:</strong> Lower REL = better calibration. Higher RES = sharper sorting of YES vs NO outcomes. Positive resolution gain = agent sorts outcomes better than the market; positive reliability gap = agent is better calibrated than the market. Baseline (Polymarket mid-price) Brier: {formatPct(scoring.baseline.brier * 100)}.
+          </p>
+        </div>
+      )}
 
       {/* Chart */}
       {chartData.length > 1 && (
