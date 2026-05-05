@@ -4,16 +4,29 @@ import { Link } from 'react-router-dom';
 import { useDataContext } from '../context/DataContext';
 import TimeFilter from '../components/TimeFilter';
 import LoadingSpinner from '../components/LoadingSpinner';
-import type { TimePeriod, LeaderboardEntry } from '../types';
+import type { TimePeriod } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
 import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
+import { computeAgentScoring, type MarketSample } from '../lib/scoring';
+
+interface LeaderboardRow {
+  address: string;
+  name: string;
+  url: string;
+  avgAlphaPct: number;        // mean δ in %, from per-market computation
+  alphaCIHalfPct: number;     // 1.96 * SE in %
+  scoredMarkets: number;
+  scoredRounds: number;
+  commitCount: number;
+  lastActive: number;
+}
 
 function truncAddr(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
 
-function formatAlpha(score: number): string {
-  return ((score / 1e8) * 100).toFixed(2) + '%';
+function formatSignedPct(v: number): string {
+  return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
 }
 
 function formatTs(ts: number): string {
@@ -40,39 +53,52 @@ export default function LeaderboardPage() {
       filtered = rounds.filter((r) => r.commitDeadline >= cutoff);
     }
 
-    // Aggregate per agent: scored rounds + commit-only rounds
+    // Aggregate per agent: per-market samples + commit/scored counts
     const agg = new Map<
       string,
-      { totalAlpha: number; scoredCount: number; commitCount: number; lastActive: number }
+      { samples: MarketSample[]; scoredRounds: number; commitCount: number; lastActive: number }
     >();
 
     for (const round of filtered) {
       for (const [addr, agent] of round.agents) {
         const key = addr.toLowerCase();
-        const existing = agg.get(key) || { totalAlpha: 0, scoredCount: 0, commitCount: 0, lastActive: 0 };
+        const existing = agg.get(key) || { samples: [], scoredRounds: 0, commitCount: 0, lastActive: 0 };
         existing.commitCount += 1;
-        if (agent.scoredMarkets > 0) {
-          existing.totalAlpha += agent.alphaScore;
-          existing.scoredCount += 1;
-        }
         existing.lastActive = Math.max(existing.lastActive, round.commitDeadline);
+
+        if (agent.revealed && agent.scoredMarkets > 0) {
+          existing.scoredRounds += 1;
+          const benchmarks = round.benchmarkPrices;
+          const preds = agent.predictions;
+          for (let i = 0; i < round.conditionIds.length; i++) {
+            const outcome = round.outcomes?.[i];
+            if (outcome !== 'YES' && outcome !== 'NO') continue;
+            if (preds[i] == null || benchmarks[i] == null) continue;
+            existing.samples.push({
+              p: preds[i] / 10000,
+              b: benchmarks[i] / 10000,
+              x: outcome === 'YES' ? 1 : 0,
+            });
+          }
+        }
+
         agg.set(key, existing);
       }
     }
 
-    const result: LeaderboardEntry[] = [];
+    const result: LeaderboardRow[] = [];
     for (const [addr, data] of agg) {
       const info = agentMap.get(addr);
       const meta = resolvedMeta.get(addr);
+      const scoring = computeAgentScoring(data.samples);
       result.push({
         address: addr,
         name: meta?.name ?? info?.name ?? '',
         url: meta?.url ?? info?.url ?? '',
-        avgBrierScore: 0,
-        avgAlphaScore: data.scoredCount > 0 ? data.totalAlpha / data.scoredCount : 0,
-        totalBrierScore: 0,
-        totalAlphaScore: data.totalAlpha,
-        roundCount: data.scoredCount,
+        avgAlphaPct: scoring.avgAlpha * 100,
+        alphaCIHalfPct: scoring.alphaSE * 1.96 * 100,
+        scoredMarkets: scoring.n,
+        scoredRounds: data.scoredRounds,
         commitCount: data.commitCount,
         lastActive: data.lastActive,
       });
@@ -80,10 +106,10 @@ export default function LeaderboardPage() {
 
     // Sort by alpha descending; unscored agents go to bottom
     result.sort((a, b) => {
-      if (a.roundCount === 0 && b.roundCount === 0) return 0;
-      if (a.roundCount === 0) return 1;
-      if (b.roundCount === 0) return -1;
-      return b.avgAlphaScore - a.avgAlphaScore;
+      if (a.scoredMarkets === 0 && b.scoredMarkets === 0) return 0;
+      if (a.scoredMarkets === 0) return 1;
+      if (b.scoredMarkets === 0) return -1;
+      return b.avgAlphaPct - a.avgAlphaPct;
     });
 
     return result;
@@ -109,7 +135,7 @@ export default function LeaderboardPage() {
               <tr>
                 <th>Rank</th>
                 <th>Agent</th>
-                <th>Avg Alpha</th>
+                <th title="Mean per-market α (Brier reduction vs Polymarket benchmark) ± 95% CI. Computed across all scored markets in the period.">Avg Alpha (95% CI)</th>
                 <th>Scored</th>
                 <th>Commits</th>
                 <th>Last Active</th>
@@ -118,7 +144,13 @@ export default function LeaderboardPage() {
             <tbody>
               {entries.map((entry, idx) => {
                 const isBenchmark = isBenchmarkAgent(entry.address);
-                const hasScore = entry.roundCount > 0;
+                const hasScore = entry.scoredMarkets > 0;
+                const lower = entry.avgAlphaPct - entry.alphaCIHalfPct;
+                const upper = entry.avgAlphaPct + entry.alphaCIHalfPct;
+                const crossesZero = lower < 0 && upper > 0;
+                const alphaColor = !hasScore || crossesZero
+                  ? 'var(--text-primary)'
+                  : (entry.avgAlphaPct >= 0 ? '#10b981' : '#ef4444');
                 return (
                 <tr key={entry.address} className={isBenchmark ? 'benchmark-row' : undefined}>
                   <td>{hasScore ? idx + 1 : '--'}</td>
@@ -160,8 +192,17 @@ export default function LeaderboardPage() {
                       </span>
                     )}
                   </td>
-                  <td className="mono">{hasScore ? formatAlpha(entry.avgAlphaScore) : '--'}</td>
-                  <td>{entry.roundCount}</td>
+                  <td className="mono" style={{ whiteSpace: 'nowrap' }}>
+                    {hasScore ? (
+                      <>
+                        <span style={{ color: alphaColor, fontWeight: 600 }}>{formatSignedPct(entry.avgAlphaPct)}</span>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> ± {entry.alphaCIHalfPct.toFixed(2)}%</span>
+                      </>
+                    ) : '--'}
+                  </td>
+                  <td title={hasScore ? `${entry.scoredMarkets} markets across ${entry.scoredRounds} rounds` : ''}>
+                    {hasScore ? `${entry.scoredRounds}r / ${entry.scoredMarkets}m` : '--'}
+                  </td>
                   <td>{entry.commitCount}</td>
                   <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                     {formatTs(entry.lastActive)}
