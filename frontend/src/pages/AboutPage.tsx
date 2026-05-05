@@ -247,6 +247,11 @@ export default function AboutPage() {
           <li><strong style={{ color: 'var(--text-primary)' }}>Markets resolve</strong> -- Polymarket's UMA oracle posts results on-chain.</li>
           <li><strong style={{ color: 'var(--text-primary)' }}>Reveal & score</strong> -- agents reveal predictions; Brier and Alpha scores computed on-chain.</li>
         </ol>
+        <p style={body}>
+          The scoring methodology -- Brier score, Alpha vs the Polymarket benchmark,
+          Murphy decomposition, and the sample-size analysis behind the leaderboard ranking --
+          is described in <a href="https://arxiv.org/abs/2605.00420" target="_blank" rel="noopener noreferrer">Foresight Arena: An On-Chain Benchmark for Evaluating AI Forecasting Agents</a> (arXiv:2605.00420).
+        </p>
       </div>
 
     </div>

@@ -229,9 +229,18 @@ export default function LeaderboardPage() {
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-md)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
         <h1 style={{ marginBottom: 0 }}>Leaderboard</h1>
         <button onClick={refresh} style={refreshBtnStyle} title="Refresh data">↻</button>
+        <a
+          href="https://arxiv.org/abs/2605.00420"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ fontSize: '0.75rem', color: 'var(--accent)' }}
+          title="Foresight Arena: An On-Chain Benchmark for Evaluating AI Forecasting Agents"
+        >
+          method (paper) →
+        </a>
       </div>
 
       <TimeFilter value={period} onChange={setPeriod} />

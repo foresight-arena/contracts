@@ -3,8 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { useDataContext } from '../context/DataContext';
 import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
 import LoadingSpinner from '../components/LoadingSpinner';
-import TimeFilter from '../components/TimeFilter';
-import type { TimePeriod } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
 import { computeAgentScoring, type MarketSample } from '../lib/scoring';
 
@@ -50,7 +48,6 @@ export default function AgentDetailPage() {
   const resolvedMeta = useAgentsMetadata(singleAgentMap);
 
   const [twitter, setTwitter] = useState<{ handle: string; displayName: string; tweetUrl: string } | null>(null);
-  const [period, setPeriod] = useState<TimePeriod>('30d');
   const [copied, setCopied] = useState(false);
 
   // Fetch Twitter handle
@@ -73,14 +70,6 @@ export default function AgentDetailPage() {
       .filter(r => r.agents.has(address))
       .sort((a, b) => b.roundId - a.roundId);
   }, [rounds, address]);
-
-  // Filtered by period
-  const filteredRounds = useMemo(() => {
-    const now = Math.floor(Date.now() / 1000);
-    if (period === '7d') return agentRounds.filter(r => r.commitDeadline >= now - 7 * 86400);
-    if (period === '30d') return agentRounds.filter(r => r.commitDeadline >= now - 30 * 86400);
-    return agentRounds;
-  }, [agentRounds, period]);
 
   // Stats
   const stats = useMemo(() => {
@@ -137,20 +126,6 @@ export default function AgentDetailPage() {
     }
     return computeAgentScoring(samples);
   }, [agentRounds, address]);
-
-  // Chart data
-  const chartData = useMemo(() => {
-    return filteredRounds
-      .filter(r => {
-        const a = r.agents.get(address);
-        return a && a.scoredMarkets > 0;
-      })
-      .map(r => {
-        const a = r.agents.get(address)!;
-        return { roundId: r.roundId, alpha: a.alphaScore / 1e8 * 100 };
-      })
-      .sort((a, b) => a.roundId - b.roundId);
-  }, [filteredRounds, address]);
 
   if (loading) return <LoadingSpinner />;
 
@@ -340,17 +315,6 @@ export default function AgentDetailPage() {
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 'var(--space-sm)', lineHeight: 1.6 }}>
             <strong style={{ color: 'var(--text-secondary)' }}>How to read:</strong> <code>Brier = UNC + REL − RES</code>. <code>Alpha = (RES_agent − RES_base) + (REL_base − REL_agent)</code> — an agent beats the market through better resolution, better calibration, or both. Baseline Brier: {formatPct(scoring.baseline.brier * 100)}.
           </p>
-        </div>
-      )}
-
-      {/* Chart */}
-      {chartData.length > 1 && (
-        <div style={{ marginBottom: 'var(--space-xl)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
-            <h2 style={{ marginBottom: 0 }}>Alpha Score</h2>
-            <TimeFilter value={period} onChange={setPeriod} />
-          </div>
-          <AlphaChart data={chartData} />
         </div>
       )}
 
@@ -616,45 +580,6 @@ function EdgeAnatomyBars({ resolutionGainPct, reliabilityGapPct }: { resolutionG
       <text x={4} y={H - 2} fontSize={9} fill="var(--text-muted)">{(-range).toFixed(1)}%</text>
       <text x={zeroX} y={H - 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle">0</text>
       <text x={W - 4} y={H - 2} fontSize={9} fill="var(--text-muted)" textAnchor="end">+{range.toFixed(1)}%</text>
-    </svg>
-  );
-}
-
-function AlphaChart({ data }: { data: { roundId: number; alpha: number }[] }) {
-  if (data.length === 0) return null;
-
-  const W = 600, H = 160, PAD = 30;
-  const plotW = W - PAD * 2, plotH = H - PAD * 2;
-  const maxAbs = Math.max(1, ...data.map(d => Math.abs(d.alpha)));
-  const yScale = (v: number) => PAD + plotH / 2 - (v / maxAbs) * (plotH / 2);
-  const xScale = (i: number) => PAD + (i / Math.max(1, data.length - 1)) * plotW;
-  const zeroY = yScale(0);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto', display: 'block' }}>
-      {/* Zero line */}
-      <line x1={PAD} y1={zeroY} x2={W - PAD} y2={zeroY} stroke="var(--border)" strokeWidth={1} />
-      {/* Y labels */}
-      <text x={PAD - 4} y={PAD + 4} fontSize={9} fill="var(--text-muted)" textAnchor="end">{maxAbs.toFixed(1)}%</text>
-      <text x={PAD - 4} y={zeroY + 3} fontSize={9} fill="var(--text-muted)" textAnchor="end">0%</text>
-      <text x={PAD - 4} y={H - PAD + 4} fontSize={9} fill="var(--text-muted)" textAnchor="end">-{maxAbs.toFixed(1)}%</text>
-      {/* Bars */}
-      {data.map((d, i) => {
-        const x = xScale(i);
-        const barW = Math.max(4, plotW / data.length - 2);
-        const barH = Math.abs(d.alpha / maxAbs) * (plotH / 2);
-        const y = d.alpha >= 0 ? zeroY - barH : zeroY;
-        const color = d.alpha >= 0 ? '#10b981' : '#ef4444';
-        return (
-          <g key={d.roundId}>
-            <rect x={x - barW / 2} y={y} width={barW} height={barH} fill={color} rx={2} opacity={0.8} />
-            <title>Round #{d.roundId}: {d.alpha.toFixed(2)}%</title>
-            {data.length <= 20 && (
-              <text x={x} y={H - 6} fontSize={8} fill="var(--text-muted)" textAnchor="middle">#{d.roundId}</text>
-            )}
-          </g>
-        );
-      })}
     </svg>
   );
 }
