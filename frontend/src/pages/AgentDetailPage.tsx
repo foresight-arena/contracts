@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDataContext } from '../context/DataContext';
 import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
@@ -254,25 +254,58 @@ export default function AgentDetailPage() {
       {/* Murphy decomposition + Alpha anatomy */}
       {scoring.n > 0 && (
         <div style={{ marginBottom: 'var(--space-xl)' }}>
-          <h2 style={{ marginBottom: 'var(--space-sm)' }}>Forecasting metrics</h2>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)', flexWrap: 'wrap' }}>
+            <h2 style={{ marginBottom: 0 }}>Forecasting metrics</h2>
+            <a href="https://arxiv.org/abs/2605.00420" target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.75rem', color: 'var(--accent)' }}>
+              method (paper) →
+            </a>
+          </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)', lineHeight: 1.6 }}>
-            Murphy decomposition: <code>Brier = UNC + REL − RES</code>. Alpha = <code>(RES_agent − RES_base) + (REL_base − REL_agent)</code>. Computed across {scoring.n} resolved markets.
+            Computed across {scoring.n} resolved markets.
             {scoring.n < 140 && <> <span style={{ color: 'var(--warning)' }}>⚠ Limited data</span> — paper recommends 140+ predictions before drawing conclusions.</>}
           </p>
           <div style={statsGridStyle}>
             <StatCard
               label="Avg Alpha (95% CI)"
               value={`${formatPct(scoring.avgAlpha * 100)} ± ${formatPct(scoring.alphaSE * 1.96 * 100)}`}
+              tooltip="Mean edge over Polymarket consensus, with 95% confidence interval. Positive = beats the market. The CI shows uncertainty; if it crosses zero, the edge is not yet statistically distinguishable from luck."
+            >
+              <AlphaCIBar mean={scoring.avgAlpha * 100} halfWidth={scoring.alphaSE * 1.96 * 100} />
+            </StatCard>
+            <StatCard
+              label="Avg Brier"
+              value={formatPct(scoring.agent.brier * 100)}
+              tooltip="Mean squared error of probability predictions vs binary outcomes (0 = perfect, 25% = random 50/50, 100% = always wrong with full confidence). Lower is better."
             />
-            <StatCard label="Avg Brier" value={formatPct(scoring.agent.brier * 100)} />
-            <StatCard label="REL (calibration error)" value={formatPct(scoring.agent.rel * 100)} accent={scoring.agent.rel > scoring.baseline.rel} />
-            <StatCard label="RES (resolution)" value={formatPct(scoring.agent.res * 100)} />
-            <StatCard label="UNC (irreducible)" value={formatPct(scoring.agent.unc * 100)} />
-            <StatCard label="Resolution gain" value={formatSigned(scoring.resolutionGain * 100)} />
-            <StatCard label="Reliability gap" value={formatSigned(scoring.reliabilityGap * 100)} />
+            <StatCard
+              label="REL (calibration)"
+              value={formatPct(scoring.agent.rel * 100)}
+              accent={scoring.agent.rel > scoring.baseline.rel}
+              tooltip={`Reliability / calibration error: how well stated probabilities match realized frequencies. 0 = perfectly calibrated. Lower is better. Baseline REL: ${formatPct(scoring.baseline.rel * 100)}.`}
+            />
+            <StatCard
+              label="RES (resolution)"
+              value={formatPct(scoring.agent.res * 100)}
+              tooltip={`Resolution / discriminative power: how much predictions vary by outcome. Higher = sharper sorting of YES vs NO. Baseline RES: ${formatPct(scoring.baseline.res * 100)}.`}
+            />
+            <StatCard
+              label="UNC (irreducible)"
+              value={formatPct(scoring.agent.unc * 100)}
+              tooltip="Outcome variance ō(1−ō). Property of the question set, common to all forecasters. Maximum 25% at ō=0.5."
+            />
+            <StatCard
+              label="Resolution gain"
+              value={formatSigned(scoring.resolutionGain * 100)}
+              tooltip="RES_agent − RES_base. Positive means the agent sorts outcomes more sharply than the market — a stronger discriminative signal."
+            />
+            <StatCard
+              label="Reliability gap"
+              value={formatSigned(scoring.reliabilityGap * 100)}
+              tooltip="REL_base − REL_agent. Positive means the agent is better calibrated than the market (closer alignment between stated probabilities and realized frequencies)."
+            />
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 'var(--space-sm)', lineHeight: 1.6 }}>
-            <strong style={{ color: 'var(--text-secondary)' }}>How to read:</strong> Lower REL = better calibration. Higher RES = sharper sorting of YES vs NO outcomes. Positive resolution gain = agent sorts outcomes better than the market; positive reliability gap = agent is better calibrated than the market. Baseline (Polymarket mid-price) Brier: {formatPct(scoring.baseline.brier * 100)}.
+            <strong style={{ color: 'var(--text-secondary)' }}>How to read:</strong> <code>Brier = UNC + REL − RES</code>. <code>Alpha = (RES_agent − RES_base) + (REL_base − REL_agent)</code> — an agent beats the market through better resolution, better calibration, or both. Baseline Brier: {formatPct(scoring.baseline.brier * 100)}.
           </p>
         </div>
       )}
@@ -336,11 +369,72 @@ export default function AgentDetailPage() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function StatCard({ label, value, accent, tooltip, children }: { label: string; value: string; accent?: boolean; tooltip?: string; children?: ReactNode }) {
   return (
-    <div style={statCardStyle}>
-      <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+    <div style={statCardStyle} title={tooltip}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 4 }}>
+        <span>{label}</span>
+        {tooltip && <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)', cursor: 'help', opacity: 0.7 }}>ⓘ</span>}
+      </div>
       <div style={{ fontSize: '1rem', fontWeight: 700, color: accent ? 'var(--warning)' : 'var(--text-primary)' }}>{value}</div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Small horizontal bar showing the 95% CI of mean alpha.
+ * - Centered around zero so positive/negative is visually obvious
+ * - The CI bar straddles or sits above/below zero
+ * - Mean marker (dot) and tick at zero
+ */
+function AlphaCIBar({ mean, halfWidth }: { mean: number; halfWidth: number }) {
+  const lower = mean - halfWidth;
+  const upper = mean + halfWidth;
+  const crossesZero = lower < 0 && upper > 0;
+
+  // Symmetric x range so zero is centered
+  const maxAbs = Math.max(Math.abs(lower), Math.abs(upper), 1);
+  const range = maxAbs * 1.2; // padding
+  const W = 220, H = 36, midY = H / 2;
+  const xScale = (v: number) => W / 2 + (v / range) * (W / 2);
+
+  const ciColor = crossesZero
+    ? 'var(--text-muted)'           // not statistically distinguishable from 0
+    : (mean > 0 ? '#10b981' : '#ef4444'); // green if positive, red if negative
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto', display: 'block' }}>
+        {/* Axis line */}
+        <line x1={0} y1={midY} x2={W} y2={midY} stroke="var(--border)" strokeWidth={1} />
+        {/* Range labels */}
+        <text x={2} y={H - 2} fontSize={8} fill="var(--text-muted)">{(-range).toFixed(1)}%</text>
+        <text x={W - 2} y={H - 2} fontSize={8} fill="var(--text-muted)" textAnchor="end">+{range.toFixed(1)}%</text>
+        {/* Zero tick */}
+        <line x1={W / 2} y1={midY - 8} x2={W / 2} y2={midY + 8} stroke="var(--text-muted)" strokeWidth={1} />
+        <text x={W / 2} y={10} fontSize={8} fill="var(--text-muted)" textAnchor="middle">0</text>
+        {/* CI bar */}
+        <rect
+          x={xScale(lower)}
+          y={midY - 4}
+          width={Math.max(2, xScale(upper) - xScale(lower))}
+          height={8}
+          fill={ciColor}
+          opacity={0.35}
+          rx={2}
+        />
+        {/* CI endpoints (whiskers) */}
+        <line x1={xScale(lower)} y1={midY - 6} x2={xScale(lower)} y2={midY + 6} stroke={ciColor} strokeWidth={1.5} />
+        <line x1={xScale(upper)} y1={midY - 6} x2={xScale(upper)} y2={midY + 6} stroke={ciColor} strokeWidth={1.5} />
+        {/* Mean dot */}
+        <circle cx={xScale(mean)} cy={midY} r={3.5} fill={ciColor} />
+      </svg>
+      {crossesZero && (
+        <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)', marginTop: 2 }}>
+          CI crosses zero — edge not statistically detected
+        </div>
+      )}
     </div>
   );
 }
