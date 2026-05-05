@@ -26,6 +26,7 @@ export interface AgentScoring {
   resolutionGain: number;    // RES_agent − RES_base
   reliabilityGap: number;    // REL_base − REL_agent
   alphaSE: number;           // standard error of ᾱ
+  deltas: number[];          // per-market δ_i (in [0,1] units; multiply by 100 for %)
 }
 
 const NUM_BINS = 10;
@@ -81,10 +82,13 @@ export function computeAgentScoring(samples: MarketSample[]): AgentScoring {
   const meanOutcome = n > 0 ? outcomes.reduce((s: number, v) => s + v, 0) / n : 0;
 
   // Per-market delta and SE of mean alpha
+  const deltas: number[] = new Array(n);
   let deltaSum = 0;
   let deltaSqSum = 0;
-  for (const s of samples) {
+  for (let i = 0; i < n; i++) {
+    const s = samples[i];
     const delta = (s.b - s.x) ** 2 - (s.p - s.x) ** 2;
+    deltas[i] = delta;
     deltaSum += delta;
     deltaSqSum += delta * delta;
   }
@@ -102,5 +106,6 @@ export function computeAgentScoring(samples: MarketSample[]): AgentScoring {
     resolutionGain: agent.res - baseline.res,
     reliabilityGap: baseline.rel - agent.rel,
     alphaSE,
+    deltas,
   };
 }

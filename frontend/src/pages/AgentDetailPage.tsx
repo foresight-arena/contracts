@@ -271,7 +271,7 @@ export default function AgentDetailPage() {
               <span style={{ fontSize: '0.6875rem', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)', flexWrap: 'wrap' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+              <div style={{ fontSize: '2rem', fontWeight: 700, color: scoring.avgAlpha >= 0 ? '#10b981' : '#ef4444', fontFamily: 'var(--font-mono)' }}>
                 {formatPct(scoring.avgAlpha * 100)}
                 <span style={{ fontSize: '1.25rem', color: 'var(--text-muted)', fontWeight: 500 }}>
                   {' '}± {formatPct(scoring.alphaSE * 1.96 * 100)}
@@ -281,6 +281,14 @@ export default function AgentDetailPage() {
                 <AlphaCIBar mean={scoring.avgAlpha * 100} halfWidth={scoring.alphaSE * 1.96 * 100} large />
               </div>
             </div>
+            {scoring.deltas.length > 0 && (
+              <div style={{ marginTop: 'var(--space-md)' }}>
+                <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  Per-market alpha distribution ({scoring.deltas.length} markets)
+                </div>
+                <AlphaHistogram deltas={scoring.deltas.map(d => d * 100)} mean={scoring.avgAlpha * 100} />
+              </div>
+            )}
           </div>
 
           {/* 6 other metrics in 3×2 grid */}
@@ -457,6 +465,84 @@ function AlphaCIBar({ mean, halfWidth, large = false }: { mean: number; halfWidt
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Histogram of per-market alpha (δ_i = (b−x)² − (p−x)²) values, in %.
+ * - Symmetric x-axis around 0 so positive vs negative is obvious
+ * - Bars on negative side colored red, positive side green
+ * - Vertical line at 0 (market parity) and at mean
+ */
+function AlphaHistogram({ deltas, mean }: { deltas: number[]; mean: number }) {
+  if (deltas.length === 0) return null;
+
+  const maxAbs = Math.max(1, ...deltas.map(Math.abs), Math.abs(mean));
+  const range = maxAbs * 1.05;
+
+  // Bin count: sqrt(n), clamped
+  const binCount = Math.max(8, Math.min(30, Math.round(Math.sqrt(deltas.length) * 2)));
+  const binWidth = (2 * range) / binCount;
+  const bins = new Array(binCount).fill(0);
+  for (const d of deltas) {
+    let k = Math.floor((d + range) / binWidth);
+    if (k < 0) k = 0;
+    if (k >= binCount) k = binCount - 1;
+    bins[k]++;
+  }
+  const maxCount = Math.max(1, ...bins);
+
+  const W = 480, H = 140, PAD_L = 28, PAD_R = 8, PAD_T = 8, PAD_B = 22;
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+  const xScale = (v: number) => PAD_L + ((v + range) / (2 * range)) * plotW;
+  const yScale = (count: number) => PAD_T + plotH - (count / maxCount) * plotH;
+  const barPlotW = plotW / binCount;
+  const zeroX = xScale(0);
+  const meanX = xScale(mean);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto', display: 'block' }}>
+      {/* Y-axis labels */}
+      <text x={PAD_L - 4} y={PAD_T + 8} fontSize={9} fill="var(--text-muted)" textAnchor="end">{maxCount}</text>
+      <text x={PAD_L - 4} y={H - PAD_B + 4} fontSize={9} fill="var(--text-muted)" textAnchor="end">0</text>
+      {/* Baseline (x-axis) */}
+      <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="var(--border)" strokeWidth={1} />
+      {/* Bars */}
+      {bins.map((count, i) => {
+        if (count === 0) return null;
+        const binCenter = -range + binWidth * (i + 0.5);
+        const x = PAD_L + i * barPlotW;
+        const y = yScale(count);
+        const h = (H - PAD_B) - y;
+        const color = binCenter >= 0 ? '#10b981' : '#ef4444';
+        return (
+          <rect
+            key={i}
+            x={x + 1}
+            y={y}
+            width={Math.max(1, barPlotW - 2)}
+            height={h}
+            fill={color}
+            opacity={0.55}
+            rx={1}
+          >
+            <title>{`α ∈ [${(binCenter - binWidth / 2).toFixed(2)}%, ${(binCenter + binWidth / 2).toFixed(2)}%]: ${count} markets`}</title>
+          </rect>
+        );
+      })}
+      {/* Zero line (market parity) */}
+      <line x1={zeroX} y1={PAD_T} x2={zeroX} y2={H - PAD_B} stroke="var(--text-muted)" strokeWidth={1} strokeDasharray="2 3" />
+      <text x={zeroX} y={H - 6} fontSize={9} fill="var(--text-muted)" textAnchor="middle">0</text>
+      {/* Mean line */}
+      <line x1={meanX} y1={PAD_T} x2={meanX} y2={H - PAD_B} stroke={mean >= 0 ? '#10b981' : '#ef4444'} strokeWidth={1.5} />
+      <text x={meanX} y={PAD_T + 8} fontSize={9} fill={mean >= 0 ? '#10b981' : '#ef4444'} textAnchor={meanX > W / 2 ? 'end' : 'start'} dx={meanX > W / 2 ? -3 : 3}>
+        mean {mean >= 0 ? '+' : ''}{mean.toFixed(2)}%
+      </text>
+      {/* X-axis range labels */}
+      <text x={PAD_L} y={H - 6} fontSize={9} fill="var(--text-muted)">{(-range).toFixed(1)}%</text>
+      <text x={W - PAD_R} y={H - 6} fontSize={9} fill="var(--text-muted)" textAnchor="end">+{range.toFixed(1)}%</text>
+    </svg>
   );
 }
 
