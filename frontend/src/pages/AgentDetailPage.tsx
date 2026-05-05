@@ -75,17 +75,21 @@ export default function AgentDetailPage() {
 
   // Stats
   const stats = useMemo(() => {
+    const now = Math.floor(Date.now() / 1000);
     let totalAlpha = 0, scoredCount = 0, commitCount = 0, nonReveals = 0;
+    let scoredMarkets = 0;
     let firstRoundTs = Infinity, lastRoundTs = 0;
 
     for (const round of agentRounds) {
       const agent = round.agents.get(address);
       if (!agent) continue;
       commitCount++;
-      if (!agent.revealed) nonReveals++;
+      // Only count as non-reveal if reveal deadline has actually passed
+      if (!agent.revealed && now >= round.revealDeadline) nonReveals++;
       if (agent.scoredMarkets > 0) {
         totalAlpha += agent.alphaScore;
         scoredCount++;
+        scoredMarkets += agent.scoredMarkets;
       }
       firstRoundTs = Math.min(firstRoundTs, round.commitDeadline);
       lastRoundTs = Math.max(lastRoundTs, round.commitDeadline);
@@ -94,6 +98,7 @@ export default function AgentDetailPage() {
     return {
       totalAlpha,
       scoredCount,
+      scoredMarkets,
       commitCount,
       nonReveals,
       avgAlpha: scoredCount > 0 ? totalAlpha / scoredCount : 0,
@@ -211,7 +216,7 @@ export default function AgentDetailPage() {
         <StatCard label="First Round" value={formatDate(stats.firstRoundTs)} />
         <StatCard label="Last Round" value={formatDate(stats.lastRoundTs)} />
         <StatCard label="Committed" value={String(stats.commitCount)} />
-        <StatCard label="Scored" value={String(stats.scoredCount)} />
+        <StatCard label="Scored" value={`${stats.scoredCount} rounds, ${stats.scoredMarkets} markets`} />
         <StatCard label="Non-reveals" value={String(stats.nonReveals)} accent={stats.nonReveals > 0} />
         <StatCard label="Avg Alpha" value={stats.scoredCount > 0 ? formatAlpha(stats.avgAlpha) : '--'} />
       </div>
@@ -248,11 +253,17 @@ export default function AgentDetailPage() {
                 {agentRounds.map(round => {
                   const agent = round.agents.get(address)!;
                   const hasScore = agent.scoredMarkets > 0;
+                  const now = Math.floor(Date.now() / 1000);
+                  const revealStatus = agent.revealed
+                    ? <span className="badge success">Yes</span>
+                    : (now >= round.revealDeadline
+                        ? <span className="badge warning">No</span>
+                        : <span className="badge">Pending</span>);
                   return (
                     <tr key={round.roundId}>
                       <td><Link to={`/round/${round.roundId}`} style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>#{round.roundId}</Link></td>
                       <td style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{formatTs(agent.commitTimestamp)}</td>
-                      <td>{agent.revealed ? <span className="badge success">Yes</span> : <span className="badge warning">No</span>}</td>
+                      <td>{revealStatus}</td>
                       <td className="mono">{hasScore ? formatAlpha(agent.alphaScore) : '--'}</td>
                       <td>{hasScore ? `${agent.scoredMarkets}/${agent.totalMarkets}` : '--'}</td>
                     </tr>
