@@ -292,11 +292,13 @@ export default function RoundDetailPage() {
                     </td>
                     <td>
                       {(() => {
-                        if (outcome) return (
-                          <span className={`badge ${outcome === 'YES' ? 'success' : 'error'}`} title="Oracle has posted the outcome on-chain">
-                            {outcome}
-                          </span>
-                        );
+                        if (outcome) {
+                          const cls = outcome === 'YES' ? 'success' : outcome === 'NO' ? 'error' : 'warning';
+                          const title = outcome === 'VOID'
+                            ? 'Oracle resolved this market 50/50 (split payout) — excluded from scoring'
+                            : 'Oracle has posted the outcome on-chain';
+                          return <span className={`badge ${cls}`} title={title}>{outcome}</span>;
+                        }
                         if (meta?.closed) return <span className="badge warning" style={{ cursor: 'help' }} title="Market closed on Polymarket, waiting for the oracle to post the result on-chain">Awaiting oracle</span>;
                         if (meta?.endDate) {
                           const cd = formatCountdown(meta.endDate);
