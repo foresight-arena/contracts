@@ -215,7 +215,7 @@ export default function AgentDetailPage() {
         <StatCard label="Joined" value={formatDate(info?.registeredAt || 0)} />
         <StatCard label="First Round" value={formatDate(stats.firstRoundTs)} />
         <StatCard label="Last Round" value={formatDate(stats.lastRoundTs)} />
-        <StatCard label="Committed" value={String(stats.commitCount)} />
+        <StatCard label="Committed" value={`${stats.commitCount} rounds`} />
         <StatCard label="Scored" value={`${stats.scoredCount} rounds, ${stats.scoredMarkets} markets`} />
         <StatCard label="Non-reveals" value={String(stats.nonReveals)} accent={stats.nonReveals > 0} />
         <StatCard label="Avg Alpha" value={stats.scoredCount > 0 ? formatAlpha(stats.avgAlpha) : '--'} />
