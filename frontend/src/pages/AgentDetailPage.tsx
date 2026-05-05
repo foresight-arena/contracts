@@ -264,14 +264,27 @@ export default function AgentDetailPage() {
             Computed across {scoring.n} resolved markets.
             {scoring.n < 140 && <> <span style={{ color: 'var(--warning)' }}>⚠ Limited data</span> — paper recommends 140+ predictions before drawing conclusions.</>}
           </p>
-          <div style={statsGridStyle}>
-            <StatCard
-              label="Avg Alpha (95% CI)"
-              value={`${formatPct(scoring.avgAlpha * 100)} ± ${formatPct(scoring.alphaSE * 1.96 * 100)}`}
-              tooltip="Mean edge over Polymarket consensus, with 95% confidence interval. Positive = beats the market. The CI shows uncertainty; if it crosses zero, the edge is not yet statistically distinguishable from luck."
-            >
-              <AlphaCIBar mean={scoring.avgAlpha * 100} halfWidth={scoring.alphaSE * 1.96 * 100} />
-            </StatCard>
+          {/* Hero: Avg Alpha (large card, full width) */}
+          <div style={alphaHeroStyle} title="Mean edge over Polymarket consensus, with 95% confidence interval. Positive = beats the market. The CI shows uncertainty; if it crosses zero, the edge is not yet statistically distinguishable from luck.">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
+              <span>Avg Alpha (95% CI)</span>
+              <span style={{ fontSize: '0.6875rem', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                {formatPct(scoring.avgAlpha * 100)}
+                <span style={{ fontSize: '1.25rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                  {' '}± {formatPct(scoring.alphaSE * 1.96 * 100)}
+                </span>
+              </div>
+              <div style={{ flex: 1, minWidth: 280 }}>
+                <AlphaCIBar mean={scoring.avgAlpha * 100} halfWidth={scoring.alphaSE * 1.96 * 100} large />
+              </div>
+            </div>
+          </div>
+
+          {/* 6 other metrics in 3×2 grid */}
+          <div style={metricsGridStyle}>
             <StatCard
               label="Avg Brier"
               value={formatPct(scoring.agent.brier * 100)}
@@ -388,7 +401,7 @@ function StatCard({ label, value, accent, tooltip, children }: { label: string; 
  * - The CI bar straddles or sits above/below zero
  * - Mean marker (dot) and tick at zero
  */
-function AlphaCIBar({ mean, halfWidth }: { mean: number; halfWidth: number }) {
+function AlphaCIBar({ mean, halfWidth, large = false }: { mean: number; halfWidth: number; large?: boolean }) {
   const lower = mean - halfWidth;
   const upper = mean + halfWidth;
   const crossesZero = lower < 0 && upper > 0;
@@ -396,42 +409,50 @@ function AlphaCIBar({ mean, halfWidth }: { mean: number; halfWidth: number }) {
   // Symmetric x range so zero is centered
   const maxAbs = Math.max(Math.abs(lower), Math.abs(upper), 1);
   const range = maxAbs * 1.2; // padding
-  const W = 220, H = 36, midY = H / 2;
+  const W = large ? 480 : 220;
+  const H = large ? 64 : 36;
+  const midY = H / 2;
   const xScale = (v: number) => W / 2 + (v / range) * (W / 2);
 
   const ciColor = crossesZero
     ? 'var(--text-muted)'           // not statistically distinguishable from 0
     : (mean > 0 ? '#10b981' : '#ef4444'); // green if positive, red if negative
 
+  const labelSize = large ? 11 : 8;
+  const tickHalf = large ? 14 : 8;
+  const barHalf = large ? 8 : 4;
+  const dotR = large ? 6 : 3.5;
+  const whiskerHalf = large ? 11 : 6;
+
   return (
-    <div style={{ marginTop: 8 }}>
+    <div style={{ marginTop: large ? 0 : 8 }}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto', display: 'block' }}>
         {/* Axis line */}
         <line x1={0} y1={midY} x2={W} y2={midY} stroke="var(--border)" strokeWidth={1} />
         {/* Range labels */}
-        <text x={2} y={H - 2} fontSize={8} fill="var(--text-muted)">{(-range).toFixed(1)}%</text>
-        <text x={W - 2} y={H - 2} fontSize={8} fill="var(--text-muted)" textAnchor="end">+{range.toFixed(1)}%</text>
+        <text x={2} y={H - 4} fontSize={labelSize} fill="var(--text-muted)">{(-range).toFixed(1)}%</text>
+        <text x={W - 2} y={H - 4} fontSize={labelSize} fill="var(--text-muted)" textAnchor="end">+{range.toFixed(1)}%</text>
         {/* Zero tick */}
-        <line x1={W / 2} y1={midY - 8} x2={W / 2} y2={midY + 8} stroke="var(--text-muted)" strokeWidth={1} />
-        <text x={W / 2} y={10} fontSize={8} fill="var(--text-muted)" textAnchor="middle">0</text>
+        <line x1={W / 2} y1={midY - tickHalf} x2={W / 2} y2={midY + tickHalf} stroke="var(--text-muted)" strokeWidth={1} />
+        <text x={W / 2} y={large ? 14 : 10} fontSize={labelSize} fill="var(--text-muted)" textAnchor="middle">0</text>
         {/* CI bar */}
         <rect
           x={xScale(lower)}
-          y={midY - 4}
+          y={midY - barHalf}
           width={Math.max(2, xScale(upper) - xScale(lower))}
-          height={8}
+          height={barHalf * 2}
           fill={ciColor}
           opacity={0.35}
           rx={2}
         />
         {/* CI endpoints (whiskers) */}
-        <line x1={xScale(lower)} y1={midY - 6} x2={xScale(lower)} y2={midY + 6} stroke={ciColor} strokeWidth={1.5} />
-        <line x1={xScale(upper)} y1={midY - 6} x2={xScale(upper)} y2={midY + 6} stroke={ciColor} strokeWidth={1.5} />
+        <line x1={xScale(lower)} y1={midY - whiskerHalf} x2={xScale(lower)} y2={midY + whiskerHalf} stroke={ciColor} strokeWidth={large ? 2 : 1.5} />
+        <line x1={xScale(upper)} y1={midY - whiskerHalf} x2={xScale(upper)} y2={midY + whiskerHalf} stroke={ciColor} strokeWidth={large ? 2 : 1.5} />
         {/* Mean dot */}
-        <circle cx={xScale(mean)} cy={midY} r={3.5} fill={ciColor} />
+        <circle cx={xScale(mean)} cy={midY} r={dotR} fill={ciColor} />
       </svg>
       {crossesZero && (
-        <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)', marginTop: 2 }}>
+        <div style={{ fontSize: large ? '0.75rem' : '0.625rem', color: 'var(--text-muted)', marginTop: 4 }}>
           CI crosses zero — edge not statistically detected
         </div>
       )}
@@ -510,7 +531,18 @@ const statsGridStyle: CSSProperties = {
   gap: 'var(--space-sm)', marginBottom: 'var(--space-xl)',
 };
 
+const metricsGridStyle: CSSProperties = {
+  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+  gap: 'var(--space-sm)',
+};
+
 const statCardStyle: CSSProperties = {
   backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)',
   borderRadius: 'var(--radius-md)', padding: 'var(--space-md)',
+};
+
+const alphaHeroStyle: CSSProperties = {
+  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-md)', padding: 'var(--space-lg)',
+  marginBottom: 'var(--space-sm)',
 };
