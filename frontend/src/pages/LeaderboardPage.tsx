@@ -9,17 +9,25 @@ import { isBenchmarkAgent } from '../config/benchmarks';
 import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
 import { computeAgentScoring, type MarketSample } from '../lib/scoring';
 
+// Empirical-Bayes shrinkage prior. Aligned with the paper's recommendation
+// of N >= 140 predictions before drawing conclusions: at n=140 the agent's
+// observed alpha is weighted equally with the zero prior, so the shrunken
+// score is half the raw value.
+const SHRINKAGE_KAPPA = 140;
+
 interface LeaderboardRow {
   address: string;
   name: string;
   url: string;
   avgAlphaPct: number;        // mean δ in %, from per-market computation
+  alphaShrunkPct: number;     // (n / (n + κ)) · avgAlpha — used for ranking
   alphaCIHalfPct: number;     // 1.96 * SE in %
   deltasPct: number[];        // per-market δ in %
   scoredMarkets: number;
   scoredRounds: number;
   commitCount: number;
   lastActive: number;
+  provisional: boolean;       // n < 140
 }
 
 function truncAddr(addr: string): string {
@@ -92,26 +100,34 @@ export default function LeaderboardPage() {
       const info = agentMap.get(addr);
       const meta = resolvedMeta.get(addr);
       const scoring = computeAgentScoring(data.samples);
+      const avgAlphaPct = scoring.avgAlpha * 100;
+      const alphaShrunkPct = scoring.n > 0
+        ? (scoring.n / (scoring.n + SHRINKAGE_KAPPA)) * avgAlphaPct
+        : 0;
       result.push({
         address: addr,
         name: meta?.name ?? info?.name ?? '',
         url: meta?.url ?? info?.url ?? '',
-        avgAlphaPct: scoring.avgAlpha * 100,
+        avgAlphaPct,
+        alphaShrunkPct,
         alphaCIHalfPct: scoring.alphaSE * 1.96 * 100,
         deltasPct: scoring.deltas.map((d) => d * 100),
         scoredMarkets: scoring.n,
         scoredRounds: data.scoredRounds,
         commitCount: data.commitCount,
         lastActive: data.lastActive,
+        provisional: scoring.n > 0 && scoring.n < SHRINKAGE_KAPPA,
       });
     }
 
-    // Sort by alpha descending; unscored agents go to bottom
+    // Sort by shrunken alpha descending; unscored agents go to bottom.
+    // Shrinkage pulls small-n agents toward 0 so high-α-but-few-markets
+    // doesn't outrank a battle-tested smaller edge.
     result.sort((a, b) => {
       if (a.scoredMarkets === 0 && b.scoredMarkets === 0) return 0;
       if (a.scoredMarkets === 0) return 1;
       if (b.scoredMarkets === 0) return -1;
-      return b.avgAlphaPct - a.avgAlphaPct;
+      return b.alphaShrunkPct - a.alphaShrunkPct;
     });
 
     // Global x-range so all sparkline charts share a comparable scale
@@ -148,7 +164,7 @@ export default function LeaderboardPage() {
           <table>
             <thead>
               <tr>
-                <th>Rank</th>
+                <th title={`Ranked by shrunken alpha: (n / (n + ${SHRINKAGE_KAPPA})) · avgAlpha. Pulls agents with few markets toward 0 so a high alpha on a tiny sample doesn't outrank a battle-tested smaller edge. κ=${SHRINKAGE_KAPPA} matches the paper's recommended sample size.`}>Rank ⓘ</th>
                 <th>Agent</th>
                 <th title="Mean per-market α (Brier reduction vs Polymarket benchmark) ± 95% CI. Bottom curve is the kernel density of per-market α — red on the negative side, green on the positive.">Avg Alpha (95% CI)</th>
                 <th>Scored</th>
@@ -178,6 +194,12 @@ export default function LeaderboardPage() {
                             <span className="badge benchmark" title="Benchmark agent">benchmark</span>
                           </>
                         )}
+                        {entry.provisional && (
+                          <>
+                            {' '}
+                            <span style={provisionalBadgeStyle} title={`Fewer than ${SHRINKAGE_KAPPA} scored markets — ranking is provisional and the alpha estimate is pulled toward 0.`}>provisional</span>
+                          </>
+                        )}
                         {entry.url && (
                           <>
                             {' '}
@@ -203,6 +225,12 @@ export default function LeaderboardPage() {
                             <span className="badge benchmark" title="Benchmark agent">benchmark</span>
                           </>
                         )}
+                        {entry.provisional && (
+                          <>
+                            {' '}
+                            <span style={provisionalBadgeStyle} title={`Fewer than ${SHRINKAGE_KAPPA} scored markets — ranking is provisional and the alpha estimate is pulled toward 0.`}>provisional</span>
+                          </>
+                        )}
                       </span>
                     )}
                   </td>
@@ -218,6 +246,12 @@ export default function LeaderboardPage() {
                           mean={entry.avgAlphaPct}
                           range={globalMaxAbs}
                         />
+                        <div
+                          style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}
+                          title={`Shrunken alpha used for ranking: (n / (n + ${SHRINKAGE_KAPPA})) · avgAlpha`}
+                        >
+                          rank score: {formatSignedPct(entry.alphaShrunkPct)}
+                        </div>
                       </div>
                     ) : '--'}
                   </td>
@@ -325,6 +359,18 @@ function MiniAlphaDist({ deltas, mean, range }: { deltas: number[]; mean: number
     </svg>
   );
 }
+
+const provisionalBadgeStyle: CSSProperties = {
+  display: 'inline-block',
+  fontSize: '0.625rem',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  padding: '1px 6px',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid var(--border)',
+  color: 'var(--text-muted)',
+  cursor: 'help',
+};
 
 const refreshBtnStyle: CSSProperties = {
   background: 'none',
