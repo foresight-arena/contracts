@@ -2,6 +2,7 @@ node_modules
 build
 generated
 
-# Generated from RELAYER_ADDRESSES env var by scripts/gen-config.mjs.
-# Deployment-specific; regenerated on every build.
-src/config.ts
+# NOTE: src/config.ts is committed as an empty stub. scripts/gen-config.mjs
+# rewrites it from the RELAYER_ADDRESSES env var before each deploy. Don't
+# commit the regenerated version — `git checkout subgraph/src/config.ts`
+# after `npm run build` if you accidentally stage it.
