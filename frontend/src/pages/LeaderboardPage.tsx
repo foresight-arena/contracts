@@ -156,6 +156,10 @@ export default function LeaderboardPage() {
     for (const [addr, info] of agentRegistry) {
       if (info.registrationOrigin !== 'RELAYER') continue;
       if (info.registeredAt === 0) continue;
+      // Skip operator wallets that minted then transferred away (e.g. the
+      // relayer hot wallet itself ends up with agentId=null after every
+      // mint+transfer cycle). Real agents own their NFT.
+      if (info.agentId == null) continue;
       if (activeAddrs.has(addr)) continue;
       const meta = resolvedMeta.get(addr);
       out.push({

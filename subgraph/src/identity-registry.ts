@@ -84,7 +84,10 @@ export function handleTransfer(event: Transfer): void {
     newAgent.scoredRoundCount = 0
     newAgent.gaslessNonce = 0
     newAgent.lastActiveTimestamp = BigInt.zero()
-    newAgent.registeredAt = oldAgent.registeredAt
+    // registeredAt = when *this address* received the identity, not the
+    // original mint time. Inheriting oldAgent.registeredAt would stamp
+    // every relayer-onboarded agent with the relayer's first-mint date.
+    newAgent.registeredAt = event.block.timestamp
     newAgent.registrationOrigin = "DIRECT"
   }
   newAgent.agentId = oldAgent.agentId
