@@ -42,6 +42,7 @@ export interface AgentInfo {
   url: string;
   owner: string;
   registeredAt: number;
+  registrationOrigin: 'RELAYER' | 'DIRECT';
 }
 
 export interface LeaderboardEntry {

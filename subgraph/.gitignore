@@ -1,3 +1,7 @@
 node_modules
 build
 generated
+
+# Generated from RELAYER_ADDRESSES env var by scripts/gen-config.mjs.
+# Deployment-specific; regenerated on every build.
+src/config.ts

@@ -41,6 +41,9 @@ type Agent @entity {
   agentURI: String
   owner: Bytes!
   registeredAt: BigInt!
+  # "RELAYER" if the ERC-8004 mint or onward NFT transfer came from a known
+  # relayer wallet (see RELAYER_ADDRESSES env var); "DIRECT" otherwise.
+  registrationOrigin: String!
   totalBrierScore: BigInt!
   totalAlphaScore: BigInt!
   scoredRoundCount: Int!

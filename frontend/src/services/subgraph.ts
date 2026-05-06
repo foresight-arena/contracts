@@ -62,12 +62,14 @@ export async function fetchAllData(): Promise<{
           totalMarkets
         }
       }
-      agents(first: 1000, where: { lastActiveTimestamp_gt: 0 }) {
+      agents(first: 1000, where: { registeredAt_gt: 0 }) {
         id
         agentId
         agentURI
         owner
         registeredAt
+        registrationOrigin
+        lastActiveTimestamp
       }
     }
   `);
@@ -135,6 +137,7 @@ export async function fetchAllData(): Promise<{
       url: '',
       owner: (a.owner || '').toLowerCase(),
       registeredAt: Number(a.registeredAt || 0),
+      registrationOrigin: a.registrationOrigin === 'RELAYER' ? 'RELAYER' : 'DIRECT',
     });
   }
 

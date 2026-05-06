@@ -46,6 +46,7 @@ function formatTs(ts: number): string {
 export default function LeaderboardPage() {
   const { rounds, agents: agentRegistry, loading, refresh } = useDataContext();
   const [period, setPeriod] = React.useState<TimePeriod>('30d');
+  const [showInactive, setShowInactive] = React.useState(false);
 
   const agentMap = agentRegistry;
   const resolvedMeta = useAgentsMetadata(agentMap);
@@ -146,6 +147,28 @@ export default function LeaderboardPage() {
 
   const { entries, globalMaxAbs } = data;
 
+  // Relayer-registered agents who never committed in any round in `rounds`.
+  // Period-independent: signing up is signing up regardless of which window
+  // you're looking at on the leaderboard.
+  const inactiveAgents = useMemo(() => {
+    const activeAddrs = new Set(entries.map((e) => e.address));
+    const out: { address: string; name: string; url: string; registeredAt: number }[] = [];
+    for (const [addr, info] of agentRegistry) {
+      if (info.registrationOrigin !== 'RELAYER') continue;
+      if (info.registeredAt === 0) continue;
+      if (activeAddrs.has(addr)) continue;
+      const meta = resolvedMeta.get(addr);
+      out.push({
+        address: addr,
+        name: meta?.name ?? info.name ?? '',
+        url: meta?.url ?? info.url ?? '',
+        registeredAt: info.registeredAt,
+      });
+    }
+    out.sort((a, b) => b.registeredAt - a.registeredAt);
+    return out;
+  }, [agentRegistry, entries, resolvedMeta]);
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -164,7 +187,21 @@ export default function LeaderboardPage() {
         </a>
       </div>
 
-      <TimeFilter value={period} onChange={setPeriod} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+        <TimeFilter value={period} onChange={setPeriod} />
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            style={{ cursor: 'pointer' }}
+          />
+          Show registered-but-inactive agents
+          {inactiveAgents.length > 0 && (
+            <span style={{ color: 'var(--text-muted)' }}>({inactiveAgents.length})</span>
+          )}
+        </label>
+      </div>
 
       {entries.length === 0 ? (
         <p>No agents found for this period.</p>
@@ -274,6 +311,48 @@ export default function LeaderboardPage() {
                 );
               })}
             </tbody>
+            {showInactive && inactiveAgents.length > 0 && (
+              <tbody>
+                <tr>
+                  <td colSpan={5} style={{ padding: 'var(--space-md) 0 6px', borderTop: '1px solid var(--border)', fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
+                    Registered via relayer, no on-chain activity yet ({inactiveAgents.length})
+                  </td>
+                </tr>
+                {inactiveAgents.map((agent) => (
+                  <tr key={`inactive-${agent.address}`} style={{ opacity: 0.7 }}>
+                    <td>—</td>
+                    <td>
+                      {agent.name ? (
+                        <span>
+                          <Link to={`/agent/${agent.address}`} style={{ fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'none' }}>{agent.name}</Link>
+                          {' '}
+                          <span style={inactiveBadgeStyle} title="Registered on-chain via relayer; has not committed in any round yet.">registered</span>
+                          {agent.url && (
+                            <>
+                              {' '}
+                              <a href={agent.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.75rem' }}>[link]</a>
+                            </>
+                          )}
+                          <br />
+                          <Link to={`/agent/${agent.address}`} className="address">{truncAddr(agent.address)}</Link>
+                        </span>
+                      ) : (
+                        <span>
+                          <Link to={`/agent/${agent.address}`} className="address">{truncAddr(agent.address)}</Link>
+                          {' '}
+                          <span style={inactiveBadgeStyle} title="Registered on-chain via relayer; has not committed in any round yet.">registered</span>
+                        </span>
+                      )}
+                    </td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }} title="Date the agent registered on the ERC-8004 Identity Registry">
+                      Registered {formatTs(agent.registeredAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            )}
           </table>
         </div>
       )}
@@ -368,6 +447,18 @@ function MiniAlphaDist({ deltas, mean, range }: { deltas: number[]; mean: number
     </svg>
   );
 }
+
+const inactiveBadgeStyle: CSSProperties = {
+  display: 'inline-block',
+  fontSize: '0.625rem',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  padding: '1px 6px',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px dashed var(--border)',
+  color: 'var(--text-muted)',
+  cursor: 'help',
+};
 
 const provisionalBadgeStyle: CSSProperties = {
   display: 'inline-block',

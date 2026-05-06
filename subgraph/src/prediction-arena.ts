@@ -18,6 +18,7 @@ function getOrCreateAgent(address: string, rawAddress: Address): Agent {
     agent.address = rawAddress
     agent.owner = rawAddress
     agent.registeredAt = BigInt.zero()
+    agent.registrationOrigin = "DIRECT"
     agent.totalBrierScore = BigInt.zero()
     agent.totalAlphaScore = BigInt.zero()
     agent.scoredRoundCount = 0
