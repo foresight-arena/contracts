@@ -4,6 +4,7 @@ import {
   Revealed,
   ScoreComputed,
   OutcomesTriggered,
+  PredictionArena,
 } from "../generated/PredictionArena/PredictionArena"
 import { ConditionalTokens } from "../generated/PredictionArena/ConditionalTokens"
 import { AgentRound, Agent, Round, Market } from "../generated/schema"
@@ -106,6 +107,26 @@ export function handleScoreComputed(event: ScoreComputed): void {
   ar.brierScore = event.params.brierScore
   ar.alphaScore = event.params.alphaScore
   ar.scoredMarkets = event.params.scoredMarkets
+
+  // ScoreComputed implies the agent revealed successfully. Two paths emit it:
+  //   1) _scorePending(): the agent revealed before outcomes were triggered,
+  //      so handleRevealed has already set revealed=true + predictions.
+  //   2) _reveal() with outcomesTriggered=true: the contract scores the agent
+  //      immediately and emits ONLY ScoreComputed (no Revealed event). For
+  //      this case we have to set revealed=true here and fetch predictions
+  //      from the public getter, otherwise the UI shows "not revealed" while
+  //      still displaying a score (and per-market scoring computations skip
+  //      the round because predictions[] is empty).
+  if (!ar.revealed) {
+    ar.revealed = true
+    ar.revealTimestamp = event.block.timestamp
+    let arena = PredictionArena.bind(event.address)
+    let predResult = arena.try_getRevealedPredictions(roundId, event.params.agent)
+    if (!predResult.reverted) {
+      ar.predictions = predResult.value
+    }
+  }
+
   ar.save()
 
   // Update agent aggregate leaderboard
