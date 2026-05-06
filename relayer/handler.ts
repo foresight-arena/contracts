@@ -5,6 +5,7 @@ import { checkAndPostBenchmarks, checkAndTriggerOutcomes } from './lib/benchmark
 import { verifyReasoningHash, uploadReasoning, getReasoning, hasRevealStartPassed, isOutcomesTriggeredSubgraph } from './lib/reasoning.js';
 import { getAgentMetadata, getAgentImage } from './lib/metadata.js';
 import { createChallenge, verifyTweetAndSign, getTwitterForAgent, VoucherError } from './lib/voucher.js';
+import { validateFields, buildAgentURI, isNameTaken, ValidationError } from './lib/registration.js';
 import { config } from './config.js';
 import { keccak256, encodePacked, recoverAddress, type Hex } from 'viem';
 
@@ -194,15 +195,33 @@ export async function handler(event: {
       return json(200, { agent, nonce: nonce.toString() });
     }
 
-    // Agent registration on canonical ERC-8004 Identity Registry (gasless via curator voucher)
-    // Relayer mints the NFT to itself, then transfers to the agent.
+    // Agent registration on canonical ERC-8004 Identity Registry (gasless via curator voucher).
+    //
+    // Body shape:
+    //   {
+    //     agent:       "0x...",                                  // required
+    //     name:        "Agent display name",                     // required, unique
+    //     description: "What this agent does",                   // required
+    //     image:       "https://...",                            // optional, defaults to RELAYER_BASE/agent/<addr>/image
+    //     externalUrl: "https://...",                            // optional, defaults to PLATFORM_URL/agent/<addr>
+    //     voucher:     { signature: "0x...", expiry: <unix> },   // required, curator-signed
+    //   }
+    //
+    // The relayer assembles the on-chain agentURI as a self-contained
+    // data:application/json;base64 blob; callers no longer pass URIs.
+    // Then the relayer mints the NFT to itself and transfers it to the agent.
     if (method === 'POST' && path === '/register') {
-      const { agent, agentURI, voucher } = JSON.parse(
-        event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
-      );
-      if (!agent) return json(400, { success: false, error: 'Missing agent' });
+      let body: any;
+      try {
+        body = JSON.parse(
+          event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || '{}'
+        );
+      } catch {
+        return json(400, { success: false, error: 'Invalid JSON body' });
+      }
 
-      // Verify curator voucher
+      // Voucher is verified before any subgraph lookups — cheap and unforgeable.
+      const { voucher } = body;
       if (!voucher || !voucher.signature || !voucher.expiry) {
         return json(400, { success: false, error: 'Missing voucher (curator approval required)' });
       }
@@ -210,8 +229,11 @@ export async function handler(event: {
       if (Number(voucher.expiry) <= now) {
         return json(400, { success: false, error: 'Voucher expired' });
       }
+      if (typeof body.agent !== 'string') {
+        return json(400, { success: false, error: 'agent is required' });
+      }
       const voucherHash = keccak256(
-        encodePacked(['address', 'uint256'], [agent as Hex, BigInt(voucher.expiry)])
+        encodePacked(['address', 'uint256'], [body.agent as Hex, BigInt(voucher.expiry)])
       );
       const recoveredAddr = await recoverAddress({
         hash: voucherHash,
@@ -221,14 +243,28 @@ export async function handler(event: {
         return json(403, { success: false, error: 'Invalid voucher: not signed by curator' });
       }
 
-      const already = await isAgentRegistered(agent as `0x${string}`);
+      // Sync field validation
+      let validated;
+      try {
+        validated = validateFields(body);
+      } catch (err) {
+        if (err instanceof ValidationError) return json(err.status, { success: false, error: err.message });
+        throw err;
+      }
+
+      const already = await isAgentRegistered(validated.agent);
       if (already) return json(200, { success: true, alreadyRegistered: true });
 
+      // Name uniqueness — checked AFTER alreadyRegistered so a re-registration
+      // attempt by the same agent doesn't trip on its own existing name.
+      if (await isNameTaken(validated.name, validated.agent)) {
+        return json(409, { success: false, error: `Name "${validated.name}" is already taken by another agent` });
+      }
+
+      const agentURI = buildAgentURI(validated);
+
       try {
-        const { txHash, agentId } = await submitRegister(
-          agent as `0x${string}`,
-          typeof agentURI === 'string' ? agentURI : '',
-        );
+        const { txHash, agentId } = await submitRegister(validated.agent, agentURI);
         return json(200, { success: true, txHash, agentId: agentId.toString() });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
