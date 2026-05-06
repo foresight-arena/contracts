@@ -1,4 +1,4 @@
-const SUBGRAPH = 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
+const SUBGRAPH = process.env.SUBGRAPH_URL || 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
 const RELAYER_BASE = process.env.RELAYER_BASE_URL || 'https://api.foresightarena.xyz';
 const PLATFORM_URL = 'https://foresightarena.xyz';
 

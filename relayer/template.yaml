@@ -24,6 +24,10 @@ Parameters:
     Type: String
     Default: '0x943507c28186741608a80777B03F045C84beA3A5'
     Description: Curator public address for voucher verification
+  SubgraphUrl:
+    Type: String
+    NoEcho: true
+    Description: Authenticated subgraph URL (Studio query URL with key, or gateway URL)
 
 Resources:
   VoucherTable:
@@ -76,6 +80,7 @@ Resources:
           CURATOR_ADDRESS: !Ref CuratorAddress
           REASONING_BUCKET: !Ref ReasoningBucket
           VOUCHER_TABLE: !Ref VoucherTable
+          SUBGRAPH_URL: !Ref SubgraphUrl
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref ReasoningBucket

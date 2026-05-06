@@ -8,7 +8,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import { polygon } from 'viem/chains';
 
-const SUBGRAPH = 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
+const SUBGRAPH = process.env.SUBGRAPH_URL || 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
 
 const roundManagerAbi = parseAbi([
   'function postBenchmarkPrices(uint256 roundId, uint16[] benchmarkPrices) external',

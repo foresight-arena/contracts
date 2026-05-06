@@ -1,7 +1,7 @@
 import { keccak256, toBytes } from 'viem';
 import { S3Client, PutObjectCommand, GetObjectCommand, NoSuchKey } from '@aws-sdk/client-s3';
 
-const SUBGRAPH = 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
+const SUBGRAPH = process.env.SUBGRAPH_URL || 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
 
 const MAX_CONTENT_BYTES = 64 * 1024; // 64 KB cap (reasoning is just an array of strings)
 
