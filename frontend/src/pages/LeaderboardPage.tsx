@@ -150,8 +150,22 @@ export default function LeaderboardPage() {
   // Relayer-registered agents who never committed in any round in `rounds`.
   // Period-independent: signing up is signing up regardless of which window
   // you're looking at on the leaderboard.
+  // "Ever active" = committed in any round, regardless of the leaderboard's
+  // current time filter. Drives the inactive section so switching to 7D /
+  // 30D doesn't surface agents that have on-chain history outside that
+  // window as "no on-chain activity yet" — they did commit, just not
+  // recently.
+  const everActiveAddrs = useMemo(() => {
+    const s = new Set<string>();
+    for (const round of rounds) {
+      for (const addr of round.agents.keys()) {
+        s.add(addr.toLowerCase());
+      }
+    }
+    return s;
+  }, [rounds]);
+
   const inactiveAgents = useMemo(() => {
-    const activeAddrs = new Set(entries.map((e) => e.address));
     const out: { address: string; name: string; url: string; registeredAt: number }[] = [];
     for (const [addr, info] of agentRegistry) {
       if (info.registrationOrigin !== 'RELAYER') continue;
@@ -160,7 +174,7 @@ export default function LeaderboardPage() {
       // relayer hot wallet itself ends up with agentId=null after every
       // mint+transfer cycle). Real agents own their NFT.
       if (info.agentId == null) continue;
-      if (activeAddrs.has(addr)) continue;
+      if (everActiveAddrs.has(addr)) continue;
       const meta = resolvedMeta.get(addr);
       out.push({
         address: addr,
@@ -171,7 +185,7 @@ export default function LeaderboardPage() {
     }
     out.sort((a, b) => b.registeredAt - a.registeredAt);
     return out;
-  }, [agentRegistry, entries, resolvedMeta]);
+  }, [agentRegistry, everActiveAddrs, resolvedMeta]);
 
   if (loading) return <LoadingSpinner />;
 
