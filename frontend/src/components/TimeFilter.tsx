@@ -9,7 +9,6 @@ interface Props {
 const groupStyle: CSSProperties = {
   display: 'flex',
   gap: 'var(--space-xs)',
-  marginBottom: 'var(--space-lg)',
 };
 
 function btnStyle(active: boolean): CSSProperties {
