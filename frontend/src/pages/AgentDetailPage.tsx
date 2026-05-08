@@ -13,12 +13,21 @@ function truncAddr(addr: string): string {
   return '0x' + addr.slice(2, 8) + '…' + addr.slice(-4);
 }
 
+function getInitials(name: string): string {
+  if (!name) return '··';
+  const cleaned = name.replace(/^benchmark-/i, '');
+  const parts = cleaned.split(/[-_\s]/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+  return '··';
+}
+
 function formatPct(value: number): string {
   return value.toFixed(2) + '%';
 }
 
 function formatSigned(value: number): string {
-  return (value >= 0 ? '+' : '') + value.toFixed(2) + '%';
+  return (value >= 0 ? '+' : '−') + Math.abs(value).toFixed(2) + '%';
 }
 
 function formatDate(ts: number): string {
@@ -52,6 +61,7 @@ export default function AgentDetailPage() {
   const [twitter, setTwitter] = useState<{ handle: string; displayName: string; tweetUrl: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [metric, setMetric] = useState<'alpha' | 'brier'>('alpha');
+  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     if (!address) return;
@@ -61,10 +71,14 @@ export default function AgentDetailPage() {
       .catch(() => {});
   }, [address]);
 
+  useEffect(() => { setAvatarError(false); }, [address, resolvedMeta]);
+
   const info = agentMap.get(address);
   const meta = resolvedMeta.get(address);
   const agentName = meta?.name || info?.name || '';
   const isBenchmark = isBenchmarkAgent(address);
+  const displayName = agentName || truncAddr(address);
+  const avatarSrc = meta?.image && meta.image.trim() !== '' ? meta.image : null;
 
   const agentRounds = useMemo(() => {
     return rounds
@@ -156,12 +170,17 @@ export default function AgentDetailPage() {
 
   const chartAgent = [{
     address,
-    name: agentName || truncAddr(address),
+    name: displayName,
     color: 'var(--fa-chart-1)',
     series,
   }];
 
   const now = Math.floor(Date.now() / 1000);
+
+  const avgAlphaPct = scoring.avgAlpha * 100;
+  const alphaPos = avgAlphaPct >= 0;
+  const resGainColor = scoring.resolutionGain >= 0 ? 'var(--fa-success)' : 'var(--fa-danger)';
+  const relGapColor = scoring.reliabilityGap >= 0 ? 'var(--fa-success)' : 'var(--fa-danger)';
 
   return (
     <div className="page">
@@ -174,19 +193,23 @@ export default function AgentDetailPage() {
 
       {/* Identity strip */}
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', marginBottom: 36, flexWrap: 'wrap' }}>
-        <img
-          src={meta?.image || `${RELAYER}/agent/${address}/image`}
-          alt="Agent avatar"
-          style={{ width: 120, height: 120, borderRadius: 14, border: '1px solid var(--fa-border)', flexShrink: 0, objectFit: 'cover' }}
-          onError={(e) => {
-            const img = e.currentTarget;
-            if (img.src !== `${RELAYER}/agent/${address}/image`) img.src = `${RELAYER}/agent/${address}/image`;
-          }}
-        />
+        {/* Avatar */}
+        {avatarSrc && !avatarError ? (
+          <img
+            src={avatarSrc}
+            alt={displayName}
+            style={{ width: 120, height: 120, borderRadius: 14, objectFit: 'cover', border: '1px solid var(--fa-border-soft)', background: 'var(--fa-bg-card)', flexShrink: 0 }}
+            onError={() => setAvatarError(true)}
+          />
+        ) : (
+          <div style={{ width: 120, height: 120, borderRadius: 14, background: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--fa-font-display)', fontVariationSettings: '"opsz" 144, "SOFT" 30', fontWeight: 400, fontSize: 44, color: 'var(--fa-text-secondary)', letterSpacing: '-0.02em', userSelect: 'none', flexShrink: 0 }}>
+            {getInitials(displayName)}
+          </div>
+        )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ fontFamily: 'var(--fa-font-display)', fontWeight: 400, fontVariationSettings: '"opsz" 144, "SOFT" 30', fontSize: 'clamp(1.75rem, 3.5vw, 2.25rem)', lineHeight: 1.05, letterSpacing: '-0.02em', margin: '0 0 12px', color: 'var(--fa-text-primary)' }}>
-            {agentName || truncAddr(address)}
+            {displayName}
           </h1>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -283,49 +306,62 @@ export default function AgentDetailPage() {
 
       {/* Murphy decomposition + Alpha anatomy */}
       {scoring.n > 0 && (
-        <div style={{ marginBottom: 'var(--space-xl)' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)', flexWrap: 'wrap' }}>
-            <h2 style={{ marginBottom: 0 }}>Forecasting metrics</h2>
-            <a href="https://www.foresightflow.org/publications/foresight-arena" target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.75rem', color: 'var(--accent)' }}>
-              method (paper) →
-            </a>
-          </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)', lineHeight: 1.6 }}>
-            Computed across {scoring.n} resolved markets.
-            {scoring.n < 140 && <> <span style={{ color: 'var(--warning)' }}>⚠ Limited data</span> — paper recommends 140+ predictions before drawing conclusions.</>}
-          </p>
-          {/* Hero: Avg Alpha (large card, full width) */}
-          <div style={alphaHeroStyle} title="Mean edge over Polymarket consensus, with 95% confidence interval. Positive = beats the market. The CI shows uncertainty; if it crosses zero, the edge is not yet statistically distinguishable from luck.">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
-              <span>Avg Alpha (95% CI)</span>
-              <span style={{ fontSize: '0.6875rem', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
+        <div style={{ marginBottom: 48 }}>
+
+          {/* Section header */}
+          <header style={{ marginBottom: 20 }}>
+            <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--fa-gold)', marginBottom: 8 }}>
+              Forecasting metrics
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)', flexWrap: 'wrap' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 700, color: scoring.avgAlpha >= 0 ? '#10b981' : '#ef4444', fontFamily: 'var(--font-mono)' }}>
-                {formatPct(scoring.avgAlpha * 100)}
-                <span style={{ fontSize: '1.25rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                  {' '}± {formatPct(scoring.alphaSE * 1.96 * 100)}
+            <h2 style={{ fontFamily: 'var(--fa-font-display)', fontWeight: 400, fontVariationSettings: '"opsz" 144, "SOFT" 30', fontSize: 'clamp(1.5rem, 2.6vw, 1.875rem)', lineHeight: 1.05, letterSpacing: '-0.02em', margin: '0 0 12px', color: 'var(--fa-text-primary)', display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+              <span>Computed across {scoring.n} resolved markets</span>
+              <a href="https://www.foresightflow.org/publications/foresight-arena" target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--fa-font-body)', fontSize: 13, fontWeight: 400, color: 'var(--fa-gold)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                method (paper) →
+              </a>
+            </h2>
+            {scoring.n < 140 && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 12px', background: 'var(--fa-gold-bg)', border: '1px solid rgba(232,177,74,0.3)', borderRadius: 999, fontFamily: 'var(--fa-font-mono)', fontSize: 11.5, color: 'var(--fa-gold)' }}>
+                <span>⚠</span> Limited data — paper recommends 140+ predictions
+              </div>
+            )}
+          </header>
+
+          {/* Alpha hero card */}
+          <div style={{ background: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', borderRadius: 14, padding: 28, marginBottom: 16 }} title="Mean edge over Polymarket consensus, with 95% confidence interval. Positive = beats the market. The CI shows uncertainty; if it crosses zero, the edge is not yet statistically distinguishable from luck.">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--fa-font-mono)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fa-text-tertiary)', marginBottom: 12 }}>
+              <span>Avg Alpha (95% CI)</span>
+              <span style={{ cursor: 'help', opacity: 0.7 }}>ⓘ</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 0 }}>
+                <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 'clamp(2rem, 4vw, 2.5rem)', fontWeight: 500, fontVariantNumeric: 'tabular-nums', lineHeight: 1, letterSpacing: '-0.02em', color: alphaPos ? 'var(--fa-success)' : 'var(--fa-danger)' }}>
+                  {(alphaPos ? '' : '−') + Math.abs(avgAlphaPct).toFixed(2) + '%'}
+                </span>
+                <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 'clamp(1rem, 1.8vw, 1.25rem)', color: 'var(--fa-text-tertiary)', marginLeft: 10, fontWeight: 400 }}>
+                  ± {formatPct(scoring.alphaSE * 1.96 * 100)}
                 </span>
               </div>
-              <div style={{ flex: 1, minWidth: 280 }}>
-                <AlphaCIBar mean={scoring.avgAlpha * 100} halfWidth={scoring.alphaSE * 1.96 * 100} large />
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <AlphaCIBar mean={avgAlphaPct} halfWidth={scoring.alphaSE * 1.96 * 100} large />
               </div>
             </div>
             {scoring.deltas.length > 0 && (
-              <div style={{ marginTop: 'var(--space-md)' }}>
-                <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
+              <div>
+                <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fa-text-tertiary)', marginBottom: 10 }}>
                   Per-market alpha distribution ({scoring.deltas.length} markets)
                 </div>
-                <AlphaHistogram deltas={scoring.deltas.map(d => d * 100)} mean={scoring.avgAlpha * 100} />
+                <AlphaHistogram deltas={scoring.deltas.map(d => d * 100)} mean={avgAlphaPct} />
               </div>
             )}
           </div>
 
-          {/* Edge anatomy: how avg α breaks down */}
-          <div style={edgeAnatomyStyle}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 'var(--space-sm)' }}>
-              <span style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Edge anatomy</span>
-              <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }} title="Corollary 1 in the paper: α decomposes into how much sharper your sorting is (resolution gain) plus how much better-calibrated you are (reliability gap).">α = (RES_agent − RES_base) + (REL_base − REL_agent) ⓘ</span>
+          {/* Edge anatomy card */}
+          <div style={{ background: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', borderRadius: 14, padding: 28, marginBottom: 16 }}>
+            <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fa-text-tertiary)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+              <span>Edge anatomy</span>
+              <span style={{ color: 'var(--fa-text-secondary)', textTransform: 'none', letterSpacing: 'normal' }} title="Corollary 1 in the paper: α decomposes into how much sharper your sorting is (resolution gain) plus how much better-calibrated you are (reliability gap).">
+                α = (RES_agent − RES_base) + (REL_base − REL_agent) ⓘ
+              </span>
             </div>
             <EdgeAnatomyBars
               resolutionGainPct={scoring.resolutionGain * 100}
@@ -333,7 +369,7 @@ export default function AgentDetailPage() {
             />
           </div>
 
-          {/* 6 other metrics in 3×2 grid */}
+          {/* 6 metric cards */}
           <div style={metricsGridStyle}>
             <StatCard
               label="Avg Brier"
@@ -343,7 +379,6 @@ export default function AgentDetailPage() {
             <StatCard
               label="REL (calibration)"
               value={formatPct(scoring.agent.rel * 100)}
-              accent={scoring.agent.rel > scoring.baseline.rel}
               tooltip={`Reliability / calibration error: how well stated probabilities match realized frequencies. 0 = perfectly calibrated. Lower is better. Baseline REL: ${formatPct(scoring.baseline.rel * 100)}.`}
             />
             <StatCard
@@ -359,17 +394,22 @@ export default function AgentDetailPage() {
             <StatCard
               label="Resolution gain"
               value={formatSigned(scoring.resolutionGain * 100)}
+              valueColor={resGainColor}
               tooltip="RES_agent − RES_base. Positive means the agent sorts outcomes more sharply than the market — a stronger discriminative signal."
             />
             <StatCard
               label="Reliability gap"
               value={formatSigned(scoring.reliabilityGap * 100)}
+              valueColor={relGapColor}
               tooltip="REL_base − REL_agent. Positive means the agent is better calibrated than the market (closer alignment between stated probabilities and realized frequencies)."
             />
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 'var(--space-sm)', lineHeight: 1.6 }}>
-            <strong style={{ color: 'var(--text-secondary)' }}>How to read:</strong> <code>Brier = UNC + REL − RES</code>. <code>Alpha = (RES_agent − RES_base) + (REL_base − REL_agent)</code> — an agent beats the market through better resolution, better calibration, or both. Baseline Brier: {formatPct(scoring.baseline.brier * 100)}.
-          </p>
+
+          {/* Footnote */}
+          <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', borderRadius: 10, fontFamily: 'var(--fa-font-mono)', fontSize: 11.5, lineHeight: 1.6, color: 'var(--fa-text-secondary)' }}>
+            <strong style={{ color: 'var(--fa-text-primary)', fontWeight: 600 }}>How to read:</strong>{' '}
+            Brier = UNC + REL − RES. Alpha = (RES_agent − RES_base) + (REL_base − REL_agent) — an agent beats the market through better resolution, better calibration, or both. Baseline Brier: {formatPct(scoring.baseline.brier * 100)}.
+          </div>
         </div>
       )}
 
@@ -434,14 +474,14 @@ export default function AgentDetailPage() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function StatCard({ label, value, accent, tooltip, children }: { label: string; value: string; accent?: boolean; tooltip?: string; children?: ReactNode }) {
+function StatCard({ label, value, accent, valueColor, tooltip, children }: { label: string; value: string; accent?: boolean; valueColor?: string; tooltip?: string; children?: ReactNode }) {
   return (
-    <div style={{ backgroundColor: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', borderRadius: 12, padding: '16px 20px' }} title={tooltip}>
+    <div style={{ backgroundColor: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', borderRadius: 12, padding: '18px 20px' }} title={tooltip}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--fa-font-mono)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fa-text-tertiary)', marginBottom: 8 }}>
         <span>{label}</span>
         {tooltip && <span style={{ cursor: 'help', opacity: 0.6 }}>ⓘ</span>}
       </div>
-      <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 20, fontWeight: 500, color: accent ? 'var(--fa-danger)' : 'var(--fa-text-primary)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 22, fontWeight: 500, color: valueColor || (accent ? 'var(--fa-danger)' : 'var(--fa-text-primary)'), lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       {children}
     </div>
   );
@@ -459,42 +499,48 @@ function AlphaCIBar({ mean, halfWidth, large = false }: { mean: number; halfWidt
   const midY = H / 2;
   const xScale = (v: number) => W / 2 + (v / range) * (W / 2);
 
-  const ciColor = crossesZero
-    ? 'var(--text-muted)'
-    : (mean > 0 ? '#10b981' : '#ef4444');
+  const ciFill = crossesZero
+    ? 'rgba(168,162,148,0.2)'
+    : (mean > 0 ? 'rgba(116,196,118,0.4)' : 'rgba(230,108,92,0.4)');
+  const ciStroke = crossesZero
+    ? 'rgba(168,162,148,0.5)'
+    : (mean > 0 ? '#74C476' : '#E66C5C');
 
-  const labelSize = large ? 11 : 8;
+  const labelSize = large ? 10.5 : 8;
   const tickHalf = large ? 14 : 8;
   const barHalf = large ? 8 : 4;
-  const dotR = large ? 6 : 3.5;
+  const dotR = large ? 5 : 3.5;
   const whiskerHalf = large ? 11 : 6;
 
   return (
     <div style={{ marginTop: large ? 0 : 8 }}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto', display: 'block' }}>
-        <line x1={0} y1={midY} x2={W} y2={midY} stroke="var(--border)" strokeWidth={1} />
-        <text x={2} y={H - 4} fontSize={labelSize} fill="var(--text-muted)">{(-range).toFixed(1)}%</text>
-        <text x={W - 2} y={H - 4} fontSize={labelSize} fill="var(--text-muted)" textAnchor="end">+{range.toFixed(1)}%</text>
-        <line x1={W / 2} y1={midY - tickHalf} x2={W / 2} y2={midY + tickHalf} stroke="var(--text-muted)" strokeWidth={1} />
-        <text x={W / 2} y={large ? 14 : 10} fontSize={labelSize} fill="var(--text-muted)" textAnchor="middle">0</text>
+        {/* Axis track */}
+        <line x1={0} y1={midY} x2={W} y2={midY} style={{ stroke: 'rgba(168,162,148,0.2)', strokeWidth: 1 }} />
+        {/* Domain labels */}
+        <text x={2} y={H - 4} fontSize={labelSize} style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>{(-range).toFixed(1)}%</text>
+        <text x={W - 2} y={H - 4} fontSize={labelSize} textAnchor="end" style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>+{range.toFixed(1)}%</text>
+        {/* Zero tick */}
+        <line x1={W / 2} y1={midY - tickHalf} x2={W / 2} y2={midY + tickHalf} style={{ stroke: 'var(--fa-text-tertiary)', strokeWidth: 1, strokeDasharray: '2 2' }} />
+        <text x={W / 2} y={large ? 14 : 10} fontSize={labelSize} textAnchor="middle" style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>0</text>
+        {/* CI bar */}
         <rect
           x={xScale(lower)}
           y={midY - barHalf}
           width={Math.max(2, xScale(upper) - xScale(lower))}
           height={barHalf * 2}
-          fill={ciColor}
-          opacity={0.35}
+          fill={ciFill}
           rx={2}
         />
-        <line x1={xScale(lower)} y1={midY - whiskerHalf} x2={xScale(lower)} y2={midY + whiskerHalf} stroke={ciColor} strokeWidth={large ? 2 : 1.5} />
-        <line x1={xScale(upper)} y1={midY - whiskerHalf} x2={xScale(upper)} y2={midY + whiskerHalf} stroke={ciColor} strokeWidth={large ? 2 : 1.5} />
-        <circle cx={xScale(mean)} cy={midY} r={dotR} fill={ciColor} />
+        {/* CI endpoints (whiskers) */}
+        <line x1={xScale(lower)} y1={midY - whiskerHalf} x2={xScale(lower)} y2={midY + whiskerHalf} stroke={ciStroke} strokeWidth={large ? 1.5 : 1} />
+        <line x1={xScale(upper)} y1={midY - whiskerHalf} x2={xScale(upper)} y2={midY + whiskerHalf} stroke={ciStroke} strokeWidth={large ? 1.5 : 1} />
+        {/* Mean dot — always primary */}
+        <circle cx={xScale(mean)} cy={midY} r={dotR} style={{ fill: 'var(--fa-text-primary)' }} />
       </svg>
-      {crossesZero && (
-        <div style={{ fontSize: large ? '0.75rem' : '0.625rem', color: 'var(--text-muted)', marginTop: 4 }}>
-          CI crosses zero — edge not statistically detected
-        </div>
-      )}
+      <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: large ? 11.5 : 9, color: crossesZero ? 'var(--fa-text-tertiary)' : 'var(--fa-text-secondary)', marginTop: 4 }}>
+        {crossesZero ? 'CI crosses zero — edge not statistically detected' : 'Edge statistically detected'}
+      </div>
     </div>
   );
 }
@@ -516,7 +562,7 @@ function AlphaHistogram({ deltas, mean }: { deltas: number[]; mean: number }) {
   }
   const maxCount = Math.max(1, ...bins);
 
-  const W = 480, H = 140, PAD_L = 28, PAD_R = 8, PAD_T = 8, PAD_B = 22;
+  const W = 480, H = 140, PAD_L = 32, PAD_R = 8, PAD_T = 8, PAD_B = 22;
   const plotW = W - PAD_L - PAD_R;
   const plotH = H - PAD_T - PAD_B;
   const xScale = (v: number) => PAD_L + ((v + range) / (2 * range)) * plotW;
@@ -524,33 +570,40 @@ function AlphaHistogram({ deltas, mean }: { deltas: number[]; mean: number }) {
   const barPlotW = plotW / binCount;
   const zeroX = xScale(0);
   const meanX = xScale(mean);
+  const meanColor = mean >= 0 ? '#74C476' : '#E66C5C';
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto', display: 'block' }}>
-      <text x={PAD_L - 4} y={PAD_T + 8} fontSize={9} fill="var(--text-muted)" textAnchor="end">{maxCount}</text>
-      <text x={PAD_L - 4} y={H - PAD_B + 4} fontSize={9} fill="var(--text-muted)" textAnchor="end">0</text>
-      <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="var(--border)" strokeWidth={1} />
+      {/* Y-axis count labels */}
+      <text x={PAD_L - 4} y={PAD_T + 8} fontSize={10.5} textAnchor="end" style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>{maxCount}</text>
+      <text x={PAD_L - 4} y={H - PAD_B + 4} fontSize={10.5} textAnchor="end" style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>0</text>
+      {/* Baseline */}
+      <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} style={{ stroke: 'var(--fa-border-soft)', strokeWidth: 1 }} />
+      {/* Bars */}
       {bins.map((count, i) => {
         if (count === 0) return null;
         const binCenter = -range + binWidth * (i + 0.5);
         const x = PAD_L + i * barPlotW;
         const y = yScale(count);
         const h = (H - PAD_B) - y;
-        const color = binCenter >= 0 ? '#10b981' : '#ef4444';
+        const barFill = binCenter >= 0 ? 'rgba(116,196,118,0.7)' : 'rgba(230,108,92,0.7)';
         return (
-          <rect key={i} x={x + 1} y={y} width={Math.max(1, barPlotW - 2)} height={h} fill={color} opacity={0.55} rx={1}>
+          <rect key={i} x={x + 1} y={y} width={Math.max(1, barPlotW - 2)} height={h} fill={barFill} rx={1}>
             <title>{`α ∈ [${(binCenter - binWidth / 2).toFixed(2)}%, ${(binCenter + binWidth / 2).toFixed(2)}%]: ${count} markets`}</title>
           </rect>
         );
       })}
-      <line x1={zeroX} y1={PAD_T} x2={zeroX} y2={H - PAD_B} stroke="var(--text-muted)" strokeWidth={1} strokeDasharray="2 3" />
-      <text x={zeroX} y={H - 6} fontSize={9} fill="var(--text-muted)" textAnchor="middle">0</text>
-      <line x1={meanX} y1={PAD_T} x2={meanX} y2={H - PAD_B} stroke={mean >= 0 ? '#10b981' : '#ef4444'} strokeWidth={1.5} />
-      <text x={meanX} y={PAD_T + 8} fontSize={9} fill={mean >= 0 ? '#10b981' : '#ef4444'} textAnchor={meanX > W / 2 ? 'end' : 'start'} dx={meanX > W / 2 ? -3 : 3}>
-        mean {mean >= 0 ? '+' : ''}{mean.toFixed(2)}%
+      {/* Zero line */}
+      <line x1={zeroX} y1={PAD_T} x2={zeroX} y2={H - PAD_B} style={{ stroke: 'var(--fa-text-tertiary)', strokeWidth: 1, strokeDasharray: '2 3' }} />
+      <text x={zeroX} y={H - 6} fontSize={10.5} textAnchor="middle" style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>0</text>
+      {/* Mean line + label */}
+      <line x1={meanX} y1={PAD_T} x2={meanX} y2={H - PAD_B} stroke={meanColor} strokeWidth={1.5} />
+      <text x={meanX} y={PAD_T + 8} fontSize={10.5} fill={meanColor} textAnchor={meanX > W / 2 ? 'end' : 'start'} dx={meanX > W / 2 ? -3 : 3} style={{ fontFamily: 'var(--fa-font-mono)' }}>
+        mean {mean >= 0 ? '+' : '−'}{Math.abs(mean).toFixed(2)}%
       </text>
-      <text x={PAD_L} y={H - 6} fontSize={9} fill="var(--text-muted)">{(-range).toFixed(1)}%</text>
-      <text x={W - PAD_R} y={H - 6} fontSize={9} fill="var(--text-muted)" textAnchor="end">+{range.toFixed(1)}%</text>
+      {/* X-axis range labels */}
+      <text x={PAD_L} y={H - 6} fontSize={10.5} style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>{(-range).toFixed(1)}%</text>
+      <text x={W - PAD_R} y={H - 6} fontSize={10.5} textAnchor="end" style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>+{range.toFixed(1)}%</text>
     </svg>
   );
 }
@@ -563,57 +616,53 @@ function EdgeAnatomyBars({ resolutionGainPct, reliabilityGapPct }: { resolutionG
   const maxAbs = Math.max(0.5, Math.abs(resolutionGainPct), Math.abs(reliabilityGapPct));
   const range = maxAbs * 1.15;
 
-  const W = 480, BAR_H = 14, ROW_GAP = 4;
-  const ROW_H = BAR_H + ROW_GAP + 16;
-  const H = items.length * ROW_H + 12;
-  const xToSvg = (v: number) => W / 2 + (v / range) * (W / 2);
-  const zeroX = W / 2;
-
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto', display: 'block' }}>
-      {items.map((it, idx) => {
-        const yLabel = idx * ROW_H + 12;
-        const yBar = yLabel + 4;
-        const color = it.value >= 0 ? '#10b981' : '#ef4444';
-        const x0 = it.value >= 0 ? zeroX : xToSvg(it.value);
-        const w = Math.max(2, Math.abs(xToSvg(it.value) - zeroX));
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {items.map(it => {
+        const positive = it.value >= 0;
+        const color = positive ? 'var(--fa-success)' : 'var(--fa-danger)';
+        const barFill = positive ? 'rgba(116,196,118,0.6)' : 'rgba(230,108,92,0.6)';
+        const pctOfRange = Math.abs(it.value) / range;
+        const W = 300, H = 28;
+        const zeroX = W / 2;
+        const barX = positive ? zeroX : zeroX - pctOfRange * (W / 2);
+        const barW = Math.max(2, pctOfRange * (W / 2));
+
         return (
-          <g key={it.label}>
-            <text x={4} y={yLabel} fontSize={11} fill="var(--text-secondary)" fontWeight={600}>{it.label}</text>
-            <text x={4 + 120} y={yLabel} fontSize={10} fill="var(--text-muted)">— {it.sub}</text>
-            <text x={W - 4} y={yLabel} fontSize={11} fill={color} textAnchor="end" fontWeight={700} style={{ fontFamily: 'var(--font-mono)' }}>
-              {(it.value >= 0 ? '+' : '') + it.value.toFixed(2) + '%'}
-            </text>
-            <line x1={0} y1={yBar + BAR_H / 2} x2={W} y2={yBar + BAR_H / 2} stroke="var(--border)" strokeWidth={1} />
-            <rect x={x0} y={yBar} width={w} height={BAR_H} fill={color} opacity={0.5} rx={2} />
-            <line x1={zeroX} y1={yBar - 2} x2={zeroX} y2={yBar + BAR_H + 2} stroke="var(--text-muted)" strokeWidth={1} />
-          </g>
+          <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {/* Label */}
+            <div style={{ minWidth: 156, flexShrink: 0 }}>
+              <div style={{ fontFamily: 'var(--fa-font-body)', fontSize: 14, color: 'var(--fa-text-primary)', fontWeight: 500 }}>{it.label}</div>
+              <div style={{ fontFamily: 'var(--fa-font-body)', fontSize: 12.5, color: 'var(--fa-text-secondary)', marginTop: 2 }}>— {it.sub}</div>
+            </div>
+            {/* Bar SVG */}
+            <div style={{ flex: 1 }}>
+              <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H, display: 'block' }}>
+                <line x1={0} y1={H / 2} x2={W} y2={H / 2} style={{ stroke: 'var(--fa-border-soft)', strokeWidth: 1 }} />
+                <rect x={barX} y={H / 2 - 5} width={barW} height={10} fill={barFill} rx={2} />
+                <line x1={zeroX} y1={4} x2={zeroX} y2={H - 4} style={{ stroke: 'var(--fa-text-tertiary)', strokeWidth: 1 }} />
+                <text x={4} y={H - 3} fontSize={9} style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>{(-range).toFixed(1)}%</text>
+                <text x={zeroX} y={H - 3} textAnchor="middle" fontSize={9} style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>0</text>
+                <text x={W - 4} y={H - 3} textAnchor="end" fontSize={9} style={{ fill: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)' }}>+{range.toFixed(1)}%</text>
+              </svg>
+            </div>
+            {/* Value */}
+            <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 14, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color, minWidth: 58, textAlign: 'right', flexShrink: 0 }}>
+              {(positive ? '+' : '−') + Math.abs(it.value).toFixed(2) + '%'}
+            </div>
+          </div>
         );
       })}
-      <text x={4} y={H - 2} fontSize={9} fill="var(--text-muted)">{(-range).toFixed(1)}%</text>
-      <text x={zeroX} y={H - 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle">0</text>
-      <text x={W - 4} y={H - 2} fontSize={9} fill="var(--text-muted)" textAnchor="end">+{range.toFixed(1)}%</text>
-    </svg>
+    </div>
   );
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const metricsGridStyle: CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-  gap: 'var(--space-sm)',
-};
-
-const alphaHeroStyle: CSSProperties = {
-  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-md)', padding: 'var(--space-lg)',
-  marginBottom: 'var(--space-sm)',
-};
-
-const edgeAnatomyStyle: CSSProperties = {
-  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-md)', padding: 'var(--space-md)',
-  marginBottom: 'var(--space-sm)',
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+  gap: 12,
 };
 
 const agentCSS = `
