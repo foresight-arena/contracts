@@ -53,7 +53,7 @@ const css = `
 
 const pillColors: Record<RoundPhase, { bg: string; color: string; border: string }> = {
   commit:    { bg: 'var(--fa-teal-bg)',    color: 'var(--fa-teal)',           border: '1px solid rgba(93,191,176,0.3)' },
-  buffer:    { bg: 'var(--fa-gold-bg)',    color: 'var(--fa-gold)',            border: '1px solid rgba(232,177,74,0.3)' },
+  buffer:    { bg: 'var(--fa-danger-bg)', color: 'var(--fa-danger)',          border: '1px solid rgba(230,108,92,0.3)' },
   reveal:    { bg: 'var(--fa-gold-bg)',    color: 'var(--fa-gold)',            border: '1px solid rgba(232,177,74,0.3)' },
   triggered: { bg: 'var(--fa-polygon-bg)', color: 'var(--fa-polygon)',         border: '1px solid rgba(130,71,229,0.35)' },
   scored:    { bg: 'var(--fa-success-bg)', color: 'var(--fa-success)',         border: '1px solid rgba(116,196,118,0.3)' },

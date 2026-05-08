@@ -25,7 +25,7 @@ function getStatus(round: Props['round'], now: number): StatusDef {
     return { label: 'Commit', bg: 'var(--fa-gold-bg)', color: 'var(--accent)' };
   }
   if (now < round.revealStart) {
-    return { label: 'Buffer', bg: 'var(--fa-gold-bg)', color: 'var(--warning)' };
+    return { label: 'Buffer', bg: 'var(--fa-danger-bg)', color: 'var(--fa-danger)' };
   }
   if (now < round.revealDeadline) {
     if (!round.benchmarksPosted) {

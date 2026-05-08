@@ -85,6 +85,9 @@ function getPhaseStyle(round: Round, now: number) {
   if (now < round.commitDeadline) {
     return { label: 'COMMIT', bg: 'var(--fa-teal-bg)', color: 'var(--fa-teal)', border: '1px solid rgba(93,191,176,0.3)' };
   }
+  if (now < round.revealStart) {
+    return { label: 'BUFFER', bg: 'var(--fa-danger-bg)', color: 'var(--fa-danger)', border: '1px solid rgba(230,108,92,0.3)' };
+  }
   return { label: 'REVEAL', bg: 'var(--fa-gold-bg)', color: 'var(--fa-gold)', border: '1px solid rgba(232,177,74,0.3)' };
 }
 
