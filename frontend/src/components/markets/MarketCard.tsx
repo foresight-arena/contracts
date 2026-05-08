@@ -8,9 +8,10 @@ export type MarketCardProps = {
   benchmarkPrice?: number;   // basis points 0–10000; undefined → show 50/50
   outcome?: string | null;   // 'YES' | 'NO' | null
   roundId: number;
+  dimmed?: boolean;
 };
 
-export default function MarketCard({ conditionId, info, benchmarkPrice, outcome, roundId }: MarketCardProps) {
+export default function MarketCard({ conditionId, info, benchmarkPrice, outcome, roundId, dimmed }: MarketCardProps) {
   const [hovered, setHovered] = useState(false);
 
   const yesPrice = benchmarkPrice != null && benchmarkPrice > 0
@@ -43,7 +44,9 @@ export default function MarketCard({ conditionId, info, benchmarkPrice, outcome,
         borderRadius: 10, padding: 16,
         textDecoration: 'none', color: 'inherit',
         transform: hovered ? 'translateY(-1px)' : 'none',
-        transition: 'border-color 160ms ease, background 160ms ease, transform 160ms ease',
+        opacity: dimmed ? 0.3 : 1,
+        pointerEvents: dimmed ? 'none' : 'auto',
+        transition: 'border-color 160ms ease, background 160ms ease, transform 160ms ease, opacity 200ms ease',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
