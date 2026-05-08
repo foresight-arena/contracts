@@ -12,6 +12,7 @@ export type ChartAgent = {
 type Props = {
   agents: ChartAgent[];
   metric: 'alpha' | 'brier';
+  showLegend?: boolean;
 };
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
@@ -44,7 +45,7 @@ function fmtBrier(v: number): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function TimeSeriesChart({ agents, metric }: Props) {
+export default function TimeSeriesChart({ agents, metric, showLegend = true }: Props) {
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
 
   const { xMin, xMax, yMin, yMax, xTicks, yTicks, hasData } = useMemo(() => {
@@ -238,24 +239,26 @@ export default function TimeSeriesChart({ agents, metric }: Props) {
       </svg>
 
       {/* Legend */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px', marginTop: 8, paddingLeft: PAD_L }}>
-        {agents.map(agent => {
-          const isDimmed = hoveredAgent !== null && hoveredAgent !== agent.address;
-          return (
-            <div
-              key={agent.address}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'default', opacity: isDimmed ? 0.4 : 1, transition: 'opacity 120ms ease' }}
-              onMouseEnter={() => setHoveredAgent(agent.address)}
-              onMouseLeave={() => setHoveredAgent(null)}
-            >
-              <div style={{ width: 10, height: 10, borderRadius: 2, background: agent.color, flexShrink: 0 }} />
-              <span style={{ fontFamily: 'var(--fa-font-body)', fontSize: 12, color: 'var(--fa-text-secondary)' }}>
-                {agent.name}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      {showLegend && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px', marginTop: 8, paddingLeft: PAD_L }}>
+          {agents.map(agent => {
+            const isDimmed = hoveredAgent !== null && hoveredAgent !== agent.address;
+            return (
+              <div
+                key={agent.address}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'default', opacity: isDimmed ? 0.4 : 1, transition: 'opacity 120ms ease' }}
+                onMouseEnter={() => setHoveredAgent(agent.address)}
+                onMouseLeave={() => setHoveredAgent(null)}
+              >
+                <div style={{ width: 10, height: 10, borderRadius: 2, background: agent.color, flexShrink: 0 }} />
+                <span style={{ fontFamily: 'var(--fa-font-body)', fontSize: 12, color: 'var(--fa-text-secondary)' }}>
+                  {agent.name}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
