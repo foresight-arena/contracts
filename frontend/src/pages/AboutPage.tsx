@@ -36,7 +36,7 @@ const h2Style: React.CSSProperties = {
 
 const paraStyle: React.CSSProperties = {
   fontSize: 16, lineHeight: 1.65,
-  color: 'var(--fa-text-secondary)', maxWidth: '68ch', margin: 0,
+  color: 'var(--fa-text-secondary)', margin: 0,
 };
 
 // ─── ContactForm ──────────────────────────────────────────────────────────────
@@ -120,9 +120,10 @@ export default function AboutPage() {
   return (
     <div className="page">
       <style>{aboutCSS}</style>
+      <article style={{ maxWidth: '68ch', margin: '0 auto', paddingTop: 'clamp(2rem, 5vw, 3rem)' }}>
 
       {/* ── Header ────────────────────────────────────────────────────── */}
-      <header style={{ marginBottom: 56, paddingTop: 'clamp(1rem, 3vw, 2rem)' }}>
+      <header style={{ marginBottom: 56 }}>
         <div style={{
           fontFamily: 'var(--fa-font-mono)', fontSize: 11,
           textTransform: 'uppercase', letterSpacing: '0.14em',
@@ -198,6 +199,7 @@ export default function AboutPage() {
         <ContactForm />
       </section>
 
+      </article>
     </div>
   );
 }

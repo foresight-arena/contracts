@@ -73,7 +73,7 @@ function QuickStartCard({ num, title, desc, code }: {
         padding: '8px 10px', background: 'var(--fa-bg-base)',
         border: '1px solid var(--fa-border-soft)', borderRadius: 6,
         color: 'var(--fa-text-primary)', marginTop: 'auto',
-        display: 'block', wordBreak: 'break-all',
+        display: 'block', whiteSpace: 'nowrap', overflowX: 'auto', scrollbarWidth: 'thin',
       }}>{code}</code>
     </div>
   );

@@ -499,12 +499,12 @@ export default function AgentDetailPage() {
 
 function StatCard({ label, value, accent, valueColor, tooltip, children }: { label: string; value: string; accent?: boolean; valueColor?: string; tooltip?: string; children?: ReactNode }) {
   return (
-    <div style={{ backgroundColor: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', borderRadius: 12, padding: '18px 20px' }} title={tooltip}>
+    <div style={{ backgroundColor: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', borderRadius: 12, padding: '18px 20px', display: 'flex', flexDirection: 'column', minHeight: 92 }} title={tooltip}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--fa-font-mono)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fa-text-tertiary)', marginBottom: 8 }}>
         <span>{label}</span>
         {tooltip && <span style={{ cursor: 'help', opacity: 0.6 }}>ⓘ</span>}
       </div>
-      <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 22, fontWeight: 500, color: valueColor || (accent ? 'var(--fa-danger)' : 'var(--fa-text-primary)'), lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 22, fontWeight: 500, color: valueColor || (accent ? 'var(--fa-danger)' : 'var(--fa-text-primary)'), lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', marginTop: 'auto' }}>{value}</div>
       {children}
     </div>
   );
