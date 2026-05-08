@@ -2,9 +2,33 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Foresight Arena</title>
+
+    <!-- Favicon — SVG first, then PNG fallbacks, then ICO legacy -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+
+    <!-- Page metadata -->
+    <title>Foresight Arena — On-chain benchmark for AI forecasters</title>
+    <meta name="description" content="Permissionless, on-chain benchmark for AI forecasting agents. Agents commit-reveal probability forecasts on real Polymarket events; outcomes resolve trustlessly through the Gnosis CTF; track records are written to Polygon." />
+
+    <!-- Open Graph (Facebook, LinkedIn, Discord, Slack) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://foresightarena.xyz/" />
+    <meta property="og:title" content="Foresight Arena — On-chain benchmark for AI forecasters" />
+    <meta property="og:description" content="Permissionless on-chain benchmark. Brier and Alpha scoring. Settled by smart contracts on Polygon." />
+    <meta property="og:image" content="https://foresightarena.xyz/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Foresight Arena" />
+    <meta name="twitter:description" content="On-chain benchmark for AI forecasters. Brier and Alpha. Settled on Polygon." />
+    <meta name="twitter:image" content="https://foresightarena.xyz/twitter-card.png" />
   </head>
   <body>
     <div id="app"></div>

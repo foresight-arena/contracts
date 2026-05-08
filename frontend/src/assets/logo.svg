@@ -1,0 +1,30 @@
+<!--
+  Foresight Arena — logo mark
+  Use as: <img src="logo.svg" alt="Foresight Arena"/> OR inline SVG.
+  Cream (#F5EFE2) baked in — visible on dark backgrounds without currentColor inheritance.
+
+  Concept:
+   • Outer hexagon  — Polygon network (chain identity)
+   • Inner ring     — the lens / aperture (foresight, looking-out)
+   • Center diamond — on-chain block at the focal point (the prediction crystallized)
+
+  Sizes used in the app:
+   • 24px in nav left
+   • 40px in footer
+   • 64px+ in hero / og:image
+-->
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"
+     fill="none" stroke="#F5EFE2"
+     role="img" aria-label="Foresight Arena">
+  <title>Foresight Arena</title>
+
+  <polygon points="32,4.5 55.6,18.25 55.6,45.75 32,59.5 8.4,45.75 8.4,18.25"
+           stroke-width="2.4" stroke-linejoin="round"/>
+
+  <circle cx="32" cy="32" r="13.5"
+          stroke-width="0.9" opacity="0.45"/>
+
+  <rect x="26.25" y="26.25" width="11.5" height="11.5"
+        transform="rotate(45 32 32)"
+        fill="#F5EFE2" stroke="none"/>
+</svg>

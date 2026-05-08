@@ -22,7 +22,7 @@ const refreshBtnStyle: CSSProperties = {
   transition: 'all 0.15s ease',
 };
 
-export default function ArenaPage() {
+export default function RoundsPage() {
   const { rounds, loading, refresh } = useDataContext();
 
   if (loading) return <LoadingSpinner />;
@@ -68,7 +68,7 @@ export default function ArenaPage() {
                 return (
                   <tr key={round.roundId}>
                     <td>
-                      <Link to={`/round/${round.roundId}`} style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>
+                      <Link to={`/round/${round.roundId}`} style={{ fontWeight: 600, fontFamily: 'var(--fa-font-mono)', fontSize: '0.8125rem' }}>
                         #{round.roundId}
                       </Link>
                     </td>

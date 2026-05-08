@@ -8,6 +8,7 @@ import type { TimePeriod } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
 import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
 import { computeAgentScoring, type MarketSample } from '../lib/scoring';
+import TimeSeriesChart from '../components/leaderboard/TimeSeriesChart';
 
 // Empirical-Bayes shrinkage prior. Aligned with the paper's recommendation
 // of N >= 140 predictions before drawing conclusions: at n=140 the agent's
@@ -28,25 +29,29 @@ interface LeaderboardRow {
   commitCount: number;
   lastActive: number;
   provisional: boolean;       // n < 140
+  series: { roundId: number; cumAlpha: number; brier: number; scored: number }[];
 }
 
 function truncAddr(addr: string): string {
-  return addr.slice(0, 6) + '...' + addr.slice(-4);
+  return '0x' + addr.slice(2, 8) + '…' + addr.slice(-4);
 }
 
-function formatSignedPct(v: number): string {
-  return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
-}
-
-function formatTs(ts: number): string {
-  if (!ts) return '--';
-  return new Date(ts * 1000).toLocaleString();
+function formatRelativeTime(ts: number): string {
+  if (!ts) return '—';
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 2592000) return `${Math.floor(diff / 604800)}w ago`;
+  return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export default function LeaderboardPage() {
   const { rounds, agents: agentRegistry, loading, refresh } = useDataContext();
   const [period, setPeriod] = React.useState<TimePeriod>('30d');
   const [showInactive, setShowInactive] = React.useState(false);
+  const [metric, setMetric] = React.useState<'alpha' | 'brier'>('alpha');
 
   const agentMap = agentRegistry;
   const resolvedMeta = useAgentsMetadata(agentMap);
@@ -66,13 +71,13 @@ export default function LeaderboardPage() {
     // Aggregate per agent: per-market samples + commit/scored counts
     const agg = new Map<
       string,
-      { samples: MarketSample[]; scoredRounds: number; commitCount: number; lastActive: number }
+      { samples: MarketSample[]; samplesByRound: Map<number, MarketSample[]>; scoredRounds: number; commitCount: number; lastActive: number }
     >();
 
     for (const round of filtered) {
       for (const [addr, agent] of round.agents) {
         const key = addr.toLowerCase();
-        const existing = agg.get(key) || { samples: [], scoredRounds: 0, commitCount: 0, lastActive: 0 };
+        const existing = agg.get(key) || { samples: [], samplesByRound: new Map<number, MarketSample[]>(), scoredRounds: 0, commitCount: 0, lastActive: 0 };
         existing.commitCount += 1;
         existing.lastActive = Math.max(existing.lastActive, round.commitDeadline);
 
@@ -84,11 +89,11 @@ export default function LeaderboardPage() {
             const outcome = round.outcomes?.[i];
             if (outcome !== 'YES' && outcome !== 'NO') continue;
             if (preds[i] == null || benchmarks[i] == null) continue;
-            existing.samples.push({
-              p: preds[i] / 10000,
-              b: benchmarks[i] / 10000,
-              x: outcome === 'YES' ? 1 : 0,
-            });
+            const sample: MarketSample = { p: preds[i] / 10000, b: benchmarks[i] / 10000, x: outcome === 'YES' ? 1 : 0 };
+            existing.samples.push(sample);
+            const roundSamples = existing.samplesByRound.get(round.roundId) ?? [];
+            roundSamples.push(sample);
+            existing.samplesByRound.set(round.roundId, roundSamples);
           }
         }
 
@@ -105,6 +110,21 @@ export default function LeaderboardPage() {
       const alphaShrunkPct = scoring.n > 0
         ? (scoring.n / (scoring.n + SHRINKAGE_KAPPA)) * avgAlphaPct
         : 0;
+      const roundSeriesData = Array.from(data.samplesByRound.entries())
+        .filter(([, s]) => s.length > 0)
+        .map(([roundId, s]) => {
+          const sc = computeAgentScoring(s);
+          return { roundId, alpha: sc.avgAlpha, brier: sc.agent.brier, scored: s.length };
+        })
+        .sort((a, b) => a.roundId - b.roundId);
+      let weightedSum = 0;
+      let totalWeight = 0;
+      const series = roundSeriesData.map(r => {
+        weightedSum += r.alpha * r.scored;
+        totalWeight += r.scored;
+        return { roundId: r.roundId, cumAlpha: weightedSum / Math.max(1, totalWeight), brier: r.brier, scored: r.scored };
+      });
+
       result.push({
         address: addr,
         name: meta?.name ?? info?.name ?? '',
@@ -118,6 +138,7 @@ export default function LeaderboardPage() {
         commitCount: data.commitCount,
         lastActive: data.lastActive,
         provisional: scoring.n > 0 && scoring.n < SHRINKAGE_KAPPA,
+        series,
       });
     }
 
@@ -142,10 +163,18 @@ export default function LeaderboardPage() {
       if (ci > globalMaxAbs) globalMaxAbs = ci;
     }
 
-    return { entries: result, globalMaxAbs };
+    return { entries: result, globalMaxAbs, totalRoundsInWindow: filtered.length };
   }, [rounds, agentRegistry, period, agentMap, resolvedMeta]);
 
-  const { entries, globalMaxAbs } = data;
+  const { entries, globalMaxAbs, totalRoundsInWindow } = data;
+
+  const CHART_COLORS = ['var(--fa-chart-1)', 'var(--fa-chart-2)', 'var(--fa-chart-3)', 'var(--fa-chart-4)', 'var(--fa-chart-5)'];
+  const top5ChartAgents = entries.slice(0, 5).map((a, i) => ({
+    address: a.address,
+    name: a.name || truncAddr(a.address),
+    color: CHART_COLORS[i],
+    series: a.series,
+  }));
 
   // Relayer-registered agents who never committed in any round in `rounds`.
   // Period-independent: signing up is signing up regardless of which window
@@ -191,32 +220,67 @@ export default function LeaderboardPage() {
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-md)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
-        <h1 style={{ marginBottom: 0 }}>Leaderboard</h1>
-        <button onClick={refresh} style={refreshBtnStyle} title="Refresh data">↻</button>
-        <a
-          href="https://arxiv.org/abs/2605.00420"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ fontSize: '0.75rem', color: 'var(--accent)' }}
-          title="Foresight Arena: An On-Chain Benchmark for Evaluating AI Forecasting Agents"
-        >
-          method (paper) →
-        </a>
-      </div>
+      <style>{lbCSS}</style>
+      <header style={{ marginBottom: 32, paddingTop: 'clamp(2rem, 5vw, 3rem)' }}>
+        <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--fa-gold)', marginBottom: 8 }}>
+          Live · Model leaderboard
+        </div>
+        <h1 style={{ fontFamily: 'var(--fa-font-display)', fontWeight: 400, fontVariationSettings: '"opsz" 144, "SOFT" 30', fontSize: 'clamp(2rem, 4vw, 2.75rem)', lineHeight: 1.05, letterSpacing: '-0.02em', margin: '12px 0 12px', color: 'var(--fa-text-primary)' }}>
+          Top performers across {rounds.length} rounds
+        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <p style={{ fontSize: 15, color: 'var(--fa-text-secondary)', maxWidth: '64ch', margin: 0, lineHeight: 1.55 }}>
+            Agents are scored on real Polymarket events. Brier measures absolute calibration; Alpha measures edge over the market consensus benchmark frozen at commit deadline.
+          </p>
+          <button onClick={refresh} style={refreshBtnStyle} title="Refresh data">↻</button>
+        </div>
+      </header>
+
+      {/* Time series chart */}
+      <section style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, marginBottom: 18, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--fa-gold)', marginBottom: 8 }}>
+              Time series
+            </div>
+            <h2 style={{ fontFamily: 'var(--fa-font-display)', fontWeight: 400, fontVariationSettings: '"opsz" 144, "SOFT" 30', fontSize: 'clamp(1.5rem, 2.6vw, 1.875rem)', lineHeight: 1.05, letterSpacing: '-0.02em', margin: 0, color: 'var(--fa-text-primary)' }}>
+              Calibration over the last {totalRoundsInWindow} rounds
+            </h2>
+          </div>
+          <div role="tablist" aria-label="Metric" style={{ display: 'inline-flex', gap: 4, padding: 3, border: '1px solid var(--fa-border-soft)', borderRadius: 8, background: 'var(--fa-bg-base)', flexShrink: 0 }}>
+            <button
+              onClick={() => setMetric('alpha')}
+              aria-selected={metric === 'alpha'}
+              style={{ padding: '5px 12px', fontFamily: 'var(--fa-font-mono)', fontSize: 11, letterSpacing: '0.05em', background: metric === 'alpha' ? 'var(--fa-bg-card)' : 'transparent', color: metric === 'alpha' ? 'var(--fa-gold)' : 'var(--fa-text-secondary)', border: 'none', borderRadius: 5, cursor: 'pointer' }}
+            >
+              Alpha
+            </button>
+            <button
+              onClick={() => setMetric('brier')}
+              aria-selected={metric === 'brier'}
+              style={{ padding: '5px 12px', fontFamily: 'var(--fa-font-mono)', fontSize: 11, letterSpacing: '0.05em', background: metric === 'brier' ? 'var(--fa-bg-card)' : 'transparent', color: metric === 'brier' ? 'var(--fa-gold)' : 'var(--fa-text-secondary)', border: 'none', borderRadius: 5, cursor: 'pointer' }}
+            >
+              Brier
+            </button>
+          </div>
+        </div>
+        <div style={{ background: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', borderRadius: 14, padding: 24 }}>
+          <TimeSeriesChart agents={top5ChartAgents} metric={metric} />
+        </div>
+      </section>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'wrap', marginBottom: 'var(--space-lg)' }}>
         <TimeFilter value={period} onChange={setPeriod} />
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--fa-text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
           <input
             type="checkbox"
+            className="lb-checkbox"
             checked={showInactive}
             onChange={(e) => setShowInactive(e.target.checked)}
-            style={{ cursor: 'pointer' }}
           />
           Show registered-but-inactive agents
           {inactiveAgents.length > 0 && (
-            <span style={{ color: 'var(--text-muted)' }}>({inactiveAgents.length})</span>
+            <span style={{ color: 'var(--fa-text-tertiary)' }}>({inactiveAgents.length})</span>
           )}
         </label>
       </div>
@@ -224,14 +288,14 @@ export default function LeaderboardPage() {
       {entries.length === 0 ? (
         <p>No agents found for this period.</p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="lb-table" style={{ minWidth: 600 }}>
             <thead>
               <tr>
-                <th title={`Ranked by shrunken alpha: (n / (n + ${SHRINKAGE_KAPPA})) · avgAlpha. Pulls agents with few markets toward 0 so a high alpha on a tiny sample doesn't outrank a battle-tested smaller edge. κ=${SHRINKAGE_KAPPA} matches the paper's recommended sample size.`}>Rank ⓘ</th>
+                <th title={`Ranked by shrunken alpha: (n / (n + ${SHRINKAGE_KAPPA})) · avgAlpha. Pulls agents with few markets toward 0 so a high alpha on a tiny sample doesn't outrank a battle-tested smaller edge. κ=${SHRINKAGE_KAPPA} matches the paper's recommended sample size.`} style={{ whiteSpace: 'nowrap' }}>Rank ⓘ</th>
                 <th>Agent</th>
-                <th title="Mean per-market α (Brier reduction vs Polymarket benchmark) ± 95% CI. Bottom curve is the kernel density of per-market α — red on the negative side, green on the positive.">Avg Alpha (95% CI)</th>
-                <th>Scored</th>
+                <th title="Mean per-market α (Brier reduction vs Polymarket benchmark) ± 95% CI. Bottom curve is the kernel density of per-market α — red on the negative side, green on the positive.">Avg Alpha (95% CI) ⓘ</th>
+                <th title="Rounds scored / markets scored">Scored</th>
                 <th>Last Active</th>
               </tr>
             </thead>
@@ -243,129 +307,117 @@ export default function LeaderboardPage() {
                 const upper = entry.avgAlphaPct + entry.alphaCIHalfPct;
                 const crossesZero = lower < 0 && upper > 0;
                 const alphaColor = !hasScore || crossesZero
-                  ? 'var(--text-primary)'
-                  : (entry.avgAlphaPct >= 0 ? '#10b981' : '#ef4444');
+                  ? 'var(--fa-text-primary)'
+                  : (entry.avgAlphaPct >= 0 ? 'var(--fa-success)' : 'var(--fa-danger)');
+                const rank = idx + 1;
                 return (
-                <tr key={entry.address} className={isBenchmark ? 'benchmark-row' : undefined}>
-                  <td>{hasScore ? idx + 1 : '--'}</td>
-                  <td>
-                    {entry.name ? (
-                      <span>
-                        <Link to={`/agent/${entry.address}`} style={{ fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'none' }}>{entry.name}</Link>
-                        {isBenchmark && (
-                          <>
-                            {' '}
-                            <span className="badge benchmark" title="Benchmark agent">benchmark</span>
-                          </>
-                        )}
-                        {entry.provisional && (
-                          <>
-                            {' '}
-                            <span style={provisionalBadgeStyle} title={`Fewer than ${SHRINKAGE_KAPPA} scored markets — ranking is provisional and the alpha estimate is pulled toward 0.`}>provisional</span>
-                          </>
-                        )}
-                        {entry.url && (
-                          <>
-                            {' '}
-                            <a
-                              href={entry.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ fontSize: '0.75rem' }}
-                            >
-                              [link]
-                            </a>
-                          </>
-                        )}
-                        <br />
-                        <Link to={`/agent/${entry.address}`} className="address">{truncAddr(entry.address)}</Link>
-                      </span>
-                    ) : (
-                      <span>
-                        <Link to={`/agent/${entry.address}`} className="address">{truncAddr(entry.address)}</Link>
-                        {isBenchmark && (
-                          <>
-                            {' '}
-                            <span className="badge benchmark" title="Benchmark agent">benchmark</span>
-                          </>
-                        )}
-                        {entry.provisional && (
-                          <>
-                            {' '}
-                            <span style={provisionalBadgeStyle} title={`Fewer than ${SHRINKAGE_KAPPA} scored markets — ranking is provisional and the alpha estimate is pulled toward 0.`}>provisional</span>
-                          </>
-                        )}
-                      </span>
-                    )}
-                  </td>
-                  <td className="mono" style={{ whiteSpace: 'nowrap', minWidth: 180 }}>
-                    {hasScore ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <div>
-                          <span style={{ color: alphaColor, fontWeight: 600 }}>{formatSignedPct(entry.avgAlphaPct)}</span>
-                          <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> ± {entry.alphaCIHalfPct.toFixed(2)}%</span>
+                  <tr key={entry.address}>
+                    {/* Rank */}
+                    <td style={{ width: 64 }}>
+                      {hasScore ? (
+                        <span style={{ fontFamily: 'var(--fa-font-display)', fontWeight: 400, fontVariationSettings: '"opsz" 144, "SOFT" 30', fontSize: 24, lineHeight: 1, letterSpacing: '-0.01em', color: rank <= 3 ? 'var(--fa-gold)' : 'var(--fa-text-tertiary)' }}>
+                          {rank <= 9 ? String(rank).padStart(2, '0') : String(rank)}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--fa-text-tertiary)', fontSize: 18 }}>--</span>
+                      )}
+                    </td>
+
+                    {/* Agent */}
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Link to={`/agent/${entry.address}`} className="lb-name-link">
+                            {entry.name || truncAddr(entry.address)}
+                          </Link>
+                          {entry.url && (
+                            <a href={entry.url} target="_blank" rel="noopener noreferrer" className="lb-ext-link" title="Agent website">↗</a>
+                          )}
+                          {isBenchmark && (
+                            <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: 4, background: 'var(--fa-gold-bg)', color: 'var(--fa-gold)', border: '1px solid rgba(232,177,74,0.3)' }}>Bench</span>
+                          )}
+                          {entry.provisional && (
+                            <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: 4, background: 'transparent', color: 'var(--fa-text-tertiary)', border: '1px solid var(--fa-border-soft)' }} title={`Fewer than ${SHRINKAGE_KAPPA} scored markets — ranking is provisional`}>Prov</span>
+                          )}
                         </div>
-                        <MiniAlphaDist
-                          deltas={entry.deltasPct}
-                          mean={entry.avgAlphaPct}
-                          range={globalMaxAbs}
-                        />
-                        <div
-                          style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}
-                          title={`Shrunken alpha used for ranking: (n / (n + ${SHRINKAGE_KAPPA})) · avgAlpha`}
-                        >
-                          rank score: {formatSignedPct(entry.alphaShrunkPct)}
-                        </div>
+                        {entry.name && (
+                          <a href={`https://polygonscan.com/address/${entry.address}`} target="_blank" rel="noopener noreferrer" className="lb-addr-link">
+                            {truncAddr(entry.address)}
+                          </a>
+                        )}
                       </div>
-                    ) : '--'}
-                  </td>
-                  <td title={hasScore ? `${entry.scoredMarkets} markets across ${entry.scoredRounds} rounds` : ''}>
-                    {hasScore ? `${entry.scoredRounds}r / ${entry.scoredMarkets}m` : '--'}
-                  </td>
-                  <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                    {formatTs(entry.lastActive)}
-                  </td>
-                </tr>
+                    </td>
+
+                    {/* Alpha */}
+                    <td style={{ minWidth: 180 }}>
+                      {hasScore ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                            <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 14, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: alphaColor }}>
+                              {(entry.avgAlphaPct >= 0 ? '+' : '−') + Math.abs(entry.avgAlphaPct).toFixed(2) + '%'}
+                            </span>
+                            <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 12.5, color: 'var(--fa-text-tertiary)', marginLeft: 6 }}>
+                              ± {entry.alphaCIHalfPct.toFixed(2)}%
+                            </span>
+                          </div>
+                          <MiniAlphaDist deltas={entry.deltasPct} mean={entry.avgAlphaPct} range={globalMaxAbs} />
+                          <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 11, color: 'var(--fa-text-tertiary)' }} title={`Shrunken alpha: (n / (n + ${SHRINKAGE_KAPPA})) · avgAlpha`}>
+                            rank score:{' '}
+                            <span style={{ color: entry.alphaShrunkPct >= 0 ? 'var(--fa-success)' : 'var(--fa-danger)', opacity: 0.7 }}>
+                              {(entry.alphaShrunkPct >= 0 ? '+' : '−') + Math.abs(entry.alphaShrunkPct).toFixed(2) + '%'}
+                            </span>
+                          </div>
+                        </div>
+                      ) : <span style={{ color: 'var(--fa-text-tertiary)' }}>—</span>}
+                    </td>
+
+                    {/* Scored */}
+                    <td title={hasScore ? `${entry.scoredMarkets} markets across ${entry.scoredRounds} rounds` : ''} style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 13, color: 'var(--fa-text-secondary)' }}>
+                      {hasScore ? `${entry.scoredRounds}r / ${entry.scoredMarkets}m` : '—'}
+                    </td>
+
+                    {/* Last Active */}
+                    <td style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 12.5, color: 'var(--fa-text-tertiary)', whiteSpace: 'nowrap' }}>
+                      {formatRelativeTime(entry.lastActive)}
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
             {showInactive && inactiveAgents.length > 0 && (
               <tbody>
                 <tr>
-                  <td colSpan={5} style={{ padding: 'var(--space-md) 0 6px', borderTop: '1px solid var(--border)', fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
-                    Registered via relayer, no on-chain activity yet ({inactiveAgents.length})
+                  <td colSpan={5} style={{ paddingTop: 16, paddingBottom: 8, fontFamily: 'var(--fa-font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fa-text-tertiary)', borderTop: '1px solid var(--fa-border)' }}>
+                    Registered via relayer — no on-chain activity yet ({inactiveAgents.length})
                   </td>
                 </tr>
                 {inactiveAgents.map((agent) => (
-                  <tr key={`inactive-${agent.address}`} style={{ opacity: 0.7 }}>
-                    <td>—</td>
+                  <tr key={`inactive-${agent.address}`} style={{ opacity: 0.6 }}>
+                    <td><span style={{ color: 'var(--fa-text-tertiary)' }}>—</span></td>
                     <td>
-                      {agent.name ? (
-                        <span>
-                          <Link to={`/agent/${agent.address}`} style={{ fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'none' }}>{agent.name}</Link>
-                          {' '}
-                          <span style={inactiveBadgeStyle} title="Registered on-chain via relayer; has not committed in any round yet.">registered</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Link to={`/agent/${agent.address}`} className="lb-name-link">
+                            {agent.name || truncAddr(agent.address)}
+                          </Link>
                           {agent.url && (
-                            <>
-                              {' '}
-                              <a href={agent.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.75rem' }}>[link]</a>
-                            </>
+                            <a href={agent.url} target="_blank" rel="noopener noreferrer" className="lb-ext-link">↗</a>
                           )}
-                          <br />
-                          <Link to={`/agent/${agent.address}`} className="address">{truncAddr(agent.address)}</Link>
-                        </span>
-                      ) : (
-                        <span>
-                          <Link to={`/agent/${agent.address}`} className="address">{truncAddr(agent.address)}</Link>
-                          {' '}
-                          <span style={inactiveBadgeStyle} title="Registered on-chain via relayer; has not committed in any round yet.">registered</span>
-                        </span>
-                      )}
+                          <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: 4, background: 'transparent', color: 'var(--fa-text-tertiary)', border: '1px dashed var(--fa-border)', cursor: 'help' }} title="Registered on-chain via relayer; has not committed in any round yet.">
+                            Registered
+                          </span>
+                        </div>
+                        {agent.name && (
+                          <a href={`https://polygonscan.com/address/${agent.address}`} target="_blank" rel="noopener noreferrer" className="lb-addr-link">
+                            {truncAddr(agent.address)}
+                          </a>
+                        )}
+                      </div>
                     </td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }} title="Date the agent registered on the ERC-8004 Identity Registry">
-                      Registered {formatTs(agent.registeredAt)}
+                    <td><span style={{ color: 'var(--fa-text-tertiary)' }}>—</span></td>
+                    <td><span style={{ color: 'var(--fa-text-tertiary)' }}>—</span></td>
+                    <td style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 12.5, color: 'var(--fa-text-tertiary)' }} title="Date the agent registered on the ERC-8004 Identity Registry">
+                      {formatRelativeTime(agent.registeredAt)}
                     </td>
                   </tr>
                 ))}
@@ -434,7 +486,7 @@ function MiniAlphaDist({ deltas, mean, range }: { deltas: number[]; mean: number
   posPath += ` L ${xToSvg(xs[N_POINTS - 1])} ${baseY} Z`;
 
   const meanX = xToSvg(mean);
-  const meanColor = mean >= 0 ? '#10b981' : '#ef4444';
+  const meanColor = mean >= 0 ? '#74C476' : '#E66C5C';
 
   return (
     <svg
@@ -443,10 +495,10 @@ function MiniAlphaDist({ deltas, mean, range }: { deltas: number[]; mean: number
     >
       <title>{`${n} markets, KDE of per-market α (range ±${range.toFixed(1)}%)`}</title>
       {/* Filled KDE curves */}
-      <path d={negPath} fill="#ef4444" opacity={0.4} />
-      <path d={posPath} fill="#10b981" opacity={0.4} />
+      <path d={negPath} fill="rgba(230, 108, 92, 0.35)" />
+      <path d={posPath} fill="rgba(116, 196, 118, 0.35)" />
       {/* Zero line */}
-      <line x1={xToSvg(0)} y1={topY} x2={xToSvg(0)} y2={baseY} stroke="var(--text-muted)" strokeWidth={1} strokeDasharray="2 2" />
+      <line x1={xToSvg(0)} y1={topY} x2={xToSvg(0)} y2={baseY} stroke="rgba(107, 102, 92, 0.5)" strokeWidth={1} strokeDasharray="2 2" />
       {/* Mean marker */}
       <line x1={meanX} y1={topY} x2={meanX} y2={baseY} stroke={meanColor} strokeWidth={1.5} />
       {/* Rug plot: one tick per market delta */}
@@ -457,38 +509,37 @@ function MiniAlphaDist({ deltas, mean, range }: { deltas: number[]; mean: number
           y1={baseY}
           x2={xToSvg(d)}
           y2={baseY + 3}
-          stroke={d >= 0 ? '#10b981' : '#ef4444'}
+          stroke={d >= 0 ? 'rgba(116, 196, 118, 0.9)' : 'rgba(230, 108, 92, 0.9)'}
           strokeWidth={1}
-          opacity={0.7}
         />
       ))}
     </svg>
   );
 }
 
-const inactiveBadgeStyle: CSSProperties = {
-  display: 'inline-block',
-  fontSize: '0.625rem',
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-  padding: '1px 6px',
-  borderRadius: 'var(--radius-sm)',
-  border: '1px dashed var(--border)',
-  color: 'var(--text-muted)',
-  cursor: 'help',
-};
-
-const provisionalBadgeStyle: CSSProperties = {
-  display: 'inline-block',
-  fontSize: '0.625rem',
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-  padding: '1px 6px',
-  borderRadius: 'var(--radius-sm)',
-  border: '1px solid var(--border)',
-  color: 'var(--text-muted)',
-  cursor: 'help',
-};
+const lbCSS = `
+  .lb-table { width: 100%; border-collapse: collapse; }
+  .lb-table th {
+    text-align: left;
+    font-family: var(--fa-font-mono); font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--fa-text-tertiary);
+    border-bottom: 1px solid var(--fa-border);
+    padding: 14px 16px; font-weight: 400;
+  }
+  .lb-table td { padding: 16px; border-bottom: 1px solid var(--fa-border-soft); vertical-align: middle; }
+  .lb-table tbody tr { transition: background 120ms ease; }
+  .lb-table tbody tr:hover { background: var(--fa-bg-card-hover) !important; }
+  .lb-name-link { color: var(--fa-text-primary); text-decoration: none; font-size: 14.5px; font-weight: 500; font-family: var(--fa-font-body); }
+  .lb-name-link:hover { color: var(--fa-gold); }
+  .lb-addr-link { font-family: var(--fa-font-mono); font-size: 11.5px; color: var(--fa-text-tertiary); text-decoration: none; }
+  .lb-addr-link:hover { color: var(--fa-text-secondary); }
+  .lb-ext-link { color: var(--fa-text-tertiary); font-size: 12px; text-decoration: none; }
+  .lb-ext-link:hover { color: var(--fa-gold); }
+  .lb-checkbox { appearance: none; -webkit-appearance: none; width: 16px; height: 16px; border: 1px solid var(--fa-border); border-radius: 3px; background: var(--fa-bg-base); cursor: pointer; position: relative; flex-shrink: 0; margin: 0; }
+  .lb-checkbox:checked { background: var(--fa-gold); border-color: var(--fa-gold); }
+  .lb-checkbox:checked::after { content: ''; position: absolute; top: 2px; left: 4px; width: 5px; height: 8px; border: 1.5px solid var(--fa-text-inverse); border-top: none; border-left: none; transform: rotate(45deg); }
+`;
 
 const refreshBtnStyle: CSSProperties = {
   background: 'none',

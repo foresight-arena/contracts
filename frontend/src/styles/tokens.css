@@ -1,0 +1,203 @@
+/* ============================================================
+   Foresight Arena — Design Tokens v1.1
+   Drop into: frontend/src/styles/tokens.css
+   Import once at the top of main.tsx (or App.tsx).
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..700,0..100;1,9..144,300..700,0..100&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Surfaces — warm dark, not blue-cold */
+  --fa-bg-base: #0E0D0B;
+  --fa-bg-elev: #16140F;
+  --fa-bg-card: #1B1814;
+  --fa-bg-card-hover: #221F1A;
+
+  /* Borders */
+  --fa-border-soft: #221F1A;
+  --fa-border: #2D2925;
+  --fa-border-strong: #3F3A33;
+
+  /* Text on dark — cream-tinted, never pure white */
+  --fa-text-primary: #F5EFE2;
+  --fa-text-secondary: #A8A294;
+  --fa-text-tertiary: #6B665C;
+  --fa-text-inverse: #0E0D0B;
+
+  /* Accents */
+  --fa-gold: #E8B14A;
+  --fa-gold-hi: #F2C572;
+  --fa-gold-bg: rgba(232, 177, 74, 0.10);
+
+  --fa-teal: #5DBFB0;
+  --fa-teal-bg: rgba(93, 191, 176, 0.10);
+
+  --fa-polygon: #8247E5;
+  --fa-polygon-bg: rgba(130, 71, 229, 0.10);
+
+  /* Chart categorical palette — line charts up to 5 series */
+  --fa-chart-1: #E8B14A;
+  --fa-chart-2: #5DBFB0;
+  --fa-chart-3: #8247E5;
+  --fa-chart-4: #74C476;
+  --fa-chart-5: #E89A6F;
+
+  /* Semantics */
+  --fa-success: #74C476;
+  --fa-success-bg: rgba(116, 196, 118, 0.10);
+  --fa-danger: #E66C5C;
+  --fa-danger-bg: rgba(230, 108, 92, 0.10);
+
+  /* Typography */
+  --fa-font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --fa-font-body: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --fa-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Type scale — used in utility classes and body reset */
+  --fa-fs-body: 1rem;
+  --fa-fs-small: 0.875rem;
+  --fa-fs-tiny: 0.75rem;
+
+  /* Line heights */
+  --fa-lh-tight: 1.05;
+  --fa-lh-body: 1.55;
+
+  /* Letter-spacing */
+  --fa-ls-tight: -0.02em;
+  --fa-ls-allcaps: 0.12em;
+
+  /* Radii */
+  --fa-r-sm: 6px;
+  --fa-r-md: 10px;
+  --fa-r-lg: 14px;
+  --fa-r-pill: 999px;
+
+  /* Borders */
+  --fa-bw-thin: 1px;
+
+  /* Motion */
+  --fa-ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --fa-dur-fast: 120ms;
+  --fa-dur-base: 200ms;
+
+  /* Focus ring */
+  --fa-focus-ring: 0 0 0 2px var(--fa-bg-base), 0 0 0 4px var(--fa-gold);
+}
+
+/* Light mode (optional toggle via [data-theme="light"]) */
+[data-theme="light"] {
+  --fa-bg-base: #F8F4EB;
+  --fa-bg-elev: #FFFFFF;
+  --fa-bg-card: #FFFFFF;
+  --fa-bg-card-hover: #FAF6EC;
+
+  --fa-border-soft: #E8E1CF;
+  --fa-border: #D7CDB4;
+  --fa-border-strong: #B5A98A;
+
+  --fa-text-primary: #1C1B17;
+  --fa-text-secondary: #5C5849;
+  --fa-text-tertiary: #8A8472;
+  --fa-text-inverse: #F5EFE2;
+
+  --fa-gold-bg: rgba(232, 177, 74, 0.14);
+  --fa-teal-bg: rgba(93, 191, 176, 0.14);
+  --fa-polygon-bg: rgba(130, 71, 229, 0.10);
+  --fa-success-bg: rgba(116, 196, 118, 0.14);
+  --fa-danger-bg: rgba(230, 108, 92, 0.14);
+}
+
+/* Element resets */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body {
+  margin: 0;
+  background: var(--fa-bg-base);
+  color: var(--fa-text-primary);
+  font-family: var(--fa-font-body);
+  font-size: var(--fa-fs-body);
+  line-height: var(--fa-lh-body);
+  font-feature-settings: 'ss01', 'cv01';
+}
+::selection { background: var(--fa-gold); color: var(--fa-text-inverse); }
+
+/* Utility classes — small, intentional */
+.fa-display {
+  font-family: var(--fa-font-display);
+  font-weight: 400;
+  font-variation-settings: 'opsz' 144, 'SOFT' 30;
+  letter-spacing: var(--fa-ls-tight);
+  line-height: var(--fa-lh-tight);
+}
+.fa-display-italic {
+  font-style: italic;
+  font-variation-settings: 'opsz' 144, 'SOFT' 60;
+}
+.fa-mono { font-family: var(--fa-font-mono); }
+
+.fa-eyebrow {
+  font-family: var(--fa-font-mono);
+  font-size: var(--fa-fs-tiny);
+  text-transform: uppercase;
+  letter-spacing: var(--fa-ls-allcaps);
+  color: var(--fa-text-secondary);
+}
+
+.fa-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--fa-r-pill);
+  font-size: var(--fa-fs-tiny);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border: var(--fa-bw-thin) solid var(--fa-border);
+}
+.fa-pill[data-phase="commit"]    { color: var(--fa-teal);    background: var(--fa-teal-bg);    border-color: rgba(93,191,176,0.3); }
+.fa-pill[data-phase="reveal"]    { color: var(--fa-gold);    background: var(--fa-gold-bg);    border-color: rgba(232,177,74,0.3); }
+.fa-pill[data-phase="triggered"] { color: var(--fa-polygon); background: var(--fa-polygon-bg); border-color: rgba(130,71,229,0.3); }
+.fa-pill[data-phase="scored"]    { color: var(--fa-success); background: var(--fa-success-bg); border-color: rgba(116,196,118,0.3); }
+
+.fa-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--fa-r-md);
+  font-family: var(--fa-font-body);
+  font-weight: 500;
+  font-size: var(--fa-fs-small);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: all var(--fa-dur-fast) var(--fa-ease-out);
+  border: var(--fa-bw-thin) solid transparent;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.fa-btn-primary { background: var(--fa-gold); color: var(--fa-text-inverse); border-color: var(--fa-gold); }
+.fa-btn-primary:hover { background: var(--fa-gold-hi); border-color: var(--fa-gold-hi); }
+.fa-btn-secondary { background: transparent; color: var(--fa-text-primary); border-color: var(--fa-border); }
+.fa-btn-secondary:hover { background: var(--fa-bg-card); border-color: var(--fa-border-strong); }
+.fa-btn-ghost { background: transparent; color: var(--fa-text-secondary); border-color: transparent; }
+.fa-btn-ghost:hover { color: var(--fa-text-primary); }
+
+.fa-card {
+  background: var(--fa-bg-card);
+  border: var(--fa-bw-thin) solid var(--fa-border-soft);
+  border-radius: var(--fa-r-lg);
+  transition: border-color var(--fa-dur-base) var(--fa-ease-out);
+}
+.fa-card:hover { border-color: var(--fa-border); }
+
+.fa-live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--fa-success);
+  box-shadow: 0 0 0 3px rgba(116, 196, 118, 0.18);
+  animation: fa-pulse 1.6s ease-in-out infinite;
+}
+@keyframes fa-pulse {
+  50% { box-shadow: 0 0 0 6px rgba(116, 196, 118, 0.05); }
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--fa-focus-ring);
+  border-radius: var(--fa-r-sm);
+}

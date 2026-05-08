@@ -1,29 +1,43 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Colors — deep navy/charcoal with electric accents */
-  --bg-primary: #0b0f1a;
-  --bg-secondary: #111827;
-  --bg-tertiary: #1a2035;
-  --bg-card: #151c2e;
-  --bg-card-hover: #1a2240;
-  --text-primary: #f0f2f5;
-  --text-secondary: #8b95a8;
-  --text-muted: #4b5563;
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
-  --accent-glow: rgba(59, 130, 246, 0.15);
-  --accent-soft: rgba(59, 130, 246, 0.08);
-  --success: #10b981;
-  --success-soft: rgba(16, 185, 129, 0.12);
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.12);
-  --error: #ef4444;
-  --error-soft: rgba(239, 68, 68, 0.12);
-  --border: rgba(255, 255, 255, 0.06);
-  --border-subtle: rgba(255, 255, 255, 0.03);
-  --gradient-accent: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  --gradient-card: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
+  /* Surfaces — aliases to design system */
+  --bg-primary:    var(--fa-bg-base);
+  --bg-secondary:  var(--fa-bg-elev);
+  --bg-tertiary:   var(--fa-bg-card-hover);
+  --bg-card:       var(--fa-bg-card);
+  --bg-card-hover: var(--fa-bg-card-hover);
+
+  /* Text */
+  --text-primary:   var(--fa-text-primary);
+  --text-secondary: var(--fa-text-secondary);
+  --text-muted:     var(--fa-text-tertiary);
+
+  /* Accent (blue → gold) */
+  --accent:       var(--fa-gold);
+  --accent-hover: var(--fa-gold-hi);
+  --accent-glow:  var(--fa-gold-bg);
+  --accent-soft:  var(--fa-gold-bg);
+
+  /* Semantic */
+  --success:      var(--fa-success);
+  --success-soft: var(--fa-success-bg);
+  --warning:      var(--fa-gold);
+  --warning-soft: var(--fa-gold-bg);
+  --error:        var(--fa-danger);
+  --error-soft:   var(--fa-danger-bg);
+
+  /* Borders */
+  --border:        var(--fa-border);
+  --border-subtle: var(--fa-border-soft);
+
+  /* Gradients — warm palette */
+  --gradient-accent: linear-gradient(135deg, var(--fa-gold), var(--fa-polygon));
+  --gradient-card:   linear-gradient(180deg, rgba(245,239,226,0.02) 0%, rgba(245,239,226,0) 100%);
+
+  /* Typography */
+  --font-mono: var(--fa-font-mono);
+  --font-sans: var(--fa-font-body);
 
   /* Spacing */
   --space-xs: 4px;
@@ -34,11 +48,7 @@
   --space-2xl: 48px;
   --space-3xl: 64px;
 
-  /* Typography */
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-
-  /* Borders */
+  /* Radii */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -46,7 +56,7 @@
 
   /* Shadows */
   --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.15);
-  --shadow-glow: 0 0 30px var(--accent-glow);
+  --shadow-glow: 0 0 30px var(--fa-gold-bg);
 }
 
 *,
@@ -64,9 +74,9 @@ html {
 }
 
 body {
-  font-family: var(--font-sans);
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  font-family: var(--fa-font-body, var(--font-sans));
+  background-color: var(--fa-bg-base);
+  color: var(--fa-text-primary);
   line-height: 1.6;
   min-height: 100vh;
 }
@@ -118,7 +128,7 @@ a:hover {
 
 /* Buttons */
 button {
-  font-family: var(--font-sans);
+  font-family: var(--fa-font-body);
   font-size: 0.8125rem;
   font-weight: 600;
   padding: var(--space-sm) var(--space-md);
@@ -184,13 +194,13 @@ tbody tr:hover {
 
 /* Monospace values */
 .mono {
-  font-family: var(--font-mono);
+  font-family: var(--fa-font-mono);
   font-size: 0.8125rem;
 }
 
 /* Address display */
 .address {
-  font-family: var(--font-mono);
+  font-family: var(--fa-font-mono);
   font-size: 0.75rem;
   color: var(--accent);
   opacity: 0.8;
@@ -266,6 +276,16 @@ tr.benchmark-row {
 tr.benchmark-row:hover {
   background-color: var(--accent-glow);
 }
+
+/* Body link — gold underline, used in /about and /developer prose */
+.fa-body-link {
+  color: var(--fa-gold);
+  text-decoration: underline;
+  text-decoration-color: var(--fa-gold-bg);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 120ms ease;
+}
+.fa-body-link:hover { text-decoration-color: var(--fa-gold); }
 
 /* Responsive */
 @media (max-width: 768px) {

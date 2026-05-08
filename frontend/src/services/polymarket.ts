@@ -44,10 +44,16 @@ const POLYMARKET_BASE = import.meta.env.DEV
 
 async function fetchOne(cid: string): Promise<PolymarketInfo | null> {
   try {
-    const resp = await fetch(`${POLYMARKET_BASE}/markets?condition_ids=${cid}`);
-    if (!resp.ok) return null;
-    const markets = await resp.json();
-    if (!Array.isArray(markets) || markets.length === 0) return null;
+    // Gamma API's /markets filters by closed status (default: open only).
+    // Fetch both in parallel and take whichever returns a result.
+    const [openData, closedData] = await Promise.all([
+      fetch(`${POLYMARKET_BASE}/markets?condition_ids=${cid}&closed=false`).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`${POLYMARKET_BASE}/markets?condition_ids=${cid}&closed=true`).then(r => r.ok ? r.json() : []).catch(() => []),
+    ]);
+    const markets = Array.isArray(openData) && openData.length > 0 ? openData
+      : Array.isArray(closedData) && closedData.length > 0 ? closedData
+      : [];
+    if (markets.length === 0) return null;
     const m = markets[0];
     const event = m.events?.[0] || {};
     const eventSlug = event.slug || m.slug || '';

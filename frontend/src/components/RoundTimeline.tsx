@@ -1,332 +1,190 @@
-import { useState, useMemo, type CSSProperties, type ReactElement } from 'react';
+import { useMemo } from 'react';
 import type { Round } from '../types';
 
-interface TimelineEvent {
-  time: number;
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function fmtDate(ts: number): string {
+  return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function fmtCountdown(ts: number, now: number): string {
+  const diff = ts - now;
+  if (diff <= 0) return fmtDate(ts);
+  const h = Math.floor(diff / 3600);
+  const m = Math.floor((diff % 3600) / 60);
+  if (h > 48) return `in ${Math.floor(h / 24)}d`;
+  if (h > 0) return `in ${h}h ${m}m`;
+  return `in ${m}m`;
+}
+
+// ─── layout ──────────────────────────────────────────────────────────────────
+
+const W = 640;
+const H = 80;
+const PAD = 40;
+const CY = 26;
+
+// ─── types ───────────────────────────────────────────────────────────────────
+
+type PhaseState = 'done' | 'active' | 'future' | 'void' | 'voided';
+
+interface Phase {
   label: string;
-  type: 'milestone' | 'commit' | 'reveal' | 'now';
-  color: string;
-  detail?: string;
+  sub: string;
+  state: PhaseState;
 }
 
-function shortTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-}
+// ─── component ───────────────────────────────────────────────────────────────
 
-function truncAddr(addr: string): string {
-  return addr.slice(0, 6) + '...' + addr.slice(-4);
-}
-
-const COLORS = {
-  created: '#6366f1',
-  commitDeadline: '#f59e0b',
-  revealStart: '#10b981',
-  revealDeadline: '#ef4444',
-  commit: '#3b82f6',
-  now: '#e94560',
-  reveal: '#22d3ee',       // cyan
-  resolved: '#10b981',    // green (market resolution)
-  triggered: '#a855f7',
-};
-
-export default function RoundTimeline({ round, agentNames }: {
+export default function RoundTimeline({ round }: {
   round: Round;
-  agentNames: Map<string, string>;
+  agentNames: Map<string, string>; // kept for API compatibility
 }) {
-  const [hovered, setHovered] = useState<number | null>(null);
+  const now = Math.floor(Date.now() / 1000);
 
-  const { milestones, commits, reveals, nowEvent } = useMemo(() => {
-    const ms: TimelineEvent[] = [];
-    const cs: TimelineEvent[] = [];
-    const rs: TimelineEvent[] = [];
+  const phases = useMemo<Phase[]>(() => {
+    const hasScores = Array.from(round.agents.values()).some(a => a.scoredMarkets > 0);
+    const commitDone = now >= round.commitDeadline;
+    const revealDone = now >= round.revealDeadline;
 
-    if (round.createdAt) {
-      ms.push({ time: round.createdAt, label: 'Round created', type: 'milestone', color: COLORS.created });
+    if (round.invalidated) {
+      return [
+        { label: 'Commit',    sub: fmtDate(round.commitDeadline), state: 'void' },
+        { label: 'Reveal',    sub: fmtDate(round.revealDeadline), state: 'void' },
+        { label: 'Triggered', sub: '—',                           state: 'void' },
+        { label: 'Scored',    sub: '—',                           state: 'void' },
+        { label: 'Voided',    sub: '—',                           state: 'voided' },
+      ];
     }
 
-    for (const [addr, agent] of round.agents) {
-      const name = agentNames.get(addr) || truncAddr(addr);
-      if (agent.commitTimestamp) {
-        cs.push({ time: agent.commitTimestamp, label: name, type: 'commit', color: COLORS.commit, detail: 'committed' });
-      }
-      if (agent.revealTimestamp) {
-        rs.push({ time: agent.revealTimestamp, label: name, type: 'reveal', color: COLORS.reveal, detail: 'revealed' });
-      }
-    }
+    return [
+      {
+        label: 'Commit',
+        sub: commitDone
+          ? fmtDate(round.commitDeadline)
+          : fmtCountdown(round.commitDeadline, now),
+        state: commitDone ? 'done' : 'active',
+      },
+      {
+        label: 'Reveal',
+        sub: revealDone
+          ? fmtDate(round.revealDeadline)
+          : commitDone
+          ? fmtCountdown(round.revealDeadline, now)
+          : 'pending',
+        state: revealDone ? 'done' : commitDone ? 'active' : 'future',
+      },
+      {
+        label: 'Triggered',
+        sub: round.outcomesTriggered && round.outcomesTriggeredAt
+          ? fmtDate(round.outcomesTriggeredAt)
+          : revealDone ? 'pending' : '—',
+        state: round.outcomesTriggered ? 'done' : revealDone ? 'active' : 'future',
+      },
+      {
+        label: 'Scored',
+        sub: hasScores ? 'complete' : '—',
+        state: hasScores ? 'done' : round.outcomesTriggered ? 'active' : 'future',
+      },
+    ];
+  }, [round, now]);
 
-    ms.push({ time: round.commitDeadline, label: 'Commit deadline', type: 'milestone', color: COLORS.commitDeadline });
-    ms.push({ time: round.revealStart, label: 'Reveal start', type: 'milestone', color: COLORS.revealStart });
-    ms.push({ time: round.revealDeadline, label: 'Reveal deadline', type: 'milestone', color: COLORS.revealDeadline });
-
-    // Market resolutions
-    for (let i = 0; i < (round.marketResolutions || []).length; i++) {
-      const mr = round.marketResolutions[i];
-      if (mr.resolvedAt && mr.outcome) {
-        ms.push({
-          time: mr.resolvedAt,
-          label: `Market ${i + 1} resolved ${mr.outcome}`,
-          type: 'milestone',
-          color: COLORS.resolved,
-        });
-      }
-    }
-
-    if (round.outcomesTriggered && round.outcomesTriggeredAt) {
-      ms.push({ time: round.outcomesTriggeredAt, label: 'Outcomes triggered', type: 'milestone', color: COLORS.triggered });
-    }
-
-    let nw: TimelineEvent | null = null;
-    const all = [...ms, ...cs, ...rs];
-    const now = Math.floor(Date.now() / 1000);
-    if (all.length > 0) {
-      const start = Math.min(...all.map(e => e.time));
-      const end = Math.max(...all.map(e => e.time));
-      if (now >= start && now <= end + (end - start) * 0.1) {
-        nw = { time: now, label: 'Now', type: 'now', color: COLORS.now };
-      }
-    }
-
-    return {
-      milestones: ms.sort((a, b) => a.time - b.time),
-      commits: cs.sort((a, b) => a.time - b.time),
-      reveals: rs.sort((a, b) => a.time - b.time),
-      nowEvent: nw,
-    };
-  }, [round, agentNames]);
-
-  const allEvents = useMemo(() => {
-    const all = [...milestones, ...commits, ...reveals];
-    if (nowEvent) all.push(nowEvent);
-    return all;
-  }, [milestones, commits, reveals, nowEvent]);
-
-  if (allEvents.length < 3) return null;
-
-  const minTime = Math.min(...allEvents.map(e => e.time));
-  const maxTime = Math.max(...allEvents.map(e => e.time));
-  const range = maxTime - minTime || 1;
-  const toPercent = (t: number) => ((t - minTime) / range) * 100;
-
-  const commitStart = round.createdAt || minTime;
-  const phases = [
-    { start: commitStart, end: round.commitDeadline, color: 'rgba(59, 130, 246, 0.08)', label: 'Commit' },
-    { start: round.commitDeadline, end: round.revealStart, color: 'rgba(245, 158, 11, 0.06)', label: 'Gap' },
-    { start: round.revealStart, end: round.revealDeadline, color: 'rgba(16, 185, 129, 0.08)', label: 'Reveal' },
-  ];
-
-  // Cluster overlapping events into a single dot with count
-  function clusterEvents(events: TimelineEvent[]) {
-    const clusters: { time: number; count: number; events: TimelineEvent[] }[] = [];
-    for (const e of events) {
-      const pct = toPercent(e.time);
-      const last = clusters[clusters.length - 1];
-      if (last && Math.abs(toPercent(last.time) - pct) < 2) {
-        last.count++;
-        last.events.push(e);
-      } else {
-        clusters.push({ time: e.time, count: 1, events: [e] });
-      }
-    }
-    return clusters;
-  }
-
-  const commitClusters = clusterEvents(commits);
-  const revealClusters = clusterEvents(reveals);
-
+  const N = phases.length;
+  const plotW = W - 2 * PAD;
+  const cx = (i: number) => PAD + (i / (N - 1)) * plotW;
 
   return (
-    <div style={containerStyle}>
-      <h2 style={{ marginBottom: 'var(--space-md)' }}>Timeline</h2>
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="xMidYMid meet"
+      style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
+    >
+      {/* Connectors */}
+      {phases.slice(0, -1).map((ph, i) => {
+        const next = phases[i + 1];
+        const r1 = ph.state === 'active' ? 11 : 9;
+        const r2 = next.state === 'active' ? 11 : 9;
+        const bothDone = ph.state === 'done' && next.state === 'done';
+        const toActive = ph.state === 'done' && next.state === 'active';
+        const isVoid = ph.state === 'void';
+        return (
+          <line
+            key={i}
+            x1={cx(i) + r1} y1={CY}
+            x2={cx(i + 1) - r2} y2={CY}
+            style={{
+              stroke: isVoid || bothDone
+                ? 'var(--fa-text-tertiary)'
+                : toActive
+                ? 'var(--fa-gold)'
+                : 'var(--fa-border-soft)',
+              strokeWidth: 1.5,
+              strokeDasharray: (!bothDone && !toActive && !isVoid) ? '4 3' : 'none',
+              opacity: isVoid ? 0.3 : 1,
+            }}
+          />
+        );
+      })}
 
-      <div style={barContainerStyle}>
-        {/* Phase backgrounds */}
-        {phases.map((phase, i) => {
-          const left = Math.max(0, toPercent(phase.start));
-          const right = Math.min(100, toPercent(phase.end));
-          if (right <= left) return null;
-          return (
-            <div key={`phase-${i}`} style={{
-              position: 'absolute', left: `${left}%`, width: `${right - left}%`,
-              top: 0, bottom: 0, backgroundColor: phase.color,
-              borderRadius: i === 0 ? '6px 0 0 6px' : i === phases.length - 1 ? '0 6px 6px 0' : 0,
-            }}>
-              {(right - left) > 12 && (
-                <span style={phaseLabelStyle}>{phase.label}</span>
-              )}
-            </div>
-          );
-        })}
+      {/* Nodes */}
+      {phases.map((ph, i) => {
+        const x = cx(i);
+        const active  = ph.state === 'active';
+        const done    = ph.state === 'done';
+        const voided  = ph.state === 'voided';
+        const voidDim = ph.state === 'void';
+        const r = active ? 10 : 8;
 
-        <div style={trackStyle} />
-
-        {/* Day boundaries */}
-        {(() => {
-          const firstDay = new Date(minTime * 1000);
-          firstDay.setHours(0, 0, 0, 0);
-          let dayStart = Math.floor(firstDay.getTime() / 1000) + 86400; // start from next midnight
-          const lines: ReactElement[] = [];
-          while (dayStart < maxTime) {
-            const pct = toPercent(dayStart);
-            if (pct > 1 && pct < 99) {
-              const dayLabel = new Date(dayStart * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-              lines.push(
-                <div key={`day-${dayStart}`} style={{
-                  position: 'absolute', left: `${pct}%`, top: 0, bottom: -16,
-                  width: 1, backgroundColor: 'var(--border)', opacity: 0.5,
-                  transform: 'translateX(-50%)', zIndex: 1,
-                }}>
-                  <span style={{
-                    position: 'absolute', bottom: -14, left: '50%', transform: 'translateX(-50%)',
-                    fontSize: '0.5625rem', color: 'var(--text-muted)', whiteSpace: 'nowrap',
-                  }}>
-                    {dayLabel}
-                  </span>
-                </div>
-              );
-            }
-            dayStart += 86400;
-          }
-          return lines;
-        })()}
-
-        {/* Milestone markers */}
-        {milestones.map((evt, i) => (
-          <div
-            key={`ms-${i}`}
-            style={{ position: 'absolute', left: `${toPercent(evt.time)}%`, top: '25%', transform: 'translate(-50%, 0)', zIndex: 3, cursor: 'pointer' }}
-            onMouseEnter={() => setHovered(i)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div style={{
-              width: 14, height: 14, borderRadius: '50%',
-              backgroundColor: evt.color, border: '2px solid var(--bg-primary)',
-              boxShadow: `0 0 0 1px ${evt.color}40`,
-            }} />
-            {hovered === i && (
-              <div style={tooltipStyle}>
-                <div style={{ fontWeight: 600, marginBottom: 2 }}>{evt.label}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.625rem' }}>{shortTime(evt.time)}</div>
-              </div>
+        return (
+          <g key={i} style={{ opacity: voidDim ? 0.35 : 1 }}>
+            {/* Glow ring */}
+            {active && (
+              <circle cx={x} cy={CY} r={16}
+                style={{ fill: 'none', stroke: 'var(--fa-gold)', strokeWidth: 1.5, opacity: 0.2 }} />
             )}
-          </div>
-        ))}
 
-        {/* Commit cluster markers */}
-        {commitClusters.map((cluster, i) => {
-          const idx = milestones.length + i;
-          return (
-            <div
-              key={`cc-${i}`}
-              style={{ position: 'absolute', left: `${toPercent(cluster.time)}%`, top: '35%', transform: 'translate(-50%, 0)', zIndex: 2, cursor: 'pointer' }}
-              onMouseEnter={() => setHovered(idx)}
-              onMouseLeave={() => setHovered(null)}
+            {/* Circle */}
+            <circle cx={x} cy={CY} r={r}
+              style={{
+                fill: done ? 'var(--fa-text-tertiary)'
+                  : active ? 'var(--fa-gold)'
+                  : voided ? 'var(--fa-danger)'
+                  : 'none',
+                stroke: (!done && !active && !voided) ? 'var(--fa-border-soft)' : 'none',
+                strokeWidth: 1.5,
+              }}
+            />
+
+            {/* Phase label */}
+            <text x={x} y={CY + 19} textAnchor="middle"
+              style={{
+                fontFamily: 'var(--fa-font-mono)',
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '0.09em',
+                fill: active ? 'var(--fa-gold)'
+                  : voided ? 'var(--fa-danger)'
+                  : 'var(--fa-text-tertiary)',
+                fontWeight: (active || voided) ? '600' : '400',
+              }}
             >
-              <div style={{
-                width: cluster.count > 1 ? 16 : 10, height: cluster.count > 1 ? 16 : 10,
-                borderRadius: '50%', backgroundColor: COLORS.commit,
-                border: '2px solid var(--bg-primary)', boxShadow: `0 0 0 1px ${COLORS.commit}40`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.5rem', fontWeight: 700, color: '#fff',
-              }}>
-                {cluster.count > 1 ? cluster.count : ''}
-              </div>
-              {hovered === idx && (
-                <div style={tooltipStyle}>
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                    {cluster.count} commit{cluster.count > 1 ? 's' : ''}
-                  </div>
-                  {cluster.events.map((e, j) => (
-                    <div key={j} style={{ fontSize: '0.625rem', color: 'var(--text-secondary)' }}>
-                      {e.label} -- {shortTime(e.time)}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+              {ph.label}
+            </text>
 
-        {/* Reveal cluster markers */}
-        {revealClusters.map((cluster, i) => {
-          const idx = milestones.length + commitClusters.length + i;
-          return (
-            <div
-              key={`rc-${i}`}
-              style={{ position: 'absolute', left: `${toPercent(cluster.time)}%`, top: '15%', transform: 'translate(-50%, 0)', zIndex: 2, cursor: 'pointer' }}
-              onMouseEnter={() => setHovered(idx)}
-              onMouseLeave={() => setHovered(null)}
+            {/* Sub-label (date or status) */}
+            <text x={x} y={CY + 31} textAnchor="middle"
+              style={{
+                fontFamily: 'var(--fa-font-mono)',
+                fontSize: 9,
+                fill: 'var(--fa-text-tertiary)',
+                opacity: 0.65,
+              }}
             >
-              <div style={{
-                width: cluster.count > 1 ? 16 : 10, height: cluster.count > 1 ? 16 : 10,
-                borderRadius: '50%', backgroundColor: COLORS.reveal,
-                border: '2px solid var(--bg-primary)', boxShadow: `0 0 0 1px ${COLORS.reveal}40`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.5rem', fontWeight: 700, color: '#fff',
-              }}>
-                {cluster.count > 1 ? cluster.count : ''}
-              </div>
-              {hovered === idx && (
-                <div style={tooltipStyle}>
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                    {cluster.count} reveal{cluster.count > 1 ? 's' : ''}
-                  </div>
-                  {cluster.events.map((e, j) => (
-                    <div key={j} style={{ fontSize: '0.625rem', color: 'var(--text-secondary)' }}>
-                      {e.label} -- {shortTime(e.time)}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* NOW line */}
-        {nowEvent && (
-          <div style={{ ...nowLineStyle, left: `${toPercent(nowEvent.time)}%` }}>
-            <div style={nowLabelStyle}>NOW</div>
-          </div>
-        )}
-      </div>
-
-    </div>
+              {ph.sub}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
-
-const containerStyle: CSSProperties = { marginBottom: 'var(--space-xl)' };
-
-const barContainerStyle: CSSProperties = {
-  position: 'relative', height: 48, marginBottom: 'var(--space-xl)', borderRadius: 6, overflow: 'visible',
-};
-
-const trackStyle: CSSProperties = {
-  position: 'absolute', top: '50%', left: 0, right: 0, height: 2,
-  backgroundColor: 'var(--border)', transform: 'translateY(-50%)',
-};
-
-const phaseLabelStyle: CSSProperties = {
-  position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-  fontSize: '0.625rem', fontWeight: 600, textTransform: 'uppercase',
-  letterSpacing: '0.08em', color: 'var(--text-muted)', whiteSpace: 'nowrap',
-};
-
-const nowLineStyle: CSSProperties = {
-  position: 'absolute', top: 0, bottom: -4, width: 2,
-  backgroundColor: COLORS.now, transform: 'translateX(-50%)', zIndex: 4,
-};
-
-const nowLabelStyle: CSSProperties = {
-  position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)',
-  fontSize: '0.5625rem', fontWeight: 700, color: COLORS.now, letterSpacing: '0.05em',
-};
-
-const tooltipStyle: CSSProperties = {
-  position: 'absolute', top: -8, left: '50%', transform: 'translate(-50%, -100%)',
-  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontSize: '0.6875rem',
-  color: 'var(--text-primary)', whiteSpace: 'nowrap', zIndex: 10,
-  boxShadow: '0 4px 12px rgba(0,0,0,0.3)', pointerEvents: 'none',
-};
-
