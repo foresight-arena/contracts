@@ -277,6 +277,16 @@ tr.benchmark-row:hover {
   background-color: var(--accent-glow);
 }
 
+/* Body link — gold underline, used in /about and /developer prose */
+.fa-body-link {
+  color: var(--fa-gold);
+  text-decoration: underline;
+  text-decoration-color: var(--fa-gold-bg);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 120ms ease;
+}
+.fa-body-link:hover { text-decoration-color: var(--fa-gold); }
+
 /* Responsive */
 @media (max-width: 768px) {
   #app {

@@ -9,6 +9,7 @@ import { DataProvider } from './context/DataContext';
 import RoundsPage from './pages/RoundsPage';
 import EventsPage from './pages/EventsPage';
 import DeveloperPage from './pages/DeveloperPage';
+import AboutPage from './pages/AboutPage';
 import RoundDetailPage from './pages/RoundDetailPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import LandingPage from './pages/LandingPage';
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
       { path: 'rounds', element: <RoundsPage /> },
       { path: 'events', element: <EventsPage /> },
       { path: 'developer', element: <DeveloperPage /> },
+      { path: 'about', element: <AboutPage /> },
       { path: 'round/:roundId', element: <RoundDetailPage /> },
       { path: 'agent/:address', element: <AgentDetailPage /> },
       { path: 'leaderboard', element: <LeaderboardPage /> },
