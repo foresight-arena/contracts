@@ -6,23 +6,27 @@ interface Props {
   onChange: (v: TimePeriod) => void;
 }
 
-const groupStyle: CSSProperties = {
-  display: 'flex',
-  gap: 'var(--space-xs)',
+const containerStyle: CSSProperties = {
+  display: 'inline-flex',
+  gap: 4,
+  padding: 3,
+  border: '1px solid var(--fa-border-soft)',
+  borderRadius: 8,
+  background: 'var(--fa-bg-base)',
 };
 
 function btnStyle(active: boolean): CSSProperties {
   return {
     padding: '6px 14px',
-    fontSize: '0.8125rem',
-    fontWeight: 600,
-    border: '1px solid',
-    borderColor: active ? 'var(--accent)' : 'var(--border)',
-    borderRadius: 'var(--radius-sm)',
-    backgroundColor: active ? 'var(--accent)' : 'var(--bg-tertiary)',
-    color: active ? '#000' : 'var(--text-secondary)',
+    fontFamily: 'var(--fa-font-mono)',
+    fontSize: 11,
+    letterSpacing: '0.05em',
+    background: active ? 'var(--fa-bg-card)' : 'transparent',
+    color: active ? 'var(--fa-gold)' : 'var(--fa-text-secondary)',
+    border: 'none',
+    borderRadius: 5,
     cursor: 'pointer',
-    transition: 'all 0.15s ease',
+    transition: 'background 120ms ease, color 120ms ease',
   };
 }
 
@@ -34,7 +38,7 @@ const options: { label: string; value: TimePeriod }[] = [
 
 export default function TimeFilter({ value, onChange }: Props) {
   return (
-    <div style={groupStyle}>
+    <div style={containerStyle}>
       {options.map((opt) => (
         <button
           key={opt.value}
