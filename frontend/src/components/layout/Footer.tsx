@@ -200,8 +200,8 @@ export default function Footer(): JSX.Element {
               <span style={colHeadStyle}>Research</span>
               <ul style={linkListStyle}>
                 <li>
-                  <a href="https://arxiv.org/abs/2605.00420" target="_blank" rel="noopener noreferrer" style={linkStyle}>
-                    arXiv:2605.00420 ↗
+                  <a href="https://www.foresightflow.org/publications/foresight-arena" target="_blank" rel="noopener noreferrer" style={linkStyle}>
+                    Foresight Arena paper ↗
                   </a>
                 </li>
                 <li>
@@ -239,7 +239,7 @@ export default function Footer(): JSX.Element {
               <a href="#" style={iconBtnStyle} aria-label="X (Twitter)">
                 <IconX />
               </a>
-              <a href="https://arxiv.org/abs/2605.00420" target="_blank" rel="noopener noreferrer" style={iconBtnStyle} aria-label="arXiv paper">
+              <a href="https://www.foresightflow.org/publications/foresight-arena" target="_blank" rel="noopener noreferrer" style={iconBtnStyle} aria-label="Foresight Arena paper">
                 <IconArxiv />
               </a>
               <a

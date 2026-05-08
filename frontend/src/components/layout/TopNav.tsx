@@ -95,7 +95,7 @@ export default function TopNav(): JSX.Element {
             Build ↗
           </a>
           <a
-            href="https://arxiv.org/abs/2605.00420"
+            href="https://www.foresightflow.org/"
             target="_blank"
             rel="noopener noreferrer"
             style={baseLinkStyle}
