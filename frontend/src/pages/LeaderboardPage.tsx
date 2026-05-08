@@ -288,8 +288,8 @@ export default function LeaderboardPage() {
       {entries.length === 0 ? (
         <p>No agents found for this period.</p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="lb-table">
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="lb-table" style={{ minWidth: 600 }}>
             <thead>
               <tr>
                 <th title={`Ranked by shrunken alpha: (n / (n + ${SHRINKAGE_KAPPA})) · avgAlpha. Pulls agents with few markets toward 0 so a high alpha on a tiny sample doesn't outrank a battle-tested smaller edge. κ=${SHRINKAGE_KAPPA} matches the paper's recommended sample size.`} style={{ whiteSpace: 'nowrap' }}>Rank ⓘ</th>

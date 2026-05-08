@@ -238,7 +238,7 @@ export default function AgentDetailPage() {
           </h1>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-            <code style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 12, color: 'var(--fa-text-tertiary)', letterSpacing: '0.02em' }}>
+            <code className="agent-address-code" style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 12, color: 'var(--fa-text-tertiary)', letterSpacing: '0.02em' }}>
               {rawAddress}
             </code>
             <button onClick={handleCopy} className="agent-copy-btn">
@@ -736,4 +736,8 @@ const agentCSS = `
   .agent-rh-revealed { background: var(--fa-success-bg); color: var(--fa-success); border: 1px solid rgba(116,196,118,0.3); }
   .agent-rh-missed   { background: var(--fa-danger-bg);  color: var(--fa-danger);  border: 1px solid rgba(230,108,92,0.3); }
   .agent-rh-pending  { background: transparent; color: var(--fa-text-tertiary); border: 1px solid var(--fa-border-soft); }
+
+  @media (max-width: 640px) {
+    .agent-address-code { font-size: 10px; word-break: break-all; }
+  }
 `;

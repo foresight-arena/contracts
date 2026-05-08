@@ -22,6 +22,10 @@ const iconLinkStyle: React.CSSProperties = {
 const footerCSS = `
   .footer-link:hover { color: var(--fa-text-primary) !important; }
   .footer-icon:hover { color: var(--fa-text-primary) !important; background: var(--fa-bg-card-hover) !important; }
+
+  @media (max-width: 640px) {
+    .footer-credit { width: 100%; text-align: center; order: 3; }
+  }
 `;
 
 export default function Footer(): JSX.Element {
@@ -40,7 +44,7 @@ export default function Footer(): JSX.Element {
         }}>
           <Brand size="sm" />
 
-          <span style={{
+          <span className="footer-credit" style={{
             fontFamily: 'var(--fa-font-mono)', fontSize: 11,
             color: 'var(--fa-text-tertiary)',
             textTransform: 'uppercase', letterSpacing: '0.1em',

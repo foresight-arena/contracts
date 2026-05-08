@@ -11,6 +11,11 @@ const mobileCSS = `
   @media (max-width: 480px) {
     .topnav-center { gap: 16px !important; }
   }
+  @media (max-width: 640px) {
+    .topnav-header { padding: 12px !important; gap: 8px !important; }
+    .topnav-pill   { display: none !important; }
+    .topnav-center { gap: 12px !important; }
+  }
 `;
 
 const headerStyle: CSSProperties = {
@@ -82,7 +87,7 @@ export default function TopNav(): JSX.Element {
   return (
     <>
       <style>{mobileCSS}</style>
-      <header style={headerStyle}>
+      <header className="topnav-header" style={headerStyle}>
         <Link to="/" style={{ textDecoration: 'none' }}>
           <Brand size="sm" />
         </Link>
