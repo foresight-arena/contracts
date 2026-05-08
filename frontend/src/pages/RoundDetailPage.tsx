@@ -465,17 +465,18 @@ export default function RoundDetailPage() {
                         </span>
                       )}
                     </div>
-                    {meta?.category && (
-                      <span style={{
-                        fontFamily: 'var(--fa-font-mono)', fontSize: 9,
-                        textTransform: 'uppercase', letterSpacing: '0.1em',
-                        padding: '2px 6px', borderRadius: 4, flexShrink: 0,
-                        border: '1px solid var(--fa-border-soft)',
-                        color: 'var(--fa-text-tertiary)',
-                      }}>
-                        {meta.category}
-                      </span>
-                    )}
+                    {(() => {
+                      const cs = styleForCategory(meta?.category);
+                      if (!cs) return null;
+                      return (
+                        <span style={{
+                          fontFamily: 'var(--fa-font-mono)',
+                          textTransform: 'uppercase', letterSpacing: '0.1em',
+                          fontSize: 9.5, padding: '2px 8px', borderRadius: 999, flexShrink: 0,
+                          color: cs.color, background: cs.bg, border: `1px solid ${cs.border}`,
+                        }}>{meta!.category}</span>
+                      );
+                    })()}
                   </div>
 
                   {/* Benchmark bar */}
