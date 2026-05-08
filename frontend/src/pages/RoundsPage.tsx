@@ -22,7 +22,7 @@ const refreshBtnStyle: CSSProperties = {
   transition: 'all 0.15s ease',
 };
 
-export default function ArenaPage() {
+export default function RoundsPage() {
   const { rounds, loading, refresh } = useDataContext();
 
   if (loading) return <LoadingSpinner />;

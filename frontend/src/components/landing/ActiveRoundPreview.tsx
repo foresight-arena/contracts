@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useDataContext } from '../../context/DataContext';
 import { fetchMarketMetadata, type PolymarketInfo } from '../../services/polymarket';
 import type { Round } from '../../types';
+import MarketCard from '../markets/MarketCard';
 
 // ─── Phase helpers (adapted from StatusBadge logic) ───────────────────────────
 
@@ -46,9 +47,6 @@ const css = `
   .rd-card { background: var(--fa-bg-card); border: 1px solid var(--fa-border-soft); border-radius: 14px; padding: 24px; }
   .rd-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
   .rd-markets { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-  .mkt-card { background: var(--fa-bg-base); border: 1px solid var(--fa-border-soft); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; transition: border-color 160ms ease, transform 160ms ease; text-decoration: none; color: inherit; }
-  .mkt-card:hover { border-color: var(--fa-border); transform: translateY(-1px); }
-  .mkt-question { font-size: 14.5px; line-height: 1.4; font-weight: 500; color: var(--fa-text-primary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 `;
 
 // ─── PhasePill ────────────────────────────────────────────────────────────────
@@ -79,67 +77,6 @@ function PhasePill({ phase }: { phase: RoundPhase }) {
     }}>
       {pillLabels[phase]}
     </span>
-  );
-}
-
-// ─── MarketCard ───────────────────────────────────────────────────────────────
-
-function MarketCard({
-  conditionId, yesPrice, info, roundId,
-}: {
-  conditionId: string;
-  yesPrice: number;       // 0–1 from benchmarkPrices snapshot
-  info?: PolymarketInfo;
-  roundId: number;
-}) {
-  const yesPct = Math.max(0, Math.min(100, Math.round(yesPrice * 100)));
-  const noPct = 100 - yesPct;
-  const href = info?.url || `/round/${roundId}`;
-  const isExternal = !!info?.url;
-  const title = info?.title ?? null;
-
-  const endDateDisplay = (() => {
-    if (!info?.endDate) return null;
-    const d = new Date(info.endDate);
-    if (isNaN(d.getTime())) return null;
-    return 'Ends ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  })();
-
-  return (
-    <a
-      href={href}
-      target={isExternal ? '_blank' : undefined}
-      rel={isExternal ? 'noopener noreferrer' : undefined}
-      className="mkt-card"
-    >
-      <div className="mkt-question">
-        {title ?? <span style={{ color: 'var(--fa-text-tertiary)', fontFamily: 'var(--fa-font-mono)', fontSize: 12 }}>Loading…</span>}
-      </div>
-
-      {/* YES/NO bar */}
-      <div style={{ display: 'flex', height: 6, borderRadius: 999, overflow: 'hidden', background: 'var(--fa-border-soft)' }}>
-        <div style={{ width: `${yesPct}%`, background: 'var(--fa-gold)' }} />
-        <div style={{ flex: 1, background: 'var(--fa-border-strong)' }} />
-      </div>
-
-      {/* Prices */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--fa-font-mono)', fontSize: 12.5 }}>
-        <span style={{ color: 'var(--fa-gold)' }}>YES {yesPct}¢</span>
-        <span style={{ color: 'var(--fa-text-tertiary)' }}>NO {noPct}¢</span>
-      </div>
-
-      {/* Footer */}
-      {endDateDisplay && (
-        <div style={{
-          display: 'flex', justifyContent: 'flex-end',
-          fontSize: 11.5, color: 'var(--fa-text-tertiary)',
-          fontFamily: 'var(--fa-font-mono)',
-          borderTop: '1px solid var(--fa-border-soft)', paddingTop: 10,
-        }}>
-          {endDateDisplay}
-        </div>
-      )}
-    </a>
   );
 }
 
@@ -231,7 +168,7 @@ export default function ActiveRoundPreview() {
             <MarketCard
               key={cid}
               conditionId={cid}
-              yesPrice={(round.benchmarkPrices[i] || 5000) / 10000}
+              benchmarkPrice={round.benchmarkPrices[i] || 5000}
               info={polyInfo.get(cid)}
               roundId={round.roundId}
             />

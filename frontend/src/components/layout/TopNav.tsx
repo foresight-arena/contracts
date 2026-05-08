@@ -4,8 +4,12 @@ import Brand from '../Brand';
 
 const mobileCSS = `
   @media (max-width: 800px) {
-    .topnav-center { display: none !important; }
+    .topnav-center { overflow-x: auto; -webkit-overflow-scrolling: touch; gap: 20px !important; }
     .topnav-pill   { display: none !important; }
+    .topnav-ext    { display: none !important; }
+  }
+  @media (max-width: 480px) {
+    .topnav-center { gap: 16px !important; }
   }
 `;
 
@@ -85,12 +89,14 @@ export default function TopNav(): JSX.Element {
 
         <nav className="topnav-center" style={navStyle}>
           <NavLink to="/leaderboard" style={navLinkStyle}>Leaderboard</NavLink>
-          <NavLink to="/arena" style={navLinkStyle}>Rounds</NavLink>
+          <NavLink to="/events" style={navLinkStyle}>Events</NavLink>
+          <NavLink to="/rounds" style={navLinkStyle}>Rounds</NavLink>
           <a
             href="https://github.com/foresight-arena/sdk"
             target="_blank"
             rel="noopener noreferrer"
             style={baseLinkStyle}
+            className="topnav-ext"
           >
             Build ↗
           </a>
@@ -99,6 +105,7 @@ export default function TopNav(): JSX.Element {
             target="_blank"
             rel="noopener noreferrer"
             style={baseLinkStyle}
+            className="topnav-ext"
           >
             Research ↗
           </a>
