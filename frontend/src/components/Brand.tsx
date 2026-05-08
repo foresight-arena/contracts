@@ -42,8 +42,7 @@ export function Brand({ size = 'sm' }: { size?: Size }): JSX.Element {
   };
 
   const italicStyle: CSSProperties = {
-    fontStyle: 'italic',
-    fontVariationSettings: '"opsz" 144, "SOFT" 70',
+    fontVariationSettings: '"opsz" 144, "SOFT" 30',
     color: 'var(--fa-gold)',
   };
 
