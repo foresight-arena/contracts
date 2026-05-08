@@ -96,7 +96,12 @@ export default function AgentDetailPage() {
   const agentName = meta?.name || info?.name || '';
   const isBenchmark = isBenchmarkAgent(address);
   const displayName = agentName || truncAddr(address);
-  const avatarSrc = meta?.image && meta.image.trim() !== '' ? meta.image : null;
+  const RELAYER_IMAGE_PATTERN = /^https?:\/\/api\.foresightarena\.xyz\/agent\/[^/]+\/image/i;
+  const hasCustomImage =
+    !!meta?.image &&
+    meta.image.trim() !== '' &&
+    !RELAYER_IMAGE_PATTERN.test(meta.image.trim());
+  const avatarSrc = hasCustomImage ? meta!.image : null;
 
   const agentRounds = useMemo(() => {
     return rounds
