@@ -37,6 +37,13 @@
   --fa-polygon: #8247E5;
   --fa-polygon-bg: rgba(130, 71, 229, 0.10);
 
+  /* Chart categorical palette — line charts up to 5 series */
+  --fa-chart-1: #E8B14A;
+  --fa-chart-2: #5DBFB0;
+  --fa-chart-3: #8247E5;
+  --fa-chart-4: #74C476;
+  --fa-chart-5: #E89A6F;
+
   /* Semantics */
   --fa-success: #74C476;
   --fa-success-bg: rgba(116, 196, 118, 0.10);

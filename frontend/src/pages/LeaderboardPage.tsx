@@ -8,6 +8,7 @@ import type { TimePeriod } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
 import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
 import { computeAgentScoring, type MarketSample } from '../lib/scoring';
+import TimeSeriesChart from '../components/leaderboard/TimeSeriesChart';
 
 // Empirical-Bayes shrinkage prior. Aligned with the paper's recommendation
 // of N >= 140 predictions before drawing conclusions: at n=140 the agent's
@@ -28,6 +29,7 @@ interface LeaderboardRow {
   commitCount: number;
   lastActive: number;
   provisional: boolean;       // n < 140
+  series: { roundId: number; cumAlpha: number; brier: number; scored: number }[];
 }
 
 function truncAddr(addr: string): string {
@@ -47,6 +49,7 @@ export default function LeaderboardPage() {
   const { rounds, agents: agentRegistry, loading, refresh } = useDataContext();
   const [period, setPeriod] = React.useState<TimePeriod>('30d');
   const [showInactive, setShowInactive] = React.useState(false);
+  const [metric, setMetric] = React.useState<'alpha' | 'brier'>('alpha');
 
   const agentMap = agentRegistry;
   const resolvedMeta = useAgentsMetadata(agentMap);
@@ -66,13 +69,13 @@ export default function LeaderboardPage() {
     // Aggregate per agent: per-market samples + commit/scored counts
     const agg = new Map<
       string,
-      { samples: MarketSample[]; scoredRounds: number; commitCount: number; lastActive: number }
+      { samples: MarketSample[]; samplesByRound: Map<number, MarketSample[]>; scoredRounds: number; commitCount: number; lastActive: number }
     >();
 
     for (const round of filtered) {
       for (const [addr, agent] of round.agents) {
         const key = addr.toLowerCase();
-        const existing = agg.get(key) || { samples: [], scoredRounds: 0, commitCount: 0, lastActive: 0 };
+        const existing = agg.get(key) || { samples: [], samplesByRound: new Map<number, MarketSample[]>(), scoredRounds: 0, commitCount: 0, lastActive: 0 };
         existing.commitCount += 1;
         existing.lastActive = Math.max(existing.lastActive, round.commitDeadline);
 
@@ -84,11 +87,11 @@ export default function LeaderboardPage() {
             const outcome = round.outcomes?.[i];
             if (outcome !== 'YES' && outcome !== 'NO') continue;
             if (preds[i] == null || benchmarks[i] == null) continue;
-            existing.samples.push({
-              p: preds[i] / 10000,
-              b: benchmarks[i] / 10000,
-              x: outcome === 'YES' ? 1 : 0,
-            });
+            const sample: MarketSample = { p: preds[i] / 10000, b: benchmarks[i] / 10000, x: outcome === 'YES' ? 1 : 0 };
+            existing.samples.push(sample);
+            const roundSamples = existing.samplesByRound.get(round.roundId) ?? [];
+            roundSamples.push(sample);
+            existing.samplesByRound.set(round.roundId, roundSamples);
           }
         }
 
@@ -105,6 +108,21 @@ export default function LeaderboardPage() {
       const alphaShrunkPct = scoring.n > 0
         ? (scoring.n / (scoring.n + SHRINKAGE_KAPPA)) * avgAlphaPct
         : 0;
+      const roundSeriesData = Array.from(data.samplesByRound.entries())
+        .filter(([, s]) => s.length > 0)
+        .map(([roundId, s]) => {
+          const sc = computeAgentScoring(s);
+          return { roundId, alpha: sc.avgAlpha, brier: sc.agent.brier, scored: s.length };
+        })
+        .sort((a, b) => a.roundId - b.roundId);
+      let weightedSum = 0;
+      let totalWeight = 0;
+      const series = roundSeriesData.map(r => {
+        weightedSum += r.alpha * r.scored;
+        totalWeight += r.scored;
+        return { roundId: r.roundId, cumAlpha: weightedSum / Math.max(1, totalWeight), brier: r.brier, scored: r.scored };
+      });
+
       result.push({
         address: addr,
         name: meta?.name ?? info?.name ?? '',
@@ -118,6 +136,7 @@ export default function LeaderboardPage() {
         commitCount: data.commitCount,
         lastActive: data.lastActive,
         provisional: scoring.n > 0 && scoring.n < SHRINKAGE_KAPPA,
+        series,
       });
     }
 
@@ -142,10 +161,18 @@ export default function LeaderboardPage() {
       if (ci > globalMaxAbs) globalMaxAbs = ci;
     }
 
-    return { entries: result, globalMaxAbs };
+    return { entries: result, globalMaxAbs, totalRoundsInWindow: filtered.length };
   }, [rounds, agentRegistry, period, agentMap, resolvedMeta]);
 
-  const { entries, globalMaxAbs } = data;
+  const { entries, globalMaxAbs, totalRoundsInWindow } = data;
+
+  const CHART_COLORS = ['var(--fa-chart-1)', 'var(--fa-chart-2)', 'var(--fa-chart-3)', 'var(--fa-chart-4)', 'var(--fa-chart-5)'];
+  const top5ChartAgents = entries.slice(0, 5).map((a, i) => ({
+    address: a.address,
+    name: a.name || truncAddr(a.address),
+    color: CHART_COLORS[i],
+    series: a.series,
+  }));
 
   // Relayer-registered agents who never committed in any round in `rounds`.
   // Period-independent: signing up is signing up regardless of which window
@@ -191,19 +218,53 @@ export default function LeaderboardPage() {
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-md)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
-        <h1 style={{ marginBottom: 0 }}>Leaderboard</h1>
-        <button onClick={refresh} style={refreshBtnStyle} title="Refresh data">↻</button>
-        <a
-          href="https://arxiv.org/abs/2605.00420"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ fontSize: '0.75rem', color: 'var(--accent)' }}
-          title="Foresight Arena: An On-Chain Benchmark for Evaluating AI Forecasting Agents"
-        >
-          method (paper) →
-        </a>
-      </div>
+      <header style={{ marginBottom: 32, paddingTop: 'clamp(2rem, 5vw, 3rem)' }}>
+        <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--fa-gold)', marginBottom: 8 }}>
+          Live · Model leaderboard
+        </div>
+        <h1 style={{ fontFamily: 'var(--fa-font-display)', fontWeight: 400, fontVariationSettings: '"opsz" 144, "SOFT" 30', fontSize: 'clamp(2rem, 4vw, 2.75rem)', lineHeight: 1.05, letterSpacing: '-0.02em', margin: '12px 0 12px', color: 'var(--fa-text-primary)' }}>
+          Top performers across {rounds.length} rounds
+        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <p style={{ fontSize: 15, color: 'var(--fa-text-secondary)', maxWidth: '64ch', margin: 0, lineHeight: 1.55 }}>
+            Agents are scored on real Polymarket events. Brier measures absolute calibration; Alpha measures edge over the market consensus benchmark frozen at commit deadline.
+          </p>
+          <button onClick={refresh} style={refreshBtnStyle} title="Refresh data">↻</button>
+        </div>
+      </header>
+
+      {/* Time series chart */}
+      <section style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, marginBottom: 18, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--fa-gold)', marginBottom: 8 }}>
+              Time series
+            </div>
+            <h2 style={{ fontFamily: 'var(--fa-font-display)', fontWeight: 400, fontVariationSettings: '"opsz" 144, "SOFT" 30', fontSize: 'clamp(1.5rem, 2.6vw, 1.875rem)', lineHeight: 1.05, letterSpacing: '-0.02em', margin: 0, color: 'var(--fa-text-primary)' }}>
+              Calibration over the last {totalRoundsInWindow} rounds
+            </h2>
+          </div>
+          <div role="tablist" aria-label="Metric" style={{ display: 'inline-flex', gap: 4, padding: 3, border: '1px solid var(--fa-border-soft)', borderRadius: 8, background: 'var(--fa-bg-base)', flexShrink: 0 }}>
+            <button
+              onClick={() => setMetric('alpha')}
+              aria-selected={metric === 'alpha'}
+              style={{ padding: '5px 12px', fontFamily: 'var(--fa-font-mono)', fontSize: 11, letterSpacing: '0.05em', background: metric === 'alpha' ? 'var(--fa-bg-card)' : 'transparent', color: metric === 'alpha' ? 'var(--fa-gold)' : 'var(--fa-text-secondary)', border: 'none', borderRadius: 5, cursor: 'pointer' }}
+            >
+              Alpha
+            </button>
+            <button
+              onClick={() => setMetric('brier')}
+              aria-selected={metric === 'brier'}
+              style={{ padding: '5px 12px', fontFamily: 'var(--fa-font-mono)', fontSize: 11, letterSpacing: '0.05em', background: metric === 'brier' ? 'var(--fa-bg-card)' : 'transparent', color: metric === 'brier' ? 'var(--fa-gold)' : 'var(--fa-text-secondary)', border: 'none', borderRadius: 5, cursor: 'pointer' }}
+            >
+              Brier
+            </button>
+          </div>
+        </div>
+        <div style={{ background: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', borderRadius: 14, padding: 24 }}>
+          <TimeSeriesChart agents={top5ChartAgents} metric={metric} />
+        </div>
+      </section>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'wrap', marginBottom: 'var(--space-lg)' }}>
         <TimeFilter value={period} onChange={setPeriod} />
