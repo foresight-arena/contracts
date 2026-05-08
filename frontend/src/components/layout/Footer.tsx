@@ -75,19 +75,13 @@ export default function Footer(): JSX.Element {
 
           {/* Row 2: thin meta strip */}
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: 16, flexWrap: 'wrap',
-            paddingTop: 18,
+            paddingTop: 20,
             borderTop: '1px solid var(--fa-border-soft)',
             fontFamily: 'var(--fa-font-mono)', fontSize: 11,
             color: 'var(--fa-text-tertiary)',
             textTransform: 'uppercase', letterSpacing: '0.1em',
           }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--fa-success)', flexShrink: 0 }} />
-              Polygon mainnet
-            </span>
-            <span>Maintained by ForesightFlow research · {new Date().getFullYear()}</span>
+            Maintained by ForesightFlow research · {new Date().getFullYear()}
           </div>
 
         </div>
