@@ -88,9 +88,9 @@ export default function TopNav(): JSX.Element {
         </Link>
 
         <nav className="topnav-center" style={navStyle}>
-          <NavLink to="/leaderboard" style={navLinkStyle}>Leaderboard</NavLink>
           <NavLink to="/events" style={navLinkStyle}>Events</NavLink>
           <NavLink to="/rounds" style={navLinkStyle}>Rounds</NavLink>
+          <NavLink to="/leaderboard" style={navLinkStyle}>Leaderboard</NavLink>
           <a
             href="https://github.com/foresight-arena/sdk"
             target="_blank"

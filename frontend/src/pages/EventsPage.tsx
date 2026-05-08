@@ -110,7 +110,7 @@ export default function EventsPage() {
     const now = Math.floor(Date.now() / 1000);
     return rounds
       .filter(r => !r.invalidated && r.commitDeadline > now)
-      .sort((a, b) => a.commitDeadline - b.commitDeadline);
+      .sort((a, b) => b.roundId - a.roundId);
   }, [rounds]);
 
   const totalMarkets = commitPhaseRounds.reduce((s, r) => s + r.conditionIds.length, 0);
