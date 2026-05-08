@@ -8,6 +8,7 @@ import App from './App';
 import { DataProvider } from './context/DataContext';
 import RoundsPage from './pages/RoundsPage';
 import EventsPage from './pages/EventsPage';
+import DeveloperPage from './pages/DeveloperPage';
 import RoundDetailPage from './pages/RoundDetailPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import LandingPage from './pages/LandingPage';
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
       { path: 'arena', element: <Navigate to="/rounds" replace /> },
       { path: 'rounds', element: <RoundsPage /> },
       { path: 'events', element: <EventsPage /> },
+      { path: 'developer', element: <DeveloperPage /> },
       { path: 'round/:roundId', element: <RoundDetailPage /> },
       { path: 'agent/:address', element: <AgentDetailPage /> },
       { path: 'leaderboard', element: <LeaderboardPage /> },
