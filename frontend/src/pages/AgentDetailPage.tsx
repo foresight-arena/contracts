@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import NotFoundPage from './NotFoundPage';
 import { useDataContext } from '../context/DataContext';
 import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -184,6 +185,7 @@ export default function AgentDetailPage() {
   }, [agentRounds, address]);
 
   if (loading) return <LoadingSpinner />;
+  if (!info) return <NotFoundPage />;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(rawAddress || '');

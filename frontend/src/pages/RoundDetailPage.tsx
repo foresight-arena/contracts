@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import NotFoundPage from './NotFoundPage';
 import { useDataContext } from '../context/DataContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { fetchMarketMetadata, type PolymarketInfo } from '../services/polymarket';
@@ -278,12 +279,7 @@ export default function RoundDetailPage() {
   if (loading) return <LoadingSpinner />;
 
   if (!round) {
-    return (
-      <div className="page">
-        <h1>Round not found</h1>
-        <p>Round #{roundId} does not exist. <Link to="/arena">Back to Arena</Link></p>
-      </div>
-    );
+    return <NotFoundPage />;
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -322,7 +318,7 @@ export default function RoundDetailPage() {
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header style={{ marginBottom: 32, paddingTop: 'clamp(1rem, 3vw, 2rem)' }}>
-        <Link to="/arena" className="rd-bc" style={{
+        <Link to="/rounds" className="rd-bc" style={{
           fontFamily: 'var(--fa-font-mono)', fontSize: 12,
           color: 'var(--fa-text-tertiary)', textDecoration: 'none', letterSpacing: '0.02em',
         }}>

@@ -14,6 +14,7 @@ import RoundDetailPage from './pages/RoundDetailPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import LandingPage from './pages/LandingPage';
 import AgentDetailPage from './pages/AgentDetailPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 const router = createBrowserRouter([
   {
@@ -29,6 +30,7 @@ const router = createBrowserRouter([
       { path: 'round/:roundId', element: <RoundDetailPage /> },
       { path: 'agent/:address', element: <AgentDetailPage /> },
       { path: 'leaderboard', element: <LeaderboardPage /> },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ]);
