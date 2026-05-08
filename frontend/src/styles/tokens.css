@@ -49,8 +49,6 @@
   --fa-success-bg: rgba(116, 196, 118, 0.10);
   --fa-danger: #E66C5C;
   --fa-danger-bg: rgba(230, 108, 92, 0.10);
-  --fa-warning: #E8B14A;
-  --fa-warning-bg: var(--fa-gold-bg);
 
   /* Phase pills (round lifecycle) */
   --fa-phase-commit: var(--fa-teal);

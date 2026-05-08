@@ -207,7 +207,7 @@ export default function RoundTimeline({ round, agentNames }: {
             {hovered === i && (
               <div style={tooltipStyle}>
                 <div style={{ fontWeight: 600, marginBottom: 2 }}>{evt.label}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.625rem' }}>{shortTime(evt.time)}</div>
+                <div style={{ fontFamily: 'var(--fa-font-mono)', fontSize: '0.625rem' }}>{shortTime(evt.time)}</div>
               </div>
             )}
           </div>

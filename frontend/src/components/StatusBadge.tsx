@@ -19,19 +19,19 @@ interface StatusDef {
 
 function getStatus(round: Props['round'], now: number): StatusDef {
   if (round.invalidated) {
-    return { label: 'Invalidated', bg: 'rgba(239, 68, 68, 0.12)', color: 'var(--error)' };
+    return { label: 'Invalidated', bg: 'var(--fa-danger-bg)', color: 'var(--error)' };
   }
   if (now < round.commitDeadline) {
-    return { label: 'Commit', bg: 'rgba(59, 130, 246, 0.12)', color: 'var(--accent)' };
+    return { label: 'Commit', bg: 'var(--fa-gold-bg)', color: 'var(--accent)' };
   }
   if (now < round.revealStart) {
-    return { label: 'Buffer', bg: 'rgba(245, 158, 11, 0.12)', color: 'var(--warning)' };
+    return { label: 'Buffer', bg: 'var(--fa-gold-bg)', color: 'var(--warning)' };
   }
   if (now < round.revealDeadline) {
     if (!round.benchmarksPosted) {
-      return { label: 'Awaiting Benchmarks', bg: 'rgba(245, 158, 11, 0.12)', color: 'var(--warning)' };
+      return { label: 'Awaiting Benchmarks', bg: 'var(--fa-gold-bg)', color: 'var(--warning)' };
     }
-    return { label: 'Reveal', bg: 'rgba(16, 185, 129, 0.12)', color: 'var(--success)' };
+    return { label: 'Reveal', bg: 'var(--fa-success-bg)', color: 'var(--success)' };
   }
   return { label: 'Finalized', bg: 'var(--bg-tertiary)', color: 'var(--text-secondary)' };
 }
