@@ -1,7 +1,7 @@
 <!--
   Foresight Arena — logo mark
   Use as: <img src="logo.svg" alt="Foresight Arena"/> OR inline SVG.
-  The mark uses currentColor so it picks up text color from the parent.
+  Cream (#F5EFE2) baked in — visible on dark backgrounds without currentColor inheritance.
 
   Concept:
    • Outer hexagon  — Polygon network (chain identity)
@@ -14,7 +14,7 @@
    • 64px+ in hero / og:image
 -->
 <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"
-     fill="none" stroke="currentColor"
+     fill="none" stroke="#F5EFE2"
      role="img" aria-label="Foresight Arena">
   <title>Foresight Arena</title>
 
@@ -26,5 +26,5 @@
 
   <rect x="26.25" y="26.25" width="11.5" height="11.5"
         transform="rotate(45 32 32)"
-        fill="currentColor" stroke="none"/>
+        fill="#F5EFE2" stroke="none"/>
 </svg>
