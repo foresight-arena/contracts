@@ -22,6 +22,24 @@ function getInitials(name: string): string {
   return '··';
 }
 
+const CHART_PALETTE = [
+  'var(--fa-chart-1)',
+  'var(--fa-chart-2)',
+  'var(--fa-chart-3)',
+  'var(--fa-chart-4)',
+  'var(--fa-chart-5)',
+];
+
+function colorForAddress(addr: string): string {
+  if (!addr) return CHART_PALETTE[0];
+  const a = addr.toLowerCase().replace(/^0x/, '');
+  let h = 0;
+  for (let i = 0; i < a.length; i++) {
+    h = (h * 31 + a.charCodeAt(i)) >>> 0;
+  }
+  return CHART_PALETTE[h % CHART_PALETTE.length];
+}
+
 function formatPct(value: number): string {
   return value.toFixed(2) + '%';
 }
@@ -202,7 +220,7 @@ export default function AgentDetailPage() {
             onError={() => setAvatarError(true)}
           />
         ) : (
-          <div style={{ width: 120, height: 120, borderRadius: 14, background: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--fa-font-display)', fontVariationSettings: '"opsz" 144, "SOFT" 30', fontWeight: 400, fontSize: 44, color: 'var(--fa-text-secondary)', letterSpacing: '-0.02em', userSelect: 'none', flexShrink: 0 }}>
+          <div style={{ width: 120, height: 120, borderRadius: 14, background: 'var(--fa-bg-card)', border: '1px solid var(--fa-border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--fa-font-display)', fontVariationSettings: '"opsz" 144, "SOFT" 30', fontWeight: 400, fontSize: 44, color: colorForAddress(address), letterSpacing: '-0.02em', userSelect: 'none', flexShrink: 0 }}>
             {getInitials(displayName)}
           </div>
         )}
