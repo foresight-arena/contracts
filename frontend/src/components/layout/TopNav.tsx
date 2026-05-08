@@ -83,7 +83,7 @@ const githubLinkStyle: CSSProperties = {
 const navLinkStyle = ({ isActive }: { isActive: boolean }): CSSProperties =>
   isActive ? activeLinkStyle : baseLinkStyle;
 
-export default function TopNav(): JSX.Element {
+export default function TopNav() {
   return (
     <>
       <style>{mobileCSS}</style>

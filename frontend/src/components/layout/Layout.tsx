@@ -6,7 +6,7 @@ import RefreshOverlay from '../RefreshOverlay';
 import { ScrollToTop } from '../ScrollToTop';
 import { useDataContext } from '../../context/DataContext';
 
-export default function Layout(): JSX.Element {
+export default function Layout() {
   const { refreshing } = useDataContext();
   return (
     <>

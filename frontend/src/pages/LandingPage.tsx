@@ -83,14 +83,6 @@ const heroHeadStyle: CSSProperties = {
 };
 
 
-const h2Style: CSSProperties = {
-  fontSize: '1.375rem',
-  fontWeight: 700,
-  marginBottom: 'var(--space-md)',
-  letterSpacing: '-0.02em',
-  color: 'var(--fa-text-primary)',
-};
-
 const bodyStyle: CSSProperties = {
   color: 'var(--text-secondary)',
   lineHeight: 1.8,

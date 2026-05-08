@@ -9,7 +9,7 @@ const sizeMap: Record<Size, { mark: number; fontSize: number; gap: number }> = {
   lg: { mark: 64, fontSize: 36, gap: 20 },
 };
 
-export function Brand({ size = 'sm' }: { size?: Size }): JSX.Element {
+export function Brand({ size = 'sm' }: { size?: Size }) {
   const { mark, fontSize, gap } = sizeMap[size];
 
   const wrapStyle: CSSProperties = {

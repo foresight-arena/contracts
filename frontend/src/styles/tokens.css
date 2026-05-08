@@ -12,7 +12,6 @@
   --fa-bg-elev: #16140F;
   --fa-bg-card: #1B1814;
   --fa-bg-card-hover: #221F1A;
-  --fa-bg-overlay: rgba(14, 13, 11, 0.85);
 
   /* Borders */
   --fa-border-soft: #221F1A;
@@ -28,7 +27,6 @@
   /* Accents */
   --fa-gold: #E8B14A;
   --fa-gold-hi: #F2C572;
-  --fa-gold-lo: #B88830;
   --fa-gold-bg: rgba(232, 177, 74, 0.10);
 
   --fa-teal: #5DBFB0;
@@ -50,84 +48,40 @@
   --fa-danger: #E66C5C;
   --fa-danger-bg: rgba(230, 108, 92, 0.10);
 
-  /* Phase pills (round lifecycle) */
-  --fa-phase-commit: var(--fa-teal);
-  --fa-phase-reveal: var(--fa-gold);
-  --fa-phase-triggered: var(--fa-polygon);
-  --fa-phase-scored: var(--fa-success);
-  --fa-phase-void: var(--fa-text-tertiary);
-
   /* Typography */
   --fa-font-display: 'Fraunces', ui-serif, Georgia, serif;
   --fa-font-body: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --fa-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  /* Type scale (clamp for responsive) */
-  --fa-fs-display-xl: clamp(3rem, 7vw, 5.25rem);
-  --fa-fs-display-lg: clamp(2.25rem, 4vw, 3.5rem);
-  --fa-fs-display-md: clamp(1.625rem, 2.6vw, 2rem);
-  --fa-fs-h1: 2rem;
-  --fa-fs-h2: 1.5rem;
-  --fa-fs-h3: 1.125rem;
+  /* Type scale — used in utility classes and body reset */
   --fa-fs-body: 1rem;
   --fa-fs-small: 0.875rem;
   --fa-fs-tiny: 0.75rem;
 
   /* Line heights */
   --fa-lh-tight: 1.05;
-  --fa-lh-snug: 1.25;
   --fa-lh-body: 1.55;
-  --fa-lh-loose: 1.7;
 
   /* Letter-spacing */
   --fa-ls-tight: -0.02em;
-  --fa-ls-normal: 0;
-  --fa-ls-wide: 0.04em;
   --fa-ls-allcaps: 0.12em;
 
-  /* Spacing scale — 4px base */
-  --fa-sp-1: 4px;
-  --fa-sp-2: 8px;
-  --fa-sp-3: 12px;
-  --fa-sp-4: 16px;
-  --fa-sp-5: 24px;
-  --fa-sp-6: 32px;
-  --fa-sp-7: 48px;
-  --fa-sp-8: 64px;
-  --fa-sp-9: 96px;
-  --fa-sp-10: 128px;
-
-  /* Layout */
-  --fa-content-narrow: 720px;
-  --fa-content-default: 1120px;
-  --fa-content-wide: 1320px;
-  --fa-page-pad: clamp(1.25rem, 4vw, 2.5rem);
-
   /* Radii */
-  --fa-r-xs: 4px;
   --fa-r-sm: 6px;
   --fa-r-md: 10px;
   --fa-r-lg: 14px;
   --fa-r-pill: 999px;
 
   /* Borders */
-  --fa-bw-hair: 0.5px;
   --fa-bw-thin: 1px;
-  --fa-bw-thick: 2px;
 
   /* Motion */
   --fa-ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --fa-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --fa-dur-fast: 120ms;
   --fa-dur-base: 200ms;
-  --fa-dur-slow: 360ms;
 
   /* Focus ring */
   --fa-focus-ring: 0 0 0 2px var(--fa-bg-base), 0 0 0 4px var(--fa-gold);
-
-  /* Shadows — sparingly, never decorative */
-  --fa-shadow-card: 0 1px 0 var(--fa-border-soft) inset;
-  --fa-shadow-elev: 0 4px 24px rgba(0,0,0,0.35), 0 1px 0 var(--fa-border-soft) inset;
 }
 
 /* Light mode (optional toggle via [data-theme="light"]) */
@@ -136,7 +90,6 @@
   --fa-bg-elev: #FFFFFF;
   --fa-bg-card: #FFFFFF;
   --fa-bg-card-hover: #FAF6EC;
-  --fa-bg-overlay: rgba(248, 244, 235, 0.85);
 
   --fa-border-soft: #E8E1CF;
   --fa-border: #D7CDB4;
@@ -152,8 +105,6 @@
   --fa-polygon-bg: rgba(130, 71, 229, 0.10);
   --fa-success-bg: rgba(116, 196, 118, 0.14);
   --fa-danger-bg: rgba(230, 108, 92, 0.14);
-
-  --fa-shadow-elev: 0 6px 24px rgba(28, 27, 23, 0.08);
 }
 
 /* Element resets */
