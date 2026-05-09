@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { Round } from '../types';
+import { buildPhaseSteps, getActivePhaseIndex, type PhaseKey, type PhaseStep } from '../lib/roundPhase';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,42 @@ function fmtCountdown(ts: number, now: number): string {
   return `in ${m}m`;
 }
 
+function getStepSub(
+  step: PhaseStep,
+  round: Round,
+  now: number,
+  isPast: boolean,
+  isActive: boolean,
+): string {
+  const hasScores = Array.from(round.agents.values()).some(a => a.scoredMarkets > 0);
+  const key: PhaseKey = step.key;
+
+  if (key === 'commit') {
+    if (isActive) return fmtCountdown(round.commitDeadline, now);
+    if (isPast) return fmtDate(round.commitDeadline);
+    return '—';
+  }
+  if (key === 'buffer') {
+    if (isActive) return fmtCountdown(round.revealStart, now);
+    if (isPast) return fmtDate(round.revealStart);
+    return '—';
+  }
+  if (key === 'reveal') {
+    if (isActive) return fmtCountdown(round.revealDeadline, now);
+    if (isPast) return fmtDate(round.revealDeadline);
+    return 'pending';
+  }
+  if (key === 'triggered') {
+    if (round.outcomesTriggered && round.outcomesTriggeredAt > 0) return fmtDate(round.outcomesTriggeredAt);
+    if (isActive) return 'pending';
+    return '—';
+  }
+  // scored
+  if (hasScores) return 'complete';
+  if (isActive) return 'pending';
+  return '—';
+}
+
 // ─── layout ──────────────────────────────────────────────────────────────────
 
 const W = 640;
@@ -24,14 +61,24 @@ const H = 80;
 const PAD = 40;
 const CY = 26;
 
-// ─── types ───────────────────────────────────────────────────────────────────
+// ─── voided phases for invalidated rounds ─────────────────────────────────────
 
 type PhaseState = 'done' | 'active' | 'future' | 'void' | 'voided';
 
-interface Phase {
+interface VoidedPhase {
   label: string;
   sub: string;
   state: PhaseState;
+}
+
+function buildVoidedPhases(round: Round): VoidedPhase[] {
+  return [
+    { label: 'Commit',    sub: fmtDate(round.commitDeadline), state: 'void' },
+    { label: 'Reveal',    sub: fmtDate(round.revealDeadline), state: 'void' },
+    { label: 'Triggered', sub: '—',                           state: 'void' },
+    { label: 'Scored',    sub: '—',                           state: 'void' },
+    { label: 'Voided',    sub: '—',                           state: 'voided' },
+  ];
 }
 
 // ─── component ───────────────────────────────────────────────────────────────
@@ -42,54 +89,67 @@ export default function RoundTimeline({ round }: {
 }) {
   const now = Math.floor(Date.now() / 1000);
 
-  const phases = useMemo<Phase[]>(() => {
-    const hasScores = Array.from(round.agents.values()).some(a => a.scoredMarkets > 0);
-    const commitDone = now >= round.commitDeadline;
-    const revealDone = now >= round.revealDeadline;
+  const steps = useMemo(() => buildPhaseSteps(round), [round]);
+  const activeIndex = useMemo(() => getActivePhaseIndex(steps, now), [steps, now]);
 
-    if (round.invalidated) {
-      return [
-        { label: 'Commit',    sub: fmtDate(round.commitDeadline), state: 'void' },
-        { label: 'Reveal',    sub: fmtDate(round.revealDeadline), state: 'void' },
-        { label: 'Triggered', sub: '—',                           state: 'void' },
-        { label: 'Scored',    sub: '—',                           state: 'void' },
-        { label: 'Voided',    sub: '—',                           state: 'voided' },
-      ];
-    }
+  // ── Invalidated: keep voided visual ──────────────────────────────────────
+  if (round.invalidated) {
+    const voided = buildVoidedPhases(round);
+    const N = voided.length;
+    const plotW = W - 2 * PAD;
+    const cx = (i: number) => PAD + (i / (N - 1)) * plotW;
 
-    return [
-      {
-        label: 'Commit',
-        sub: commitDone
-          ? fmtDate(round.commitDeadline)
-          : fmtCountdown(round.commitDeadline, now),
-        state: commitDone ? 'done' : 'active',
-      },
-      {
-        label: 'Reveal',
-        sub: revealDone
-          ? fmtDate(round.revealDeadline)
-          : commitDone
-          ? fmtCountdown(round.revealDeadline, now)
-          : 'pending',
-        state: revealDone ? 'done' : commitDone ? 'active' : 'future',
-      },
-      {
-        label: 'Triggered',
-        sub: round.outcomesTriggered && round.outcomesTriggeredAt
-          ? fmtDate(round.outcomesTriggeredAt)
-          : revealDone ? 'pending' : '—',
-        state: round.outcomesTriggered ? 'done' : revealDone ? 'active' : 'future',
-      },
-      {
-        label: 'Scored',
-        sub: hasScores ? 'complete' : '—',
-        state: hasScores ? 'done' : round.outcomesTriggered ? 'active' : 'future',
-      },
-    ];
-  }, [round, now]);
+    return (
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
+      >
+        {voided.slice(0, -1).map((_ph, i) => (
+          <line
+            key={i}
+            x1={cx(i) + 9} y1={CY}
+            x2={cx(i + 1) - 9} y2={CY}
+            style={{ stroke: 'var(--fa-text-tertiary)', strokeWidth: 1.5, opacity: 0.3 }}
+          />
+        ))}
+        {voided.map((ph, i) => {
+          const x = cx(i);
+          const voided_ = ph.state === 'voided';
+          const voidDim = ph.state === 'void';
+          return (
+            <g key={i} style={{ opacity: voidDim ? 0.35 : 1 }}>
+              <circle cx={x} cy={CY} r={voided_ ? 10 : 8}
+                style={{
+                  fill: voided_ ? 'var(--fa-danger)' : 'none',
+                  stroke: voided_ ? 'none' : 'var(--fa-border-soft)',
+                  strokeWidth: 1.5,
+                }}
+              />
+              <text x={x} y={CY + 19} textAnchor="middle"
+                style={{
+                  fontFamily: 'var(--fa-font-mono)', fontSize: 10,
+                  textTransform: 'uppercase', letterSpacing: '0.09em',
+                  fill: voided_ ? 'var(--fa-danger)' : 'var(--fa-text-tertiary)',
+                  fontWeight: voided_ ? '600' : '400',
+                }}
+              >
+                {ph.label}
+              </text>
+              <text x={x} y={CY + 31} textAnchor="middle"
+                style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 9, fill: 'var(--fa-text-tertiary)', opacity: 0.65 }}
+              >
+                {ph.sub}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    );
+  }
 
-  const N = phases.length;
+  // ── Normal: timestamp-driven phases ──────────────────────────────────────
+  const N = steps.length;
   const plotW = W - 2 * PAD;
   const cx = (i: number) => PAD + (i / (N - 1)) * plotW;
 
@@ -100,57 +160,53 @@ export default function RoundTimeline({ round }: {
       style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
     >
       {/* Connectors */}
-      {phases.slice(0, -1).map((ph, i) => {
-        const next = phases[i + 1];
-        const r1 = ph.state === 'active' ? 11 : 9;
-        const r2 = next.state === 'active' ? 11 : 9;
-        const bothDone = ph.state === 'done' && next.state === 'done';
-        const toActive = ph.state === 'done' && next.state === 'active';
-        const isVoid = ph.state === 'void';
+      {steps.slice(0, -1).map((_step, i) => {
+        const iActive = i === activeIndex;
+        const nActive = i + 1 === activeIndex;
+        const iPast = i < activeIndex;
+        const nPast = i + 1 < activeIndex;
+        const r1 = iActive ? 11 : 9;
+        const r2 = nActive ? 11 : 9;
+        const bothDone = iPast && nPast;
+        const toActive = iPast && nActive;
         return (
           <line
             key={i}
             x1={cx(i) + r1} y1={CY}
             x2={cx(i + 1) - r2} y2={CY}
             style={{
-              stroke: isVoid || bothDone
-                ? 'var(--fa-text-tertiary)'
-                : toActive
-                ? 'var(--fa-gold)'
+              stroke: bothDone || toActive
+                ? (toActive ? 'var(--fa-gold)' : 'var(--fa-text-tertiary)')
                 : 'var(--fa-border-soft)',
               strokeWidth: 1.5,
-              strokeDasharray: (!bothDone && !toActive && !isVoid) ? '4 3' : 'none',
-              opacity: isVoid ? 0.3 : 1,
+              strokeDasharray: (!bothDone && !toActive) ? '4 3' : 'none',
             }}
           />
         );
       })}
 
       {/* Nodes */}
-      {phases.map((ph, i) => {
+      {steps.map((step, i) => {
+        const isActive = i === activeIndex;
+        const isPast   = i < activeIndex;
         const x = cx(i);
-        const active  = ph.state === 'active';
-        const done    = ph.state === 'done';
-        const voided  = ph.state === 'voided';
-        const voidDim = ph.state === 'void';
-        const r = active ? 10 : 8;
+        const r = isActive ? 10 : 8;
+        const sub = getStepSub(step, round, now, isPast, isActive);
 
         return (
-          <g key={i} style={{ opacity: voidDim ? 0.35 : 1 }}>
+          <g key={step.key}>
             {/* Glow ring */}
-            {active && (
+            {isActive && (
               <circle cx={x} cy={CY} r={16}
-                style={{ fill: 'none', stroke: 'var(--fa-gold)', strokeWidth: 1.5, opacity: 0.2 }} />
+                style={{ fill: 'none', stroke: 'var(--fa-gold)', strokeWidth: 1.5, opacity: 0.2 }}
+              />
             )}
 
             {/* Circle */}
             <circle cx={x} cy={CY} r={r}
               style={{
-                fill: done ? 'var(--fa-text-tertiary)'
-                  : active ? 'var(--fa-gold)'
-                  : voided ? 'var(--fa-danger)'
-                  : 'none',
-                stroke: (!done && !active && !voided) ? 'var(--fa-border-soft)' : 'none',
+                fill: isPast ? 'var(--fa-text-tertiary)' : isActive ? 'var(--fa-gold)' : 'none',
+                stroke: (!isPast && !isActive) ? 'var(--fa-border-soft)' : 'none',
                 strokeWidth: 1.5,
               }}
             />
@@ -162,16 +218,14 @@ export default function RoundTimeline({ round }: {
                 fontSize: 10,
                 textTransform: 'uppercase',
                 letterSpacing: '0.09em',
-                fill: active ? 'var(--fa-gold)'
-                  : voided ? 'var(--fa-danger)'
-                  : 'var(--fa-text-tertiary)',
-                fontWeight: (active || voided) ? '600' : '400',
+                fill: isActive ? 'var(--fa-gold)' : 'var(--fa-text-tertiary)',
+                fontWeight: isActive ? '600' : '400',
               }}
             >
-              {ph.label}
+              {step.label}
             </text>
 
-            {/* Sub-label (date or status) */}
+            {/* Sub-label */}
             <text x={x} y={CY + 31} textAnchor="middle"
               style={{
                 fontFamily: 'var(--fa-font-mono)',
@@ -180,7 +234,7 @@ export default function RoundTimeline({ round }: {
                 opacity: 0.65,
               }}
             >
-              {ph.sub}
+              {sub}
             </text>
           </g>
         );

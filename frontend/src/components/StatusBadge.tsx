@@ -1,13 +1,9 @@
 import type { CSSProperties } from 'react';
+import type { Round } from '../types';
+import { getActivePhase, type PhaseKey } from '../lib/roundPhase';
 
 interface Props {
-  round: {
-    commitDeadline: number;
-    revealStart: number;
-    revealDeadline: number;
-    invalidated: boolean;
-    benchmarksPosted: boolean;
-  };
+  round: Round;
   now?: number;
 }
 
@@ -17,27 +13,29 @@ interface StatusDef {
   color: string;
 }
 
-function getStatus(round: Props['round'], now: number): StatusDef {
-  if (round.invalidated) {
-    return { label: 'Invalidated', bg: 'var(--fa-danger-bg)', color: 'var(--error)' };
+function statusFromPhase(phase: PhaseKey | 'void', benchmarksPosted: boolean): StatusDef {
+  switch (phase) {
+    case 'commit':
+      return { label: 'Commit', bg: 'var(--fa-gold-bg)', color: 'var(--accent)' };
+    case 'buffer':
+      return { label: 'Buffer', bg: 'var(--fa-danger-bg)', color: 'var(--fa-danger)' };
+    case 'reveal':
+      if (!benchmarksPosted) {
+        return { label: 'Awaiting Benchmarks', bg: 'var(--fa-gold-bg)', color: 'var(--warning)' };
+      }
+      return { label: 'Reveal', bg: 'var(--fa-success-bg)', color: 'var(--success)' };
+    case 'triggered':
+      return { label: 'Triggered', bg: 'var(--fa-polygon-bg)', color: 'var(--fa-polygon)' };
+    case 'scored':
+      return { label: 'Finalized', bg: 'var(--bg-tertiary)', color: 'var(--text-secondary)' };
+    case 'void':
+      return { label: 'Invalidated', bg: 'var(--fa-danger-bg)', color: 'var(--error)' };
   }
-  if (now < round.commitDeadline) {
-    return { label: 'Commit', bg: 'var(--fa-gold-bg)', color: 'var(--accent)' };
-  }
-  if (now < round.revealStart) {
-    return { label: 'Buffer', bg: 'var(--fa-danger-bg)', color: 'var(--fa-danger)' };
-  }
-  if (now < round.revealDeadline) {
-    if (!round.benchmarksPosted) {
-      return { label: 'Awaiting Benchmarks', bg: 'var(--fa-gold-bg)', color: 'var(--warning)' };
-    }
-    return { label: 'Reveal', bg: 'var(--fa-success-bg)', color: 'var(--success)' };
-  }
-  return { label: 'Finalized', bg: 'var(--bg-tertiary)', color: 'var(--text-secondary)' };
 }
 
 export default function StatusBadge({ round, now = Math.floor(Date.now() / 1000) }: Props) {
-  const status = getStatus(round, now);
+  const phase = getActivePhase(round, now);
+  const status = statusFromPhase(phase, round.benchmarksPosted);
 
   const style: CSSProperties = {
     display: 'inline-block',

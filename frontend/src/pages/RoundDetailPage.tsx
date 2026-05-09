@@ -8,6 +8,7 @@ import type { AgentRoundData, AgentInfo, Round } from '../types';
 import { isBenchmarkAgent } from '../config/benchmarks';
 import { useReasoning, ReasoningToggle, ReasoningContent } from '../components/ReasoningPanel';
 import { useAgentsMetadata } from '../hooks/useAgentsMetadata';
+import { getActivePhase, type PhaseKey } from '../lib/roundPhase';
 import RoundTimeline from '../components/RoundTimeline';
 import { styleForCategory } from '../lib/categoryColor';
 
@@ -71,24 +72,18 @@ function colorForAddress(addr: string): string {
   return CHART_PALETTE[h % CHART_PALETTE.length];
 }
 
+const phaseStyleMap: Record<PhaseKey | 'void', { label: string; bg: string; color: string; border: string }> = {
+  commit:    { label: 'COMMIT',    bg: 'var(--fa-teal-bg)',    color: 'var(--fa-teal)',    border: '1px solid rgba(93,191,176,0.3)' },
+  buffer:    { label: 'BUFFER',    bg: 'var(--fa-danger-bg)',  color: 'var(--fa-danger)',  border: '1px solid rgba(230,108,92,0.3)' },
+  reveal:    { label: 'REVEAL',    bg: 'var(--fa-gold-bg)',    color: 'var(--fa-gold)',    border: '1px solid rgba(232,177,74,0.3)' },
+  triggered: { label: 'TRIGGERED', bg: 'var(--fa-polygon-bg)', color: 'var(--fa-polygon)', border: '1px solid rgba(130,71,229,0.3)' },
+  scored:    { label: 'SCORED',    bg: 'var(--fa-success-bg)', color: 'var(--fa-success)', border: '1px solid rgba(116,196,118,0.3)' },
+  void:      { label: 'VOIDED',    bg: 'rgba(230,108,92,0.12)', color: 'var(--fa-danger)', border: '1px solid rgba(230,108,92,0.3)' },
+};
+
 function getPhaseStyle(round: Round, now: number) {
-  if (round.invalidated) {
-    return { label: 'VOIDED', bg: 'rgba(230,108,92,0.12)', color: 'var(--fa-danger)', border: '1px solid rgba(230,108,92,0.3)' };
-  }
-  const hasScores = Array.from(round.agents.values()).some(a => a.scoredMarkets > 0);
-  if (hasScores) {
-    return { label: 'SCORED', bg: 'var(--fa-success-bg)', color: 'var(--fa-success)', border: '1px solid rgba(116,196,118,0.3)' };
-  }
-  if (round.outcomesTriggered) {
-    return { label: 'TRIGGERED', bg: 'var(--fa-polygon-bg)', color: 'var(--fa-polygon)', border: '1px solid rgba(130,71,229,0.3)' };
-  }
-  if (now < round.commitDeadline) {
-    return { label: 'COMMIT', bg: 'var(--fa-teal-bg)', color: 'var(--fa-teal)', border: '1px solid rgba(93,191,176,0.3)' };
-  }
-  if (now < round.revealStart) {
-    return { label: 'BUFFER', bg: 'var(--fa-danger-bg)', color: 'var(--fa-danger)', border: '1px solid rgba(230,108,92,0.3)' };
-  }
-  return { label: 'REVEAL', bg: 'var(--fa-gold-bg)', color: 'var(--fa-gold)', border: '1px solid rgba(232,177,74,0.3)' };
+  const phase = getActivePhase(round, now);
+  return phaseStyleMap[phase];
 }
 
 // ─── injected CSS ─────────────────────────────────────────────────────────────
