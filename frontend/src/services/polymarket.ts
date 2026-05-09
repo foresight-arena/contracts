@@ -8,6 +8,8 @@ export interface PolymarketInfo {
   endDate: string | null;
   closed: boolean;
   category: MarketCategory;
+  outcomePrices?: string;   // JSON string from Gamma: '["0.75","0.25"]' (YES, NO)
+  lastTradePrice?: number;  // 0–1 fallback
 }
 
 function detectCategory(slug: string, seriesSlug: string, question: string, hasGameId: boolean, tags: string[]): MarketCategory {
@@ -72,6 +74,8 @@ async function fetchOne(cid: string): Promise<PolymarketInfo | null> {
       endDate: m.endDateIso || m.end_date_iso || null,
       closed: m.closed || false,
       category: detectCategory(eventSlug, seriesSlug, m.question || '', hasGameId, tags),
+      outcomePrices: typeof m.outcomePrices === 'string' ? m.outcomePrices : undefined,
+      lastTradePrice: typeof m.lastTradePrice === 'number' ? m.lastTradePrice : undefined,
     };
   } catch {
     return null;

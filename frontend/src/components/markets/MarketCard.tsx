@@ -5,20 +5,57 @@ import { styleForCategory } from '../../lib/categoryColor';
 export type MarketCardProps = {
   conditionId: string;
   info?: PolymarketInfo;
-  benchmarkPrice?: number;   // basis points 0–10000; undefined → show 50/50
+  benchmarkPrice?: number;   // basis points 0–10000; used only when market is resolved
   outcome?: string | null;   // 'YES' | 'NO' | null
   roundId: number;
   dimmed?: boolean;
 };
 
+type PriceResult = {
+  yesPct: number;
+  noPct: number;
+  source: 'live' | 'benchmark' | 'unknown';
+};
+
+function getDisplayPrices(
+  info: PolymarketInfo | undefined,
+  benchmarkPriceBp: number | undefined,
+  isResolved: boolean,
+): PriceResult {
+  // Resolved markets: show frozen benchmark captured at commit close
+  if (isResolved && benchmarkPriceBp != null && benchmarkPriceBp > 0) {
+    const yes = benchmarkPriceBp / 10000;
+    return { yesPct: yes * 100, noPct: (1 - yes) * 100, source: 'benchmark' };
+  }
+
+  // Unresolved: live price from Polymarket Gamma
+  if (info) {
+    try {
+      if (info.outcomePrices) {
+        const parsed = JSON.parse(info.outcomePrices) as string[];
+        if (Array.isArray(parsed) && parsed.length >= 2) {
+          const yes = parseFloat(parsed[0]);
+          if (!isNaN(yes) && yes >= 0 && yes <= 1) {
+            return { yesPct: yes * 100, noPct: (1 - yes) * 100, source: 'live' };
+          }
+        }
+      }
+    } catch { /* fall through */ }
+
+    if (typeof info.lastTradePrice === 'number' && info.lastTradePrice > 0) {
+      const yes = info.lastTradePrice;
+      return { yesPct: yes * 100, noPct: (1 - yes) * 100, source: 'live' };
+    }
+  }
+
+  return { yesPct: 50, noPct: 50, source: 'unknown' };
+}
+
 export default function MarketCard({ conditionId, info, benchmarkPrice, outcome, roundId, dimmed }: MarketCardProps) {
   const [hovered, setHovered] = useState(false);
 
-  const yesPrice = benchmarkPrice != null && benchmarkPrice > 0
-    ? benchmarkPrice / 10000
-    : 0.5;
-  const yesPct = Math.max(0, Math.min(100, Math.round(yesPrice * 100)));
-  const noPct = 100 - yesPct;
+  const isResolved = !!outcome;
+  const { yesPct, noPct, source } = getDisplayPrices(info, benchmarkPrice, isResolved);
 
   const href = info?.url || `/round/${roundId}`;
   const isExternal = !!info?.url;
@@ -76,16 +113,26 @@ export default function MarketCard({ conditionId, info, benchmarkPrice, outcome,
         )}
       </div>
 
-      {/* YES/NO bar */}
-      <div style={{ display: 'flex', height: 6, borderRadius: 999, overflow: 'hidden', background: 'var(--fa-border-soft)' }}>
-        <div style={{ width: `${yesPct}%`, background: 'var(--fa-gold)' }} />
-        <div style={{ flex: 1, background: 'var(--fa-border-strong)' }} />
-      </div>
+      {/* YES/NO bar — hidden when no price data */}
+      {source !== 'unknown' ? (
+        <div style={{ display: 'flex', height: 6, borderRadius: 999, overflow: 'hidden', background: 'var(--fa-border-soft)' }}>
+          <div style={{ width: `${yesPct}%`, background: 'var(--fa-gold)' }} />
+          <div style={{ flex: 1, background: 'var(--fa-border-strong)' }} />
+        </div>
+      ) : (
+        <div style={{ height: 6, borderRadius: 999, background: 'var(--fa-border-soft)' }} />
+      )}
 
       {/* Prices */}
       <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--fa-font-mono)', fontSize: 12.5 }}>
-        <span style={{ color: 'var(--fa-gold)' }}>YES {yesPct}¢</span>
-        <span style={{ color: 'var(--fa-text-tertiary)' }}>NO {noPct}¢</span>
+        {source === 'unknown' ? (
+          <span style={{ color: 'var(--fa-text-tertiary)' }}>—</span>
+        ) : (
+          <>
+            <span style={{ color: 'var(--fa-gold)' }}>YES {Math.round(yesPct)}¢</span>
+            <span style={{ color: 'var(--fa-text-tertiary)' }}>NO {Math.round(noPct)}¢</span>
+          </>
+        )}
       </div>
 
       {/* Footer */}
