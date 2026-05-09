@@ -4,19 +4,11 @@ import { useDataContext } from '../../context/DataContext';
 import { fetchMarketMetadata, type PolymarketInfo } from '../../services/polymarket';
 import type { Round } from '../../types';
 import MarketCard from '../markets/MarketCard';
+import { getActivePhase } from '../../lib/roundPhase';
 
-// ─── Phase helpers (adapted from StatusBadge logic) ───────────────────────────
+// ─── Phase types ──────────────────────────────────────────────────────────────
 
 type RoundPhase = 'commit' | 'buffer' | 'reveal' | 'triggered' | 'scored' | 'void';
-
-function getRoundPhase(round: Round, now: number): RoundPhase {
-  if (round.invalidated) return 'void';
-  if (now < round.commitDeadline) return 'commit';
-  if (now < round.revealStart) return 'buffer';
-  if (now < round.revealDeadline) return round.benchmarksPosted ? 'reveal' : 'buffer';
-  if (round.outcomesTriggered) return 'triggered';
-  return 'scored';
-}
 
 const eyebrowMap: Record<RoundPhase, string> = {
   commit:    'NOW IN COMMIT PHASE',
@@ -113,7 +105,7 @@ export default function ActiveRoundPreview() {
     : null;
 
   const phase: RoundPhase = round
-    ? getRoundPhase(round, Math.floor(Date.now() / 1000))
+    ? getActivePhase(round, Math.floor(Date.now() / 1000))
     : 'void';
 
   const roundId = round?.roundId;
