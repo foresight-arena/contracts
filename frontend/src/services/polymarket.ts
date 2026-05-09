@@ -36,6 +36,8 @@ function detectCategory(slug: string, seriesSlug: string, question: string, hasG
   return 'other';
 }
 
+import { getCachedMarketMeta, setCachedMarketMeta } from '../lib/marketMetaCache';
+
 const cache = new Map<string, PolymarketInfo>();
 
 // In dev, Vite proxy handles /api/polymarket → gamma-api.polymarket.com
@@ -45,6 +47,10 @@ const POLYMARKET_BASE = import.meta.env.DEV
   : (import.meta.env.VITE_RELAYER_URL || 'https://api.foresightarena.xyz') + '/polymarket';
 
 async function fetchOne(cid: string): Promise<PolymarketInfo | null> {
+  // 1. localStorage cache (1 h TTL, survives page reloads)
+  const lsCached = getCachedMarketMeta(cid);
+  if (lsCached) return lsCached;
+
   try {
     // Gamma API's /markets filters by closed status (default: open only).
     // Fetch both in parallel and take whichever returns a result.
@@ -66,7 +72,8 @@ async function fetchOne(cid: string): Promise<PolymarketInfo | null> {
     const tags: string[] = Array.isArray(eventTags)
       ? eventTags.map((t: { slug?: string; label?: string }) => t.slug || t.label || '').filter(Boolean)
       : [];
-    return {
+    // 2. Build result from Gamma response
+    const info: PolymarketInfo = {
       conditionId: m.conditionId || cid,
       title: m.question || m.title || cid,
       slug: eventSlug,
@@ -77,6 +84,10 @@ async function fetchOne(cid: string): Promise<PolymarketInfo | null> {
       outcomePrices: typeof m.outcomePrices === 'string' ? m.outcomePrices : undefined,
       lastTradePrice: typeof m.lastTradePrice === 'number' ? m.lastTradePrice : undefined,
     };
+
+    // 3. Persist to localStorage so next load skips the network call
+    setCachedMarketMeta(cid, info);
+    return info;
   } catch {
     return null;
   }
