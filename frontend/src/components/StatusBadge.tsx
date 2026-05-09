@@ -1,13 +1,9 @@
 import type { CSSProperties } from 'react';
+import type { Round } from '../types';
+import { getActiveStep, type PhaseKey } from '../lib/roundPhase';
 
 interface Props {
-  round: {
-    commitDeadline: number;
-    revealStart: number;
-    revealDeadline: number;
-    invalidated: boolean;
-    benchmarksPosted: boolean;
-  };
+  round: Round;
   now?: number;
 }
 
@@ -17,27 +13,37 @@ interface StatusDef {
   color: string;
 }
 
-function getStatus(round: Props['round'], now: number): StatusDef {
+function getStatusDef(round: Round, now: number): StatusDef {
   if (round.invalidated) {
     return { label: 'Invalidated', bg: 'var(--fa-danger-bg)', color: 'var(--error)' };
   }
-  if (now < round.commitDeadline) {
-    return { label: 'Commit', bg: 'var(--fa-gold-bg)', color: 'var(--accent)' };
+
+  const step = getActiveStep(round, now);
+  if (!step) {
+    return { label: '—', bg: 'var(--bg-tertiary)', color: 'var(--text-secondary)' };
   }
-  if (now < round.revealStart) {
-    return { label: 'Buffer', bg: 'var(--fa-danger-bg)', color: 'var(--fa-danger)' };
-  }
-  if (now < round.revealDeadline) {
-    if (!round.benchmarksPosted) {
-      return { label: 'Awaiting Benchmarks', bg: 'var(--fa-gold-bg)', color: 'var(--warning)' };
-    }
-    return { label: 'Reveal', bg: 'var(--fa-success-bg)', color: 'var(--success)' };
-  }
-  return { label: 'Finalized', bg: 'var(--bg-tertiary)', color: 'var(--text-secondary)' };
+
+  const isPending = step.timestamp === null; // active but event not yet occurred
+
+  const defs: Record<PhaseKey, StatusDef> = {
+    commit:    { label: 'Commit',     bg: 'var(--fa-gold-bg)',    color: 'var(--accent)' },
+    buffer:    { label: 'Buffer',     bg: 'var(--fa-danger-bg)',  color: 'var(--fa-danger)' },
+    reveal:    round.benchmarksPosted
+                 ? { label: 'Reveal',              bg: 'var(--fa-success-bg)', color: 'var(--success)' }
+                 : { label: 'Awaiting Benchmarks', bg: 'var(--fa-gold-bg)',    color: 'var(--warning)' },
+    triggered: isPending
+                 ? { label: 'Awaiting trigger', bg: 'var(--fa-teal-bg)', color: 'var(--fa-teal)' }
+                 : { label: 'Triggered',         bg: 'var(--fa-polygon-bg)', color: 'var(--fa-polygon)' },
+    scored:    isPending
+                 ? { label: 'Awaiting scoring', bg: 'var(--fa-teal-bg)', color: 'var(--fa-teal)' }
+                 : { label: 'Finalized',         bg: 'var(--bg-tertiary)', color: 'var(--text-secondary)' },
+  };
+
+  return defs[step.key];
 }
 
 export default function StatusBadge({ round, now = Math.floor(Date.now() / 1000) }: Props) {
-  const status = getStatus(round, now);
+  const status = getStatusDef(round, now);
 
   const style: CSSProperties = {
     display: 'inline-block',

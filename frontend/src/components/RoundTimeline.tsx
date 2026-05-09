@@ -1,190 +1,233 @@
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import type { Round } from '../types';
+import { buildPhaseSteps, formatPhaseTimestamp, type PhaseStep } from '../lib/roundPhase';
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// ─── Voided layout (invalidated rounds) ──────────────────────────────────────
 
 function fmtDate(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function fmtCountdown(ts: number, now: number): string {
-  const diff = ts - now;
-  if (diff <= 0) return fmtDate(ts);
-  const h = Math.floor(diff / 3600);
-  const m = Math.floor((diff % 3600) / 60);
-  if (h > 48) return `in ${Math.floor(h / 24)}d`;
-  if (h > 0) return `in ${h}h ${m}m`;
-  return `in ${m}m`;
+function VoidedTimeline({ round }: { round: Round }) {
+  const phases = [
+    { label: 'Commit',    sub: fmtDate(round.commitDeadline) },
+    { label: 'Reveal',    sub: fmtDate(round.revealDeadline) },
+    { label: 'Triggered', sub: '—' },
+    { label: 'Scored',    sub: '—' },
+    { label: 'Voided',    sub: '—', terminal: true },
+  ];
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+      {phases.map((ph, i) => {
+        const isFirst = i === 0;
+        const isLast = i === phases.length - 1;
+        return (
+          <div key={ph.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+            {!isFirst && (
+              <div style={{ position: 'absolute', top: 9, left: 0, right: '50%', height: 1.5, borderTop: '1.5px solid var(--fa-border-soft)', opacity: 0.3 }} />
+            )}
+            {!isLast && (
+              <div style={{ position: 'absolute', top: 9, left: '50%', right: 0, height: 1.5, borderTop: '1.5px solid var(--fa-border-soft)', opacity: 0.3 }} />
+            )}
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%', zIndex: 1, boxSizing: 'border-box',
+              background: ph.terminal ? 'var(--fa-danger)' : 'transparent',
+              border: ph.terminal ? 'none' : '1.5px solid var(--fa-border-soft)',
+              opacity: ph.terminal ? 1 : 0.35,
+            }} />
+            <div style={{
+              marginTop: 8, fontFamily: 'var(--fa-font-mono)', fontSize: 10,
+              textTransform: 'uppercase', letterSpacing: '0.09em',
+              color: ph.terminal ? 'var(--fa-danger)' : 'var(--fa-text-tertiary)',
+              fontWeight: ph.terminal ? 600 : 400, opacity: ph.terminal ? 1 : 0.35,
+            }}>
+              {ph.label}
+            </div>
+            <div style={{ marginTop: 2, fontFamily: 'var(--fa-font-mono)', fontSize: 9, color: 'var(--fa-text-tertiary)', opacity: 0.4 }}>
+              {ph.sub}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-// ─── layout ──────────────────────────────────────────────────────────────────
+// ─── Connector helper ─────────────────────────────────────────────────────────
 
-const W = 640;
-const H = 80;
-const PAD = 40;
-const CY = 26;
+function connectorStyle(leftStep: PhaseStep, rightStep: PhaseStep): CSSProperties {
+  const lDone  = leftStep.status === 'past';
+  const lActive = leftStep.status === 'active';
+  const rDone  = rightStep.status === 'past';
+  const rActive = rightStep.status === 'active';
 
-// ─── types ───────────────────────────────────────────────────────────────────
+  const bothPast  = lDone && rDone;
+  const toActive  = lDone && rActive;
+  const fromActive = lActive && rDone; // anomaly case
 
-type PhaseState = 'done' | 'active' | 'future' | 'void' | 'voided';
-
-interface Phase {
-  label: string;
-  sub: string;
-  state: PhaseState;
+  if (bothPast || fromActive) {
+    return { position: 'absolute', top: 9, height: 1.5, borderTop: '1.5px solid var(--fa-text-tertiary)' };
+  }
+  if (toActive) {
+    return { position: 'absolute', top: 9, height: 1.5, borderTop: '1.5px solid var(--fa-gold)' };
+  }
+  // future / pending
+  return { position: 'absolute', top: 9, height: 1.5, borderTop: '1.5px dashed var(--fa-border-soft)' };
 }
 
-// ─── component ───────────────────────────────────────────────────────────────
+// ─── Step dot / label / sub helpers ──────────────────────────────────────────
+
+function dotStyle(step: PhaseStep): CSSProperties {
+  const { status, timestamp, anomaly } = step;
+  const isActivePending = status === 'active' && timestamp === null;
+
+  if (anomaly && status !== 'pending') {
+    return { border: '2px dashed var(--fa-danger)', background: 'transparent' };
+  }
+  if (isActivePending) {
+    return { border: '2px dotted var(--fa-gold)', background: 'transparent' };
+  }
+  if (status === 'active') {
+    return { border: 'none', background: 'var(--fa-gold)' };
+  }
+  if (status === 'past') {
+    return { border: 'none', background: 'var(--fa-text-tertiary)' };
+  }
+  // pending (non-active)
+  return { border: '2px dotted var(--fa-border-soft)', background: 'transparent' };
+}
+
+function labelColor(step: PhaseStep): string {
+  if (step.anomaly && step.status !== 'pending') return 'var(--fa-danger)';
+  if (step.status === 'active') return 'var(--fa-gold)';
+  return 'var(--fa-text-tertiary)';
+}
+
+function stepSubLabel(step: PhaseStep): string {
+  const { status, timestamp, key } = step;
+  if (key === 'scored' && status === 'past') return 'complete';
+  if (timestamp !== null) {
+    const f = formatPhaseTimestamp(timestamp);
+    return `${f.date} · ${f.time}`;
+  }
+  if (status === 'active') return 'Awaiting';
+  return 'Pending';
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function RoundTimeline({ round }: {
   round: Round;
   agentNames: Map<string, string>; // kept for API compatibility
 }) {
   const now = Math.floor(Date.now() / 1000);
+  const steps = useMemo(() => buildPhaseSteps(round, now), [round, now]);
 
-  const phases = useMemo<Phase[]>(() => {
-    const hasScores = Array.from(round.agents.values()).some(a => a.scoredMarkets > 0);
-    const commitDone = now >= round.commitDeadline;
-    const revealDone = now >= round.revealDeadline;
+  if (round.invalidated) return <VoidedTimeline round={round} />;
 
-    if (round.invalidated) {
-      return [
-        { label: 'Commit',    sub: fmtDate(round.commitDeadline), state: 'void' },
-        { label: 'Reveal',    sub: fmtDate(round.revealDeadline), state: 'void' },
-        { label: 'Triggered', sub: '—',                           state: 'void' },
-        { label: 'Scored',    sub: '—',                           state: 'void' },
-        { label: 'Voided',    sub: '—',                           state: 'voided' },
-      ];
-    }
-
-    return [
-      {
-        label: 'Commit',
-        sub: commitDone
-          ? fmtDate(round.commitDeadline)
-          : fmtCountdown(round.commitDeadline, now),
-        state: commitDone ? 'done' : 'active',
-      },
-      {
-        label: 'Reveal',
-        sub: revealDone
-          ? fmtDate(round.revealDeadline)
-          : commitDone
-          ? fmtCountdown(round.revealDeadline, now)
-          : 'pending',
-        state: revealDone ? 'done' : commitDone ? 'active' : 'future',
-      },
-      {
-        label: 'Triggered',
-        sub: round.outcomesTriggered && round.outcomesTriggeredAt
-          ? fmtDate(round.outcomesTriggeredAt)
-          : revealDone ? 'pending' : '—',
-        state: round.outcomesTriggered ? 'done' : revealDone ? 'active' : 'future',
-      },
-      {
-        label: 'Scored',
-        sub: hasScores ? 'complete' : '—',
-        state: hasScores ? 'done' : round.outcomesTriggered ? 'active' : 'future',
-      },
-    ];
-  }, [round, now]);
-
-  const N = phases.length;
-  const plotW = W - 2 * PAD;
-  const cx = (i: number) => PAD + (i / (N - 1)) * plotW;
+  const hasAnomaly = steps.some(s => s.anomaly !== null);
+  const N = steps.length;
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="xMidYMid meet"
-      style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
-    >
-      {/* Connectors */}
-      {phases.slice(0, -1).map((ph, i) => {
-        const next = phases[i + 1];
-        const r1 = ph.state === 'active' ? 11 : 9;
-        const r2 = next.state === 'active' ? 11 : 9;
-        const bothDone = ph.state === 'done' && next.state === 'done';
-        const toActive = ph.state === 'done' && next.state === 'active';
-        const isVoid = ph.state === 'void';
-        return (
-          <line
-            key={i}
-            x1={cx(i) + r1} y1={CY}
-            x2={cx(i + 1) - r2} y2={CY}
-            style={{
-              stroke: isVoid || bothDone
-                ? 'var(--fa-text-tertiary)'
-                : toActive
-                ? 'var(--fa-gold)'
-                : 'var(--fa-border-soft)',
-              strokeWidth: 1.5,
-              strokeDasharray: (!bothDone && !toActive && !isVoid) ? '4 3' : 'none',
-              opacity: isVoid ? 0.3 : 1,
-            }}
-          />
-        );
-      })}
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+        {steps.map((step, i) => {
+          const isFirst = i === 0;
+          const isLast  = i === N - 1;
+          const isActive = step.status === 'active';
+          const isPending = step.status === 'pending';
+          const isActivePending = isActive && step.timestamp === null;
+          const isAnomaly = step.anomaly !== null;
 
-      {/* Nodes */}
-      {phases.map((ph, i) => {
-        const x = cx(i);
-        const active  = ph.state === 'active';
-        const done    = ph.state === 'done';
-        const voided  = ph.state === 'voided';
-        const voidDim = ph.state === 'void';
-        const r = active ? 10 : 8;
+          const dot  = dotStyle(step);
+          const lCol = labelColor(step);
+          const sub  = stepSubLabel(step);
 
-        return (
-          <g key={i} style={{ opacity: voidDim ? 0.35 : 1 }}>
-            {/* Glow ring */}
-            {active && (
-              <circle cx={x} cy={CY} r={16}
-                style={{ fill: 'none', stroke: 'var(--fa-gold)', strokeWidth: 1.5, opacity: 0.2 }} />
-            )}
-
-            {/* Circle */}
-            <circle cx={x} cy={CY} r={r}
+          return (
+            <div
+              key={step.key}
               style={{
-                fill: done ? 'var(--fa-text-tertiary)'
-                  : active ? 'var(--fa-gold)'
-                  : voided ? 'var(--fa-danger)'
-                  : 'none',
-                stroke: (!done && !active && !voided) ? 'var(--fa-border-soft)' : 'none',
-                strokeWidth: 1.5,
-              }}
-            />
-
-            {/* Phase label */}
-            <text x={x} y={CY + 19} textAnchor="middle"
-              style={{
-                fontFamily: 'var(--fa-font-mono)',
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: '0.09em',
-                fill: active ? 'var(--fa-gold)'
-                  : voided ? 'var(--fa-danger)'
-                  : 'var(--fa-text-tertiary)',
-                fontWeight: (active || voided) ? '600' : '400',
+                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                position: 'relative',
+                opacity: isPending && !isActive ? 0.45 : 1,
               }}
             >
-              {ph.label}
-            </text>
+              {/* Left connector */}
+              {!isFirst && (
+                <div style={{ ...connectorStyle(steps[i - 1], step), left: 0, right: '50%' }} />
+              )}
 
-            {/* Sub-label (date or status) */}
-            <text x={x} y={CY + 31} textAnchor="middle"
-              style={{
-                fontFamily: 'var(--fa-font-mono)',
-                fontSize: 9,
-                fill: 'var(--fa-text-tertiary)',
-                opacity: 0.65,
-              }}
-            >
-              {ph.sub}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+              {/* Right connector */}
+              {!isLast && (
+                <div style={{ ...connectorStyle(step, steps[i + 1]), left: '50%', right: 0 }} />
+              )}
+
+              {/* Glow ring — active non-pending only */}
+              {isActive && !isActivePending && (
+                <div style={{
+                  position: 'absolute', top: -4,
+                  width: 28, height: 28, borderRadius: '50%',
+                  border: '1.5px solid var(--fa-gold)', opacity: 0.2,
+                  zIndex: 0,
+                }} />
+              )}
+
+              {/* Dot */}
+              <div style={{
+                width: 20, height: 20, borderRadius: '50%',
+                zIndex: 1, position: 'relative', boxSizing: 'border-box',
+                ...dot,
+              }} />
+
+              {/* Label + anomaly icon */}
+              <div style={{
+                marginTop: 8,
+                fontFamily: 'var(--fa-font-mono)', fontSize: 10,
+                textTransform: 'uppercase', letterSpacing: '0.09em',
+                color: lCol,
+                fontWeight: (isActive || isAnomaly) ? 600 : 400,
+                display: 'flex', alignItems: 'center', gap: 3,
+                whiteSpace: 'nowrap',
+              }}>
+                {step.label}
+                {isAnomaly && (
+                  <span
+                    title={step.anomaly!.message}
+                    aria-label={step.anomaly!.message}
+                    style={{ cursor: 'help', fontSize: 12, lineHeight: 1, opacity: 0.85 }}
+                  >
+                    ⓘ
+                  </span>
+                )}
+              </div>
+
+              {/* Timestamp / status */}
+              <div style={{
+                marginTop: 2,
+                fontFamily: 'var(--fa-font-mono)', fontSize: 9,
+                color: 'var(--fa-text-tertiary)', opacity: 0.65,
+                whiteSpace: 'nowrap',
+              }}>
+                {sub}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Anomaly banner */}
+      {hasAnomaly && (
+        <div style={{
+          marginTop: 16, padding: '8px 12px',
+          fontFamily: 'var(--fa-font-mono)', fontSize: 11,
+          color: 'var(--fa-text-tertiary)',
+          borderLeft: '2px solid var(--fa-danger)',
+          background: 'var(--fa-danger-bg)', borderRadius: 4,
+        }}>
+          Atypical sequence — see step indicators. Reasons may include disputed markets, early resolution, or other on-chain events.
+        </div>
+      )}
+    </div>
   );
 }
