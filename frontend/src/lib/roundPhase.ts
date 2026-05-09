@@ -2,83 +2,66 @@ import type { Round } from '../types';
 
 export type PhaseKey = 'commit' | 'buffer' | 'reveal' | 'triggered' | 'scored';
 
-export interface PhaseStep {
+export type AnomalyInfo = {
+  precedes: PhaseKey;
+  message: string;
+};
+
+export type PhaseStep = {
   key: PhaseKey;
   label: string;
-  /** UNIX seconds — when this phase began; used for sort + active detection */
-  timestamp: number;
-  show: boolean;
-}
+  timestamp: number | null;    // UNIX seconds; null when phase has not occurred yet
+  anomaly: AnomalyInfo | null; // non-null when timestamp violates canonical ordering
+};
+
+const LABELS: Record<PhaseKey, string> = {
+  commit: 'Commit', buffer: 'Buffer', reveal: 'Reveal',
+  triggered: 'Triggered', scored: 'Scored',
+};
 
 export function buildPhaseSteps(round: Round): PhaseStep[] {
-  const steps: PhaseStep[] = [];
   const hasScores = Array.from(round.agents.values()).some(a => a.scoredMarkets > 0);
 
-  steps.push({
-    key: 'commit',
-    label: 'Commit',
-    timestamp: round.createdAt,
-    show: true,
-  });
+  const tsByKey: Partial<Record<PhaseKey, number | null>> = {
+    commit:    round.createdAt,
+    buffer:    round.revealStart > round.commitDeadline ? round.commitDeadline : null,
+    reveal:    round.revealStart,
+    triggered: round.outcomesTriggeredAt > 0 ? round.outcomesTriggeredAt : null,
+    scored:    hasScores && round.outcomesTriggeredAt > 0 ? round.outcomesTriggeredAt + 1 : null,
+  };
 
-  // Buffer exists only when reveal doesn't start immediately after commit close
-  if (round.revealStart > round.commitDeadline) {
-    steps.push({
-      key: 'buffer',
-      label: 'Buffer',
-      timestamp: round.commitDeadline,
-      show: true,
-    });
+  const CANONICAL: PhaseKey[] = ['commit', 'buffer', 'reveal', 'triggered', 'scored'];
+  const steps: PhaseStep[] = [];
+
+  for (const key of CANONICAL) {
+    const ts = tsByKey[key] ?? null;
+    if (ts === null) continue;
+
+    const prev = steps[steps.length - 1];
+    let anomaly: AnomalyInfo | null = null;
+    if (prev?.timestamp !== null && ts < prev.timestamp!) {
+      anomaly = {
+        precedes: prev.key,
+        message: `Occurred before ${LABELS[prev.key]} · atypical sequence`,
+      };
+    }
+
+    steps.push({ key, label: LABELS[key], timestamp: ts, anomaly });
   }
 
-  steps.push({
-    key: 'reveal',
-    label: 'Reveal',
-    timestamp: round.revealStart,
-    show: true,
-  });
-
-  // Use actual on-chain timestamp if available, otherwise place in the future
-  const triggeredTs =
-    round.outcomesTriggered && round.outcomesTriggeredAt > 0
-      ? round.outcomesTriggeredAt
-      : round.revealDeadline + 86400;
-
-  steps.push({
-    key: 'triggered',
-    label: 'Triggered',
-    timestamp: triggeredTs,
-    show: true,
-  });
-
-  // No on-chain scoredAt — place 1 second after trigger (scoring is atomic with trigger tx)
-  const scoredTs =
-    hasScores && round.outcomesTriggeredAt > 0
-      ? round.outcomesTriggeredAt + 1
-      : round.revealDeadline + 86400 * 2;
-
-  steps.push({
-    key: 'scored',
-    label: 'Scored',
-    timestamp: scoredTs,
-    show: true,
-  });
-
-  // Sort by actual timestamp — handles out-of-order on-chain events correctly
-  steps.sort((a, b) => a.timestamp - b.timestamp);
-
-  return steps;
+  return steps; // canonical order, no sort
 }
 
-/** Returns the index of the last step whose timestamp is ≤ now (= current active phase). */
+/** Returns the index of the last step whose timestamp is ≤ now. */
 export function getActivePhaseIndex(steps: PhaseStep[], now: number): number {
   for (let i = steps.length - 1; i >= 0; i--) {
-    if (steps[i].timestamp <= now) return i;
+    const ts = steps[i].timestamp;
+    if (ts !== null && ts <= now) return i;
   }
   return 0;
 }
 
-/** Single source of truth for the current phase key, used by all pills and the timeline. */
+/** Single source of truth for the current phase key, used by pills and the timeline. */
 export function getActivePhase(
   round: Round,
   now = Math.floor(Date.now() / 1000),
@@ -87,4 +70,12 @@ export function getActivePhase(
   const steps = buildPhaseSteps(round);
   const idx = getActivePhaseIndex(steps, now);
   return steps[idx].key;
+}
+
+export function formatPhaseTimestamp(ts: number): { date: string; time: string } {
+  const d = new Date(ts * 1000);
+  return {
+    date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+  };
 }
