@@ -41,6 +41,9 @@ if (!RPC_URL) throw new Error('Set RPC_URL env var (Polygon RPC endpoint)');
 const AGENT_URL = process.env.AGENT_URL || '';
 const AGENT_NAME = process.env.AGENT_NAME || '';
 
+const MAX_COMMIT_BASE_FEE_GWEI = Number(process.env.MAX_COMMIT_BASE_FEE_GWEI || 1000);
+const MAX_REVEAL_BASE_FEE_GWEI = Number(process.env.MAX_REVEAL_BASE_FEE_GWEI || 200);
+
 /**
  * Build the agentURI to register with.
  *  - If AGENT_URL is set, use it directly (external JSON).
@@ -181,12 +184,25 @@ async function ensureRegistered() {
   log(`Registered in tx ${receipt.transactionHash}`);
 }
 
+// ─── Gas cap ──────────────────────────────────────────────────────────────────
+
+async function baseFeeGwei() {
+  const block = await publicClient.getBlock({ blockTag: 'latest' });
+  return Number(block.baseFeePerGas ?? 0n) / 1e9;
+}
+
 // ─── Commit ───────────────────────────────────────────────────────────────────
 
 async function tryCommit(roundId, round) {
   const now = BigInt(Math.floor(Date.now() / 1000));
   if (now >= round.commitDeadline) return;
   if (round.invalidated) return;
+
+  const fee = await baseFeeGwei();
+  if (fee > MAX_COMMIT_BASE_FEE_GWEI) {
+    log(`Round ${roundId}: base fee ${fee.toFixed(0)} gwei > ${MAX_COMMIT_BASE_FEE_GWEI} cap, skipping commit`);
+    return;
+  }
 
   const marketCount = round.conditionIds.length;
   const predictions = randomPredictions(marketCount);
@@ -240,6 +256,13 @@ async function processRevealQueue() {
 
       // Not in reveal phase yet — keep in queue
       if (now < round.revealStart) {
+        remaining.push(entry);
+        continue;
+      }
+
+      const fee = await baseFeeGwei();
+      if (fee > MAX_REVEAL_BASE_FEE_GWEI) {
+        log(`Round ${roundId}: base fee ${fee.toFixed(0)} gwei > ${MAX_REVEAL_BASE_FEE_GWEI} cap, deferring reveal`);
         remaining.push(entry);
         continue;
       }
