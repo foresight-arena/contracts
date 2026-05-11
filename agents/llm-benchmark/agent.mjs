@@ -17,6 +17,8 @@
  *   RELAYER_URL=https://...  (if set, posts reasoning JSON to /reasoning endpoint)
  *   MODE=all                 (discover|predict|all — default: all)
  *   LEAD_TIME_SECONDS=600    (predict when remaining < this many seconds; default 600 = 10m)
+ *   MAX_COMMIT_BASE_FEE_GWEI=1000   (skip commit if Polygon base fee exceeds this; default 1000)
+ *   MAX_REVEAL_BASE_FEE_GWEI=200    (defer reveal if Polygon base fee exceeds this; default 200)
  *
  * Crontab example (every 2 hours):
  *   0 *\/2 * * * cd /path/to/agents/llm-benchmark && AGENT_KEY=... RPC_URL=... MODEL=... OPENROUTER_API_KEY=... node agent.mjs >> agent.log 2>&1
@@ -89,6 +91,8 @@ const ROUND_ID_OVERRIDE = process.env.ROUND_ID ? BigInt(process.env.ROUND_ID) : 
 const RELAYER_URL = process.env.RELAYER_URL || '';
 const MODE = (process.env.MODE || 'all').toLowerCase();
 const LEAD_TIME_SECONDS = Number(process.env.LEAD_TIME_SECONDS || 600);
+const MAX_COMMIT_BASE_FEE_GWEI = Number(process.env.MAX_COMMIT_BASE_FEE_GWEI || 1000);
+const MAX_REVEAL_BASE_FEE_GWEI = Number(process.env.MAX_REVEAL_BASE_FEE_GWEI || 200);
 if (!['discover', 'predict', 'all'].includes(MODE)) {
   throw new Error(`Invalid MODE: ${MODE} (must be discover|predict|all)`);
 }
@@ -366,6 +370,13 @@ function buildReasoningPayload({ result }) {
     .map((p) => p.reasoning || '');
 }
 
+// ─── Gas cap ──────────────────────────────────────────────────────────────────
+
+async function baseFeeGwei() {
+  const block = await publicClient.getBlock({ blockTag: 'latest' });
+  return Number(block.baseFeePerGas ?? 0n) / 1e9;
+}
+
 // ─── Commit ───────────────────────────────────────────────────────────────────
 
 async function tryCommit(roundId, round) {
@@ -394,6 +405,12 @@ async function tryCommit(roundId, round) {
 
   if (DRY_RUN) {
     log(`Round ${roundId}: DRY_RUN — skipping on-chain commit`);
+    return;
+  }
+
+  const fee = await baseFeeGwei();
+  if (fee > MAX_COMMIT_BASE_FEE_GWEI) {
+    log(`Round ${roundId}: base fee ${fee.toFixed(0)} gwei > ${MAX_COMMIT_BASE_FEE_GWEI} cap, skipping commit`);
     return;
   }
 
@@ -454,6 +471,13 @@ async function processRevealQueue() {
       }
 
       if (now < round.revealStart) {
+        remaining.push(entry);
+        continue;
+      }
+
+      const fee = await baseFeeGwei();
+      if (fee > MAX_REVEAL_BASE_FEE_GWEI) {
+        log(`Round ${roundId}: base fee ${fee.toFixed(0)} gwei > ${MAX_REVEAL_BASE_FEE_GWEI} cap, deferring reveal`);
         remaining.push(entry);
         continue;
       }
