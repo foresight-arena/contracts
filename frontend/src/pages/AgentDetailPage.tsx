@@ -298,7 +298,7 @@ export default function AgentDetailPage() {
         <StatCard label="First Round" value={formatDate(stats.firstRoundTs)} />
         <StatCard label="Last Round" value={formatDate(stats.lastRoundTs)} />
         <StatCard label="Committed" value={`${stats.commitCount} rounds`} />
-        <StatCard label="Scored" value={`${stats.scoredCount}r / ${stats.scoredMarkets}m`} />
+        <StatCard label="Scored" value={`${stats.scoredCount}r / ${scoring.n}m`} />
         <StatCard label="Non-reveals" value={String(stats.nonReveals)} accent={stats.nonReveals > 0} />
       </div>
 
