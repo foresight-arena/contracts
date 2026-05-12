@@ -162,7 +162,7 @@ export function ReasoningContent({ data, loading }: { data: ReasoningData | null
         <div style={sectionTitleStyle}>Reasoning</div>
         {(data as string[]).map((r, i) => (
           <div key={i} style={reasoningItemStyle}>
-            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>[{i}]</span>
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>[{i + 1}]</span>
             <span style={{ marginLeft: 'var(--space-sm)', color: 'var(--text-secondary)' }}>{r}</span>
           </div>
         ))}
@@ -189,7 +189,7 @@ export function ReasoningContent({ data, loading }: { data: ReasoningData | null
 
       {data.autoResolved?.length > 0 && (
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>
-          Auto-resolved: {data.autoResolved.map((a: any) => `Market ${a.index} = ${a.outcome}`).join(', ')}
+          Auto-resolved: {data.autoResolved.map((a: any) => `Market ${a.index + 1} = ${a.outcome}`).join(', ')}
         </div>
       )}
 
@@ -197,7 +197,7 @@ export function ReasoningContent({ data, loading }: { data: ReasoningData | null
       {(data.perMarketReasoning || []).map((r: any) => (
         <div key={r.marketIndex} style={reasoningItemStyle}>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-            [{r.marketIndex}] {formatBps(r.probabilityBps)}
+            [{r.marketIndex + 1}] {formatBps(r.probabilityBps)}
           </span>
           <span style={{ marginLeft: 'var(--space-sm)', color: 'var(--text-secondary)' }}>
             {r.reasoning}
