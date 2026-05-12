@@ -18,11 +18,6 @@ function truncAddr(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
 
-function formatPct(value: number): string {
-  const pct = (value / 10000) * 100;
-  return pct % 1 === 0 ? pct.toFixed(0) + '%' : pct.toFixed(2) + '%';
-}
-
 function formatBrier(score: number): string {
   const pct = (score / 1e8) * 100;
   return pct % 1 === 0 ? pct.toFixed(0) + '%' : pct.toFixed(2) + '%';
@@ -93,6 +88,123 @@ const rdCSS = `
   .rd-market-card { transition: border-color 200ms ease; }
   .rd-market-card:hover { border-color: var(--fa-border) !important; }
 `;
+
+// ─── MarketPredictionStrip ────────────────────────────────────────────────────
+
+function MarketPredictionStrip({
+  idx, round, agentEntries, agentDisplayNames,
+}: {
+  idx: number;
+  round: Round;
+  agentEntries: AgentRoundData[];
+  agentDisplayNames: Map<string, string>;
+}) {
+  const outcome = round.outcomes?.[idx];
+  const benchmarkRaw = round.benchmarkPrices[idx];
+  const benchPct = benchmarkRaw != null ? (benchmarkRaw / 10000) * 100 : null;
+
+  const revealedWithPreds = agentEntries.filter(
+    a => a.revealed && a.predictions[idx] != null,
+  );
+
+  if (revealedWithPreds.length === 0 && benchPct == null) return null;
+
+  const correctCount = outcome && outcome !== 'VOID'
+    ? revealedWithPreds.filter(a =>
+        outcome === 'YES' ? a.predictions[idx] > 5000 : a.predictions[idx] < 5000,
+      ).length
+    : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      {/* Axis labels */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        fontFamily: 'var(--fa-font-mono)', fontSize: 9,
+        color: 'var(--fa-text-tertiary)', letterSpacing: '0.07em', textTransform: 'uppercase',
+      }}>
+        <span>NO</span>
+        <span style={{ color: 'var(--fa-text-tertiary)', opacity: 0.6 }}>Predictions</span>
+        <span>YES</span>
+      </div>
+
+      {/* Scatter bar */}
+      <div style={{
+        position: 'relative', height: 28, borderRadius: 5,
+        overflow: 'hidden', background: 'var(--fa-bg-base)',
+      }}>
+        {/* Correct zone shading */}
+        {outcome === 'YES' && (
+          <div style={{ position: 'absolute', inset: '0 0 0 50%', background: 'rgba(116,196,118,0.1)' }} />
+        )}
+        {outcome === 'NO' && (
+          <div style={{ position: 'absolute', inset: '0 50% 0 0', background: 'rgba(116,196,118,0.1)' }} />
+        )}
+
+        {/* 50% midline */}
+        <div style={{
+          position: 'absolute', top: 0, bottom: 0, left: '50%',
+          width: 1, transform: 'translateX(-50%)',
+          background: 'var(--fa-border-soft)',
+        }} />
+
+        {/* Agent prediction ticks */}
+        {revealedWithPreds.map(a => {
+          const pct = (a.predictions[idx] / 10000) * 100;
+          const correct = outcome === 'YES' ? a.predictions[idx] > 5000
+                        : outcome === 'NO'  ? a.predictions[idx] < 5000
+                        : null;
+          const name = agentDisplayNames.get(a.address) || truncAddr(a.address);
+          return (
+            <div
+              key={a.address}
+              title={`${name}: ${pct.toFixed(1)}%`}
+              style={{
+                position: 'absolute', top: '50%', left: `${pct}%`,
+                width: 2, height: 14,
+                background: correct === true  ? 'var(--fa-success)'
+                          : correct === false ? 'var(--fa-danger)'
+                          : 'var(--fa-text-tertiary)',
+                opacity: correct === null ? 0.5 : 0.9,
+                transform: 'translate(-50%, -50%)',
+                borderRadius: 1, cursor: 'default',
+              }}
+            />
+          );
+        })}
+
+        {/* Benchmark marker — gold, slightly taller */}
+        {benchPct != null && (
+          <div
+            title={`Benchmark: ${benchPct.toFixed(1)}%`}
+            style={{
+              position: 'absolute', top: '50%', left: `${benchPct}%`,
+              width: 3, height: 20, background: 'var(--fa-gold)',
+              transform: 'translate(-50%, -50%)',
+              borderRadius: 1.5, cursor: 'default',
+            }}
+          />
+        )}
+      </div>
+
+      {/* Bottom legend row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 9, color: 'var(--fa-text-tertiary)' }}>
+          {correctCount != null
+            ? `${correctCount}/${revealedWithPreds.length} correct`
+            : revealedWithPreds.length > 0
+              ? `${revealedWithPreds.length} agent${revealedWithPreds.length !== 1 ? 's' : ''}`
+              : ''}
+        </span>
+        {benchPct != null && (
+          <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 9, color: 'var(--fa-gold)' }}>
+            ▌ {benchPct.toFixed(1)}% benchmark
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── AgentRow — keeps useReasoning hook call ──────────────────────────────────
 
@@ -274,6 +386,19 @@ export default function RoundDetailPage() {
     return m;
   }, [round, resolvedMeta, agentMap]);
 
+  // Display names keyed by original address (for prediction strip tooltips)
+  const agentDisplayNames = useMemo(() => {
+    const m = new Map<string, string>();
+    if (!round) return m;
+    for (const [addr] of round.agents) {
+      const a = addr.toLowerCase();
+      const meta = resolvedMeta.get(a);
+      const base = agentMap.get(a);
+      m.set(addr, meta?.name || base?.name || truncAddr(addr));
+    }
+    return m;
+  }, [round, resolvedMeta, agentMap]);
+
   if (loading) return <LoadingSpinner />;
 
   if (!round) {
@@ -397,9 +522,6 @@ export default function RoundDetailPage() {
               const meta = marketMeta.get(cid);
               const outcome = round.outcomes?.[idx];
               const inBitmask = round.outcomesTriggered && (round.resolvedBitmask & (1 << idx)) !== 0;
-              const benchPct = round.benchmarkPrices[idx] != null
-                ? (round.benchmarkPrices[idx] / 10000) * 100
-                : null;
 
               const outcomePill = (() => {
                 if (!outcome) return null;
@@ -454,23 +576,13 @@ export default function RoundDetailPage() {
                     })()}
                   </div>
 
-                  {/* Benchmark bar */}
-                  {benchPct != null && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      <div style={{ display: 'flex', height: 5, borderRadius: 3, overflow: 'hidden', background: 'var(--fa-bg-base)' }}>
-                        <div style={{ width: `${benchPct}%`, background: 'var(--fa-gold)' }} />
-                        <div style={{ flex: 1, background: 'var(--fa-text-tertiary)', opacity: 0.25 }} />
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--fa-font-mono)', fontSize: 11 }}>
-                        <span style={{ color: 'var(--fa-text-tertiary)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                          Benchmark
-                        </span>
-                        <span style={{ color: 'var(--fa-gold)' }}>
-                          {formatPct(round.benchmarkPrices[idx])}
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                  {/* Prediction strip (benchmark + agent forecasts) */}
+                  <MarketPredictionStrip
+                    idx={idx}
+                    round={round}
+                    agentEntries={agentEntries}
+                    agentDisplayNames={agentDisplayNames}
+                  />
 
                   {/* Outcome / status */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
