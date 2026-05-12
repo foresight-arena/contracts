@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import NotFoundPage from './NotFoundPage';
 import { useDataContext } from '../context/DataContext';
@@ -96,10 +96,11 @@ const rdCSS = `
 
 // ─── AgentRow — keeps useReasoning hook call ──────────────────────────────────
 
-function AgentRow({ agent, displayName, round }: {
+function AgentRow({ agent, displayName, round, marketMeta }: {
   agent: AgentRoundData;
   displayName: string;
   round: Round;
+  marketMeta: Map<string, PolymarketInfo>;
 }) {
   const isBenchmark = isBenchmarkAgent(agent.address);
   const reasoning = useReasoning(round.roundId, agent.address);
@@ -122,12 +123,12 @@ function AgentRow({ agent, displayName, round }: {
   const hasAlpha = agent.alphaScore != null && agent.scoredMarkets > 0;
   const alphaRaw = hasAlpha ? (agent.alphaScore as number) / 1e8 : null;
 
+  const hasPredictions = agent.revealed && agent.predictions.some(p => p != null);
+
   return (
-    <React.Fragment>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '11px 0', borderBottom: '1px solid var(--fa-border-soft)',
-      }}>
+    <div style={{ borderBottom: '1px solid var(--fa-border-soft)' }}>
+      {/* Main row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0' }}>
         {/* Avatar */}
         <div style={{
           width: 32, height: 32, borderRadius: '50%',
@@ -141,8 +142,8 @@ function AgentRow({ agent, displayName, round }: {
         </div>
 
         {/* Name + address */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ flexShrink: 0, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Link to={`/agent/${agent.address}`} style={{
               fontFamily: 'var(--fa-font-body)', fontWeight: 500, fontSize: 13.5,
               color: 'var(--fa-text-primary)', textDecoration: 'none',
@@ -166,6 +167,66 @@ function AgentRow({ agent, displayName, round }: {
             {truncAddr(agent.address)}
           </Link>
         </div>
+
+        {/* Prediction chips */}
+        {hasPredictions && (
+          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', justifyContent: 'flex-end', minWidth: 0 }}>
+            {round.conditionIds.map((cid, idx) => {
+              const pred = agent.predictions[idx];
+              if (pred == null) return null;
+
+              const outcome = round.outcomes?.[idx];
+              const meta = marketMeta.get(cid);
+              const benchRaw = round.benchmarkPrices[idx];
+              const benchStr = benchRaw != null
+                ? ((benchRaw / 10000) * 100).toFixed(1) + '%'
+                : null;
+
+              const correct = outcome === 'YES' ? pred > 5000
+                            : outcome === 'NO'  ? pred < 5000
+                            : null;
+              const isVoid = outcome === 'VOID';
+
+              const chip = isVoid
+                ? { bg: 'var(--fa-bg-base)',    color: 'var(--fa-text-tertiary)', border: '1px solid var(--fa-border-soft)' }
+                : correct === true
+                ? { bg: 'var(--fa-success-bg)', color: 'var(--fa-success)',       border: '1px solid rgba(116,196,118,0.3)' }
+                : correct === false
+                ? { bg: 'var(--fa-danger-bg)',  color: 'var(--fa-danger)',        border: '1px solid rgba(230,108,92,0.3)' }
+                : { bg: 'var(--fa-bg-base)',    color: 'var(--fa-text-secondary)',border: '1px solid var(--fa-border-soft)' };
+
+              const predPct = (pred / 10000) * 100;
+              const predStr = predPct % 1 === 0
+                ? predPct.toFixed(0) + '%'
+                : predPct.toFixed(1) + '%';
+
+              const tooltip = [
+                meta?.title || `Market ${idx + 1}`,
+                outcome ? `Outcome: ${outcome}` : 'Pending',
+                benchStr ? `Benchmark: ${benchStr}` : null,
+              ].filter(Boolean).join('\n');
+
+              return (
+                <span
+                  key={idx}
+                  title={tooltip}
+                  style={{
+                    fontFamily: 'var(--fa-font-mono)', fontSize: 10.5,
+                    padding: '2px 7px', borderRadius: 5,
+                    background: chip.bg, color: chip.color, border: chip.border,
+                    cursor: 'default', userSelect: 'none',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  <span style={{ opacity: 0.45 }}>{idx + 1} ·</span> {predStr}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* No predictions — spacer so status stays right-aligned */}
+        {!hasPredictions && <div style={{ flex: 1 }} />}
 
         {/* Status pill */}
         <span style={{
@@ -193,12 +254,13 @@ function AgentRow({ agent, displayName, round }: {
         )}
       </div>
 
+      {/* Reasoning */}
       {showReasoning && reasoning.open && (
         <div style={{ paddingLeft: 44, paddingBottom: 12 }}>
           <ReasoningContent data={reasoning.data} loading={reasoning.loading} />
         </div>
       )}
-    </React.Fragment>
+    </div>
   );
 }
 
@@ -462,7 +524,7 @@ export default function RoundDetailPage() {
                         <div style={{ flex: 1, background: 'var(--fa-text-tertiary)', opacity: 0.25 }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--fa-font-mono)', fontSize: 11 }}>
-                        <span style={{ color: 'var(--fa-text-tertiary)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        <span title="Market consensus price frozen at the commit deadline — used as the alpha baseline to measure each agent's edge" style={{ color: 'var(--fa-text-tertiary)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'help', borderBottom: '1px dotted var(--fa-border)' }}>
                           Benchmark
                         </span>
                         <span style={{ color: 'var(--fa-gold)' }}>
@@ -533,7 +595,7 @@ export default function RoundDetailPage() {
               const base = agentMap.get(addr);
               const displayName = meta?.name || base?.name || truncAddr(agent.address);
               return (
-                <AgentRow key={agent.address} agent={agent} displayName={displayName} round={round} />
+                <AgentRow key={agent.address} agent={agent} displayName={displayName} round={round} marketMeta={marketMeta} />
               );
             })}
           </div>
