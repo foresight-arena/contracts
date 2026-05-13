@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useDataContext } from '../context/DataContext';
 import TimeFilter from '../components/TimeFilter';
@@ -15,6 +15,7 @@ import TimeSeriesChart from '../components/leaderboard/TimeSeriesChart';
 // observed alpha is weighted equally with the zero prior, so the shrunken
 // score is half the raw value.
 const SHRINKAGE_KAPPA = 140;
+const PAGE_SIZE = 10;
 
 interface LeaderboardRow {
   address: string;
@@ -52,6 +53,9 @@ export default function LeaderboardPage() {
   const [period, setPeriod] = React.useState<TimePeriod>('30d');
   const [showInactive, setShowInactive] = React.useState(false);
   const [metric, setMetric] = React.useState<'alpha' | 'brier'>('alpha');
+  const [page, setPage] = useState(1);
+
+  const handlePeriodChange = (p: TimePeriod) => { setPeriod(p); setPage(1); };
 
   const agentMap = agentRegistry;
   const resolvedMeta = useAgentsMetadata(agentMap);
@@ -218,6 +222,10 @@ export default function LeaderboardPage() {
 
   if (loading) return <LoadingSpinner />;
 
+  const totalPages = Math.ceil(entries.length / PAGE_SIZE);
+  const pageEntries = entries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const rankOffset = (page - 1) * PAGE_SIZE;
+
   return (
     <div className="page">
       <style>{lbCSS}</style>
@@ -270,7 +278,7 @@ export default function LeaderboardPage() {
       </section>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'wrap', marginBottom: 'var(--space-lg)' }}>
-        <TimeFilter value={period} onChange={setPeriod} />
+        <TimeFilter value={period} onChange={handlePeriodChange} />
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--fa-text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
           <input
             type="checkbox"
@@ -288,6 +296,7 @@ export default function LeaderboardPage() {
       {entries.length === 0 ? (
         <p>No agents found for this period.</p>
       ) : (
+        <>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table className="lb-table" style={{ minWidth: 600 }}>
             <thead>
@@ -300,7 +309,7 @@ export default function LeaderboardPage() {
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry, idx) => {
+              {pageEntries.map((entry, idx) => {
                 const isBenchmark = isBenchmarkAgent(entry.address);
                 const hasScore = entry.scoredMarkets > 0;
                 const lower = entry.avgAlphaPct - entry.alphaCIHalfPct;
@@ -309,7 +318,7 @@ export default function LeaderboardPage() {
                 const alphaColor = !hasScore || crossesZero
                   ? 'var(--fa-text-primary)'
                   : (entry.avgAlphaPct >= 0 ? 'var(--fa-success)' : 'var(--fa-danger)');
-                const rank = idx + 1;
+                const rank = rankOffset + idx + 1;
                 return (
                   <tr key={entry.address}>
                     {/* Rank */}
@@ -425,6 +434,37 @@ export default function LeaderboardPage() {
             )}
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20 }}>
+            <button
+              onClick={() => setPage(p => p - 1)}
+              disabled={page === 1}
+              style={{
+                fontFamily: 'var(--fa-font-mono)', fontSize: 12,
+                padding: '5px 14px', borderRadius: 6, cursor: page === 1 ? 'default' : 'pointer',
+                background: 'none', border: '1px solid var(--fa-border-soft)',
+                color: page === 1 ? 'var(--fa-text-tertiary)' : 'var(--fa-text-secondary)',
+                opacity: page === 1 ? 0.4 : 1,
+              }}
+            >← Prev</button>
+            <span style={{ fontFamily: 'var(--fa-font-mono)', fontSize: 12, color: 'var(--fa-text-tertiary)' }}>
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={page === totalPages}
+              style={{
+                fontFamily: 'var(--fa-font-mono)', fontSize: 12,
+                padding: '5px 14px', borderRadius: 6, cursor: page === totalPages ? 'default' : 'pointer',
+                background: 'none', border: '1px solid var(--fa-border-soft)',
+                color: page === totalPages ? 'var(--fa-text-tertiary)' : 'var(--fa-text-secondary)',
+                opacity: page === totalPages ? 0.4 : 1,
+              }}
+            >Next →</button>
+          </div>
+        )}
+        </>
       )}
     </div>
   );
