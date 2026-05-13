@@ -1,20 +1,15 @@
+import { useState, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import Brand from '../Brand';
 
 const mobileCSS = `
   @media (max-width: 800px) {
-    .topnav-center { overflow-x: auto; -webkit-overflow-scrolling: touch; gap: 20px !important; }
-    .topnav-pill   { display: none !important; }
-    .topnav-ext    { display: none !important; }
-  }
-  @media (max-width: 480px) {
-    .topnav-center { gap: 16px !important; }
-  }
-  @media (max-width: 640px) {
-    .topnav-header { padding: 12px !important; gap: 8px !important; }
-    .topnav-pill   { display: none !important; }
-    .topnav-center { gap: 12px !important; }
+    .topnav-center    { display: none !important; }
+    .topnav-pill      { display: none !important; }
+    .topnav-ext       { display: none !important; }
+    .topnav-github    { display: none !important; }
+    .topnav-hamburger { display: flex !important; }
   }
 `;
 
@@ -83,7 +78,22 @@ const githubLinkStyle: CSSProperties = {
 const navLinkStyle = ({ isActive }: { isActive: boolean }): CSSProperties =>
   isActive ? activeLinkStyle : baseLinkStyle;
 
+const mobileLinkStyle = ({ isActive }: { isActive: boolean }): CSSProperties => ({
+  fontSize: 17,
+  fontWeight: 500,
+  color: isActive ? 'var(--fa-text-primary)' : 'var(--fa-text-secondary)',
+  textDecoration: 'none',
+  padding: '14px 0',
+  borderBottom: '1px solid var(--fa-border-soft)',
+  display: 'block',
+});
+
 export default function TopNav() {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => { setOpen(false); }, [location.pathname]);
+
   return (
     <>
       <style>{mobileCSS}</style>
@@ -118,11 +128,78 @@ export default function TopNav() {
             target="_blank"
             rel="noopener noreferrer"
             style={githubLinkStyle}
+            className="topnav-github"
           >
             GitHub ↗
           </a>
+
+          {/* Hamburger — hidden on desktop via CSS */}
+          <button
+            className="topnav-hamburger"
+            onClick={() => setOpen(o => !o)}
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            style={{
+              display: 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 36, height: 36,
+              background: 'none',
+              border: '1px solid var(--fa-border-soft)',
+              borderRadius: 8,
+              cursor: 'pointer',
+              fontSize: 18,
+              color: 'var(--fa-text-secondary)',
+              flexShrink: 0,
+            }}
+          >
+            {open ? '✕' : '☰'}
+          </button>
         </div>
       </header>
+
+      {/* Mobile dropdown menu */}
+      {open && (
+        <nav style={{
+          background: 'var(--fa-bg-base)',
+          borderBottom: '1px solid var(--fa-border-soft)',
+          padding: '0 clamp(20px, 4vw, 40px) 12px',
+        }}>
+          <NavLink to="/events" style={mobileLinkStyle}>Events</NavLink>
+          <NavLink to="/rounds" style={mobileLinkStyle}>Rounds</NavLink>
+          <NavLink to="/leaderboard" style={mobileLinkStyle}>Leaderboard</NavLink>
+          <NavLink to="/developer" style={mobileLinkStyle}>Developer</NavLink>
+          <a
+            href="https://www.foresightflow.org/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              ...mobileLinkStyle({ isActive: false }),
+              borderBottom: 'none',
+              paddingBottom: 8,
+            }}
+          >
+            Research ↗
+          </a>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            paddingTop: 12, marginTop: 4,
+            borderTop: '1px solid var(--fa-border-soft)',
+          }}>
+            <span style={{ ...pillStyle, display: 'inline-flex' }}>
+              <span style={dotStyle} />
+              Polygon mainnet
+            </span>
+            <a
+              href="https://github.com/foresight-arena"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ ...githubLinkStyle, padding: 0 }}
+            >
+              GitHub ↗
+            </a>
+          </div>
+        </nav>
+      )}
     </>
   );
 }
