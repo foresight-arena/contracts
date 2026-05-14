@@ -122,11 +122,14 @@ export default function LeaderboardPage() {
         })
         .sort((a, b) => a.roundId - b.roundId);
       let weightedSum = 0;
+      let brierSum = 0;
       let totalWeight = 0;
       const series = roundSeriesData.map(r => {
         weightedSum += r.alpha * r.scored;
+        brierSum += r.brier * r.scored;
         totalWeight += r.scored;
-        return { roundId: r.roundId, cumAlpha: weightedSum / Math.max(1, totalWeight), brier: r.brier, scored: r.scored };
+        const w = Math.max(1, totalWeight);
+        return { roundId: r.roundId, cumAlpha: weightedSum / w, brier: brierSum / w, scored: r.scored };
       });
 
       result.push({
@@ -173,7 +176,7 @@ export default function LeaderboardPage() {
   const { entries, globalMaxAbs, totalRoundsInWindow } = data;
 
   const CHART_COLORS = ['var(--fa-chart-1)', 'var(--fa-chart-2)', 'var(--fa-chart-3)', 'var(--fa-chart-4)', 'var(--fa-chart-5)'];
-  const top5ChartAgents = entries.slice(0, 5).map((a, i) => ({
+  const top5ChartAgents = entries.slice(0, 3).map((a, i) => ({
     address: a.address,
     name: a.name || truncAddr(a.address),
     color: CHART_COLORS[i],
