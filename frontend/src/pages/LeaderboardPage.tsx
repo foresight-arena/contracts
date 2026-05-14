@@ -16,6 +16,7 @@ import TimeSeriesChart from '../components/leaderboard/TimeSeriesChart';
 // score is half the raw value.
 const SHRINKAGE_KAPPA = 140;
 const PAGE_SIZE = 10;
+const ROLLING_WINDOW = 5;
 
 interface LeaderboardRow {
   address: string;
@@ -121,15 +122,16 @@ export default function LeaderboardPage() {
           return { roundId, alpha: sc.avgAlpha, brier: sc.agent.brier, scored: s.length };
         })
         .sort((a, b) => a.roundId - b.roundId);
-      let weightedSum = 0;
-      let brierSum = 0;
-      let totalWeight = 0;
-      const series = roundSeriesData.map(r => {
-        weightedSum += r.alpha * r.scored;
-        brierSum += r.brier * r.scored;
-        totalWeight += r.scored;
-        const w = Math.max(1, totalWeight);
-        return { roundId: r.roundId, cumAlpha: weightedSum / w, brier: brierSum / w, scored: r.scored };
+      const series = roundSeriesData.map((r, i) => {
+        const window = roundSeriesData.slice(Math.max(0, i - ROLLING_WINDOW + 1), i + 1);
+        let alphaSum = 0, brierSum = 0, totalW = 0;
+        for (const wr of window) {
+          alphaSum += wr.alpha * wr.scored;
+          brierSum += wr.brier * wr.scored;
+          totalW += wr.scored;
+        }
+        const w = Math.max(1, totalW);
+        return { roundId: r.roundId, cumAlpha: alphaSum / w, brier: brierSum / w, scored: r.scored };
       });
 
       result.push({
@@ -176,7 +178,7 @@ export default function LeaderboardPage() {
   const { entries, globalMaxAbs, totalRoundsInWindow } = data;
 
   const CHART_COLORS = ['var(--fa-chart-1)', 'var(--fa-chart-2)', 'var(--fa-chart-3)', 'var(--fa-chart-4)', 'var(--fa-chart-5)'];
-  const top5ChartAgents = entries.slice(0, 3).map((a, i) => ({
+  const top5ChartAgents = entries.slice(0, 5).map((a, i) => ({
     address: a.address,
     name: a.name || truncAddr(a.address),
     color: CHART_COLORS[i],
