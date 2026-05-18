@@ -111,6 +111,7 @@ const identityRegistry = getContract({ address: ADDRESSES.identityRegistry, abi:
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const QUEUE_PATH = join(__dirname, `reveal-queue-${account.address.toLowerCase()}.json`);
 const STATE_PATH = join(__dirname, `state-${account.address.toLowerCase()}.json`);
+const REGISTERED_FLAG_PATH = join(__dirname, `registered-${account.address.toLowerCase()}.flag`);
 
 function loadQueue() {
   if (!existsSync(QUEUE_PATH)) return [];
@@ -165,9 +166,15 @@ function log(msg) {
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 async function ensureRegistered() {
+  // Cached: skip the RPC check entirely once we know the agent holds an NFT
+  if (existsSync(REGISTERED_FLAG_PATH)) return;
+
   // Check if already registered on the canonical ERC-8004 Identity Registry
   const balance = await identityRegistry.read.balanceOf([account.address]);
-  if (balance > 0n) return;
+  if (balance > 0n) {
+    writeFileSync(REGISTERED_FLAG_PATH, new Date().toISOString());
+    return;
+  }
 
   const agentURI = buildAgentURI();
   log(`Registering on canonical Identity Registry${agentURI ? ` with URI (${agentURI.length} bytes)` : ' (no URI)'}...`);
@@ -181,6 +188,7 @@ async function ensureRegistered() {
   });
   const hash = await walletClient.writeContract(request);
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  writeFileSync(REGISTERED_FLAG_PATH, new Date().toISOString());
   log(`Registered in tx ${receipt.transactionHash}`);
 }
 

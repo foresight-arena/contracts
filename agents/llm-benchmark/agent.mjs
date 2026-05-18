@@ -147,6 +147,7 @@ const slug = `${MODEL.replace(/[\/:]/g, '_')}-${account.address.toLowerCase()}`;
 const QUEUE_PATH = join(STATE_DIR, `reveal-queue-${slug}.json`);
 const PENDING_PATH = join(STATE_DIR, `pending-predictions-${slug}.json`);
 const STATE_PATH = join(STATE_DIR, `state-${slug}.json`);
+const REGISTERED_FLAG_PATH = join(STATE_DIR, `registered-${account.address.toLowerCase()}.flag`);
 
 function loadQueue() {
   if (!existsSync(QUEUE_PATH)) return [];
@@ -217,9 +218,15 @@ function canonicalize(content) {
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 async function ensureRegistered() {
+  // Cached: skip the RPC check entirely once we know the agent holds an NFT
+  if (existsSync(REGISTERED_FLAG_PATH)) return;
+
   // Check if already registered on canonical ERC-8004 Identity Registry
   const balance = await identityRegistry.read.balanceOf([account.address]);
-  if (balance > 0n) return;
+  if (balance > 0n) {
+    writeFileSync(REGISTERED_FLAG_PATH, new Date().toISOString());
+    return;
+  }
 
   const agentURI = buildAgentURI();
   log(`Registering on canonical Identity Registry${agentURI ? ` with URI (${agentURI.length} bytes)` : ' (no URI)'}...`);
@@ -233,6 +240,7 @@ async function ensureRegistered() {
   });
   const hash = await walletClient.writeContract(request);
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  writeFileSync(REGISTERED_FLAG_PATH, new Date().toISOString());
   log(`Registered in tx ${receipt.transactionHash}`);
 }
 
