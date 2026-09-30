@@ -372,7 +372,9 @@ async function predictRound(roundId, round) {
 
   log(`Predictions: [${finalPredictions.join(',')}]`);
   if (result.usage) {
-    log(`Token usage: ${result.usage.promptTokens || '?'} prompt + ${result.usage.completionTokens || '?'} completion`);
+    const u = result.usage;
+    const cache = u.cacheReadTokens != null ? ` (cache: ${u.cacheReadTokens} read, ${u.cacheWriteTokens} write)` : '';
+    log(`Token usage: ${u.promptTokens || '?'} prompt + ${u.completionTokens || '?'} completion${cache}`);
   }
 
   return {

@@ -37,8 +37,37 @@ function createModel(provider, model) {
   }
 }
 
-export async function getPredictions({ provider = 'openrouter', model, prompt, baseTools, marketCount, maxSteps = 20 }) {
+/**
+ * Bedrock prompt caching. Only Claude and Nova accept cache points — other
+ * Bedrock models reject them — so `auto` enables it by model family.
+ * BEDROCK_PROMPT_CACHE=on|off overrides.
+ */
+function usePromptCache(provider, model) {
+  if (provider !== 'bedrock') return false;
+  const mode = (process.env.BEDROCK_PROMPT_CACHE || 'auto').toLowerCase();
+  if (mode === 'on') return true;
+  if (mode === 'off') return false;
+  return /anthropic\.claude|amazon\.nova/.test(model);
+}
 
+const CACHE_POINT = { bedrock: { cachePoint: { type: 'default' } } };
+
+/**
+ * Each step re-sends the whole conversation, so tool results (search snippets)
+ * from early steps are paid for again on every later step. Put cache points on
+ * the prompt and the two most recent tool-result messages: the older one is read
+ * from cache, the newest is written for the next step. Bedrock allows at most 4.
+ */
+function placeCachePoints(messages) {
+  const toolIdx = messages.flatMap((m, i) => (m.role === 'tool' ? [i] : []));
+  const keep = new Set([0, ...toolIdx.slice(-2)]);
+  messages.forEach((m, i) => {
+    if (keep.has(i)) m.providerOptions = CACHE_POINT;
+    else delete m.providerOptions;
+  });
+}
+
+export async function getPredictions({ provider = 'openrouter', model, prompt, baseTools, marketCount, maxSteps = 20 }) {
   let finalPredictions = null;
   let finalReasoning = null;
 
@@ -66,22 +95,32 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
 
   const tools = { ...baseTools, submitPredictions: submitTool };
 
-  const result = await generateText({
-    model: createModel(provider, model),
-    tools,
-    maxSteps,
-    messages: [{ role: 'user', content: prompt }],
-  });
+  const llm = createModel(provider, model);
+  const cache = usePromptCache(provider, model);
+  const messages = [{ role: 'user', content: prompt }];
+  const steps = [];
+
+  // Tool loop driven one step at a time (instead of `maxSteps`) so cache points
+  // can be moved onto the newest messages before each call.
+  while (steps.length < maxSteps) {
+    if (cache) placeCachePoints(messages);
+    const res = await generateText({ model: llm, tools, messages });
+    const step = res.steps[0];
+    steps.push(step);
+    messages.push(...res.response.messages);
+    // Stop as soon as the answer is in — no need to pay for a closing summary
+    if (finalPredictions || step.finishReason !== 'tool-calls') break;
+  }
 
   if (!finalPredictions) {
-    throw new Error(`Model did not call submitPredictions after ${maxSteps} steps. Last text: ${result.text?.slice(0, 200)}`);
+    throw new Error(`Model did not call submitPredictions after ${steps.length} steps. Last text: ${steps.at(-1)?.text?.slice(0, 200)}`);
   }
 
   // Sort by marketIndex and return as plain array
   const sorted = [...finalPredictions].sort((a, b) => a.marketIndex - b.marketIndex);
 
   // Flatten all steps into a serializable trace (tool calls + responses + text)
-  const trace = (result.steps || []).map((step, i) => ({
+  const trace = steps.map((step, i) => ({
     step: i,
     text: step.text || null,
     toolCalls: (step.toolCalls || []).map((tc) => ({
@@ -94,7 +133,17 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
     })),
     finishReason: step.finishReason || null,
     usage: step.usage || null,
+    cache: cacheUsage(step),
   }));
+
+  const usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  for (const step of trace) {
+    for (const k of Object.keys(usage)) usage[k] += step.usage?.[k] || 0;
+    if (step.cache) {
+      usage.cacheReadTokens = (usage.cacheReadTokens || 0) + step.cache.readTokens;
+      usage.cacheWriteTokens = (usage.cacheWriteTokens || 0) + step.cache.writeTokens;
+    }
+  }
 
   return {
     predictions: sorted.map((p) => p.probabilityBps),
@@ -105,6 +154,12 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
       reasoning: p.reasoning,
     })),
     trace,
-    usage: result.usage,
+    usage,
   };
+}
+
+function cacheUsage(step) {
+  const u = step.providerMetadata?.bedrock?.usage;
+  if (!u) return null;
+  return { readTokens: u.cacheReadInputTokens || 0, writeTokens: u.cacheWriteInputTokens || 0 };
 }

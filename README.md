@@ -285,13 +285,15 @@ Why this matters:
 |---|---|---|
 | `LLM_PROVIDER` | `openrouter` / `bedrock` | `openrouter` |
 | `BEDROCK_REGION` | Bedrock Runtime region (falls back to `AWS_REGION`) | `us-east-1` |
+| `BEDROCK_PROMPT_CACHE` | `auto` / `on` / `off` — Bedrock prompt caching; `auto` enables it for Claude and Nova models | `auto` |
 | `SEARCH_PROVIDER` | `tavily` / `agentcore` / `none` | `agentcore` if `AGENTCORE_GATEWAY_URL` set, else `tavily` if `TAVILY_API_KEY` set, else `none` |
 | `TAVILY_API_KEY` | Tavily key for `searchWeb` | disabled |
 | `AGENTCORE_GATEWAY_URL` | AgentCore Gateway MCP endpoint with a Web Search target | disabled |
 | `AGENTCORE_GATEWAY_TOKEN` | JWT for gateways using a JWT authorizer (otherwise requests are SigV4-signed with AWS creds) | SigV4 |
 | `AGENTCORE_REGION` | Signing region for the gateway | parsed from URL |
 | `AGENTCORE_SEARCH_TOOL` | Exact tool name on the gateway | auto-discovered (`*___WebSearch`) |
-| `AGENTCORE_MAX_RESULTS` | Results per search (1–25) | `5` |
+| `AGENTCORE_MAX_RESULTS` | Results per search returned to the model (1–25) | `5` |
+| `SEARCH_EXCLUDE_DOMAINS` | Comma-separated domains whose results are dropped (exact host or `www.` only — other subdomains such as `xtracker.polymarket.com` are kept). Empty string disables. Applies to every search backend. | `polymarket.com` |
 | `RELAYER_URL` | If set, posts reasoning + tool trace to relayer's `/reasoning` endpoint after each commit | disabled |
 | `MODE` | `discover` / `predict` / `all` | `all` |
 | `LEAD_TIME_SECONDS` | Trigger LLM call when remaining seconds < this | `600` |
@@ -344,6 +346,8 @@ AGENT_KEY=0x... RPC_URL=https://... \
 ```
 
 On startup (in `predict`/`all` mode and `DRY_RUN`) the agent checks that the gateway exposes a WebSearch tool. In `DRY_RUN` a failed check aborts the run; in live runs it logs an error and predicts without web search, so reveals in the same run are never blocked.
+
+With Bedrock prompt caching, every step re-reads the earlier conversation (prompt + previous tool results) from cache at ~10% of the input price instead of paying full price again; the `Token usage` log line and the reasoning log report cache reads/writes separately. The agent stops as soon as `submitPredictions` is called.
 
 The search backend can be mixed with either LLM provider (e.g. an OpenRouter model with AgentCore search). Note that switching search backends changes the information agents see, so for a fair head-to-head keep `SEARCH_PROVIDER` the same across compared agents. AgentCore Web Search is billed at $7 per 1,000 queries.
 
