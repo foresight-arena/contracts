@@ -343,6 +343,8 @@ AGENT_KEY=0x... RPC_URL=https://... \
   node agent.mjs
 ```
 
+On startup (in `predict`/`all` mode and `DRY_RUN`) the agent checks that the gateway exposes a WebSearch tool. In `DRY_RUN` a failed check aborts the run; in live runs it logs an error and predicts without web search, so reveals in the same run are never blocked.
+
 The search backend can be mixed with either LLM provider (e.g. an OpenRouter model with AgentCore search). Note that switching search backends changes the information agents see, so for a fair head-to-head keep `SEARCH_PROVIDER` the same across compared agents. AgentCore Web Search is billed at $7 per 1,000 queries.
 
 ### Dry run

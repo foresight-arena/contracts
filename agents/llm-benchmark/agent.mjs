@@ -101,7 +101,7 @@ function buildAgentURI() {
   return '';
 }
 const SEARCH_PROVIDER = resolveSearchProvider(process.env);
-const webSearch = createWebSearch(SEARCH_PROVIDER, process.env);
+let webSearch = createWebSearch(SEARCH_PROVIDER, process.env);
 const ROUND_ID_OVERRIDE = process.env.ROUND_ID ? BigInt(process.env.ROUND_ID) : null;
 const RELAYER_URL = process.env.RELAYER_URL || '';
 const MODE = (process.env.MODE || 'all').toLowerCase();
@@ -338,7 +338,7 @@ async function predictRound(roundId, round) {
   }));
 
   const tools = createTools({ markets: subsetSummaries, marketsRaw: subsetMarketsRaw, webSearch });
-  const prompt = buildPrompt({ roundId, round, summaries: subsetSummaries, hasWebSearch: !!webSearch });
+  const prompt = buildPrompt({ roundId, round, summaries: subsetSummaries, hasWebSearch: !!webSearch, now: new Date() });
 
   log(`Calling ${LLM_PROVIDER}:${MODEL} for ${unresolvedIndices.length} unresolved market(s)...`);
   const result = await getPredictions({
@@ -688,6 +688,26 @@ async function processPendingPredictions() {
   savePending(remaining);
 }
 
+// ─── Web search preflight ─────────────────────────────────────────────────────
+
+/**
+ * Verify the search backend before any LLM call, so a misconfigured gateway is
+ * caught up front instead of the model silently getting errors from searchWeb.
+ * DRY_RUN fails hard; live runs log and continue WITHOUT search (never block
+ * reveals, which run in the same process in MODE=all).
+ */
+async function preflightWebSearch() {
+  if (!webSearch?.preflight) return;
+  try {
+    const tool = await webSearch.preflight();
+    log(`Web search preflight OK (tool: ${tool})`);
+  } catch (err) {
+    if (DRY_RUN) throw new Error(`Web search preflight failed: ${err.message}`);
+    log(`ERROR: web search preflight failed (${err.message}) — predicting WITHOUT web search this run`);
+    webSearch = null;
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -697,6 +717,8 @@ async function main() {
   log(`Lead time: ${LEAD_TIME_SECONDS}s`);
   log(`Web search: ${webSearch ? SEARCH_PROVIDER : 'disabled'}`);
   if (DRY_RUN) log(`DRY RUN — no on-chain transactions will be sent`);
+
+  if (DRY_RUN || MODE === 'predict' || MODE === 'all') await preflightWebSearch();
 
   // DRY_RUN bypasses all queue logic and predicts a single round directly
   if (DRY_RUN) {

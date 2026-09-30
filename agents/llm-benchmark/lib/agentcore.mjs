@@ -119,7 +119,7 @@ export function createAgentCoreWebSearch({ gatewayUrl, region, bearerToken, tool
     return resolvedName;
   }
 
-  return async function search(query) {
+  async function search(query) {
     const name = await resolveToolName();
     const result = await gateway.callTool(name, {
       query: query.slice(0, MAX_QUERY_CHARS),
@@ -147,5 +147,9 @@ export function createAgentCoreWebSearch({ gatewayUrl, region, bearerToken, tool
         publishedDate: r.publishedDate ?? null,
       })),
     };
-  };
+  }
+
+  // Startup check: confirms auth + that the gateway actually exposes the tool
+  search.preflight = resolveToolName;
+  return search;
 }
