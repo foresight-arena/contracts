@@ -296,6 +296,7 @@ Why this matters:
 | `SEARCH_EXCLUDE_DOMAINS` | Comma-separated domains whose results are dropped (exact host or `www.` only — other subdomains such as `xtracker.polymarket.com` are kept). Empty string disables. Applies to every search backend. | `polymarket.com` |
 | `RELAYER_URL` | If set, posts reasoning + tool trace to relayer's `/reasoning` endpoint after each commit | disabled |
 | `MODE` | `discover` / `predict` / `all` | `all` |
+| `SHRINK_TO_MARKET` | Post-process each forecast as `market + k·(model − market)` using the YES price the model saw (0–1; `1` = off, `0` = copy the market). Already-resolved markets are never shrunk. The reasoning log keeps the model's raw forecast and the market prices. Historical analysis of rounds 2–95 (`tools/analyze-history.mjs`) found `0.5` improved every benchmark LLM's alpha. | `1` |
 | `LEAD_TIME_SECONDS` | Trigger LLM call when remaining seconds < this | `600` |
 | `AGENT_NAME` | Display name for registration | `<model>-<addr>` |
 | `AGENT_URL` | Metadata URL on-chain registry | empty |

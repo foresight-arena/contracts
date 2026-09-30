@@ -28,6 +28,7 @@
  *   LEAD_TIME_SECONDS=600    (predict when remaining < this many seconds; default 600 = 10m)
  *   MAX_COMMIT_BASE_FEE_GWEI=1000   (skip commit if Polygon base fee exceeds this; default 1000)
  *   MAX_REVEAL_BASE_FEE_GWEI=200    (defer reveal if Polygon base fee exceeds this; default 200)
+ *   SHRINK_TO_MARKET=1       (final = market + k·(model − market), 0–1; default 1 = off)
  *
  * Crontab example (every 2 hours):
  *   0 *\/2 * * * cd /path/to/agents/llm-benchmark && AGENT_KEY=... RPC_URL=... MODEL=... OPENROUTER_API_KEY=... node agent.mjs >> agent.log 2>&1
@@ -54,6 +55,7 @@ import { createTools } from './lib/tools.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { getPredictions, LLM_PROVIDERS } from './lib/llm.mjs';
 import { resolveSearchProvider, createWebSearch } from './lib/search.mjs';
+import { parseShrinkFactor, shrinkToMarket } from './lib/postprocess.mjs';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -108,6 +110,7 @@ const MODE = (process.env.MODE || 'all').toLowerCase();
 const LEAD_TIME_SECONDS = Number(process.env.LEAD_TIME_SECONDS || 600);
 const MAX_COMMIT_BASE_FEE_GWEI = Number(process.env.MAX_COMMIT_BASE_FEE_GWEI || 1000);
 const MAX_REVEAL_BASE_FEE_GWEI = Number(process.env.MAX_REVEAL_BASE_FEE_GWEI || 200);
+const SHRINK_TO_MARKET = parseShrinkFactor(process.env.SHRINK_TO_MARKET);
 if (!['discover', 'predict', 'all'].includes(MODE)) {
   throw new Error(`Invalid MODE: ${MODE} (must be discover|predict|all)`);
 }
@@ -349,10 +352,14 @@ async function predictRound(roundId, round) {
     marketCount: unresolvedIndices.length,
   });
 
-  // Map LLM's subset predictions back to original indices
+  // Map LLM's subset predictions back to original indices, shrinking toward the
+  // market price the model saw (auto-resolved markets are never shrunk)
+  const modelPredictions = [...finalPredictions];
+  const marketPrices = summaries.map((s) => s.currentYesPrice ?? null);
   for (let newIdx = 0; newIdx < unresolvedIndices.length; newIdx++) {
     const origIdx = unresolvedIndices[newIdx];
-    finalPredictions[origIdx] = result.predictions[newIdx];
+    modelPredictions[origIdx] = result.predictions[newIdx];
+    finalPredictions[origIdx] = shrinkToMarket(result.predictions[newIdx], marketPrices[origIdx], SHRINK_TO_MARKET);
   }
 
   // Map per-market reasoning back to original indices
@@ -366,10 +373,18 @@ async function predictRound(roundId, round) {
       result.perMarketReasoning.map((p) => ({
         ...p,
         marketIndex: unresolvedIndices[p.marketIndex],
+        // Committed value; the model's own forecast is kept alongside
+        probabilityBps: finalPredictions[unresolvedIndices[p.marketIndex]],
+        modelProbabilityBps: p.probabilityBps,
       })),
     )
     .sort((a, b) => a.marketIndex - b.marketIndex);
 
+  if (SHRINK_TO_MARKET !== 1) {
+    log(`Model predictions: [${modelPredictions.join(',')}]`);
+    log(`Market prices:     [${marketPrices.map((m) => (m == null ? '?' : Math.round(m * 10000))).join(',')}]`);
+    log(`Shrunk to market (k=${SHRINK_TO_MARKET}):`);
+  }
   log(`Predictions: [${finalPredictions.join(',')}]`);
   if (result.usage) {
     const u = result.usage;
@@ -383,6 +398,9 @@ async function predictRound(roundId, round) {
     result: {
       ...result,
       predictions: finalPredictions,
+      modelPredictions,
+      marketPrices,
+      shrinkToMarket: SHRINK_TO_MARKET,
       perMarketReasoning: fullPerMarketReasoning,
     },
     autoResolved,
@@ -419,6 +437,9 @@ function saveReasoningLog(roundId, { summaries, result, autoResolved }) {
       markets: summaries,
       autoResolved,
       predictions: result.predictions,
+      modelPredictions: result.modelPredictions,
+      marketPrices: result.marketPrices,
+      shrinkToMarket: result.shrinkToMarket,
       perMarketReasoning: result.perMarketReasoning,
       usage: result.usage,
       trace: result.trace,
@@ -434,7 +455,8 @@ function printReasoning(result) {
     for (const tc of step.toolCalls) log(`  step ${step.step}: ${tc.tool}(${JSON.stringify(tc.args).slice(0, 160)})`);
   }
   for (const p of result.perMarketReasoning || []) {
-    log(`  [${p.marketIndex}] ${p.probabilityBps} bps — ${p.reasoning}`);
+    const model = p.modelProbabilityBps != null && p.modelProbabilityBps !== p.probabilityBps ? ` (model ${p.modelProbabilityBps})` : '';
+    log(`  [${p.marketIndex}] ${p.probabilityBps} bps${model} — ${p.reasoning}`);
   }
 }
 
@@ -717,6 +739,7 @@ async function main() {
   log(`Model: ${MODEL} (${LLM_PROVIDER})`);
   log(`Mode: ${MODE}`);
   log(`Lead time: ${LEAD_TIME_SECONDS}s`);
+  log(`Shrink to market: ${SHRINK_TO_MARKET === 1 ? 'off' : `k=${SHRINK_TO_MARKET}`}`);
   log(`Web search: ${webSearch ? SEARCH_PROVIDER : 'disabled'}`);
   if (DRY_RUN) log(`DRY RUN — no on-chain transactions will be sent`);
 
