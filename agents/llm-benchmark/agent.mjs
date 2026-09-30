@@ -2,14 +2,23 @@
 /**
  * Foresight Arena — LLM Benchmark Agent
  *
- * Uses an LLM (via OpenRouter) with tool use to predict market outcomes.
+ * Uses an LLM (via OpenRouter or Amazon Bedrock) with tool use to predict market outcomes.
  * Same prompt is used across all models for fair comparison.
  *
  * Usage:
  *   AGENT_KEY=0x... RPC_URL=https://... MODEL=anthropic/claude-opus-4 \
  *     OPENROUTER_API_KEY=... TAVILY_API_KEY=... node agent.mjs
  *
+ *   # Amazon Bedrock model + AgentCore Web Search (AWS creds from the default chain)
+ *   AGENT_KEY=0x... RPC_URL=https://... LLM_PROVIDER=bedrock \
+ *     MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0 AWS_REGION=us-east-1 \
+ *     AGENTCORE_GATEWAY_URL=https://gateway-<id>.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp \
+ *     node agent.mjs
+ *
  * Optional:
+ *   LLM_PROVIDER=openrouter  (openrouter|bedrock — default: openrouter)
+ *   SEARCH_PROVIDER=...      (tavily|agentcore|none — default: agentcore if AGENTCORE_GATEWAY_URL,
+ *                             else tavily if TAVILY_API_KEY, else none)
  *   AGENT_NAME=MyAgent       (display name; embedded in an on-chain data: URL if set — along with MODEL)
  *   AGENT_URL=https://...    (explicit agentURI; overrides AGENT_NAME. Point to JSON with name/description)
  *   DRY_RUN=1                (predict only, do not commit on-chain)
@@ -43,18 +52,23 @@ import { fileURLToPath } from 'url';
 import { getMarkets, summarizeMarket } from './lib/polymarket.mjs';
 import { createTools } from './lib/tools.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
-import { getPredictions } from './lib/llm.mjs';
+import { getPredictions, LLM_PROVIDERS } from './lib/llm.mjs';
+import { resolveSearchProvider, createWebSearch } from './lib/search.mjs';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const AGENT_KEY = process.env.AGENT_KEY;
 const RPC_URL = process.env.RPC_URL;
 const MODEL = process.env.MODEL;
+const LLM_PROVIDER = (process.env.LLM_PROVIDER || 'openrouter').toLowerCase();
 const DRY_RUN = !!process.env.DRY_RUN;
 
 if (!AGENT_KEY) throw new Error('Set AGENT_KEY env var (0x-prefixed private key)');
 if (!RPC_URL) throw new Error('Set RPC_URL env var (Polygon RPC endpoint)');
 if (!MODEL) throw new Error('Set MODEL env var (e.g. anthropic/claude-opus-4)');
+if (!LLM_PROVIDERS.includes(LLM_PROVIDER)) {
+  throw new Error(`Invalid LLM_PROVIDER: ${LLM_PROVIDER} (must be ${LLM_PROVIDERS.join('|')})`);
+}
 
 const AGENT_URL = process.env.AGENT_URL || '';
 const AGENT_NAME = process.env.AGENT_NAME || '';
@@ -86,7 +100,8 @@ function buildAgentURI() {
   }
   return '';
 }
-const TAVILY_KEY = process.env.TAVILY_API_KEY || '';
+const SEARCH_PROVIDER = resolveSearchProvider(process.env);
+const webSearch = createWebSearch(SEARCH_PROVIDER, process.env);
 const ROUND_ID_OVERRIDE = process.env.ROUND_ID ? BigInt(process.env.ROUND_ID) : null;
 const RELAYER_URL = process.env.RELAYER_URL || '';
 const MODE = (process.env.MODE || 'all').toLowerCase();
@@ -321,11 +336,12 @@ async function predictRound(roundId, round) {
     originalIndex: origIdx,
   }));
 
-  const tools = createTools({ markets: subsetSummaries, marketsRaw: subsetMarketsRaw, tavilyKey: TAVILY_KEY });
-  const prompt = buildPrompt({ roundId, round, summaries: subsetSummaries, hasWebSearch: !!TAVILY_KEY });
+  const tools = createTools({ markets: subsetSummaries, marketsRaw: subsetMarketsRaw, webSearch });
+  const prompt = buildPrompt({ roundId, round, summaries: subsetSummaries, hasWebSearch: !!webSearch });
 
-  log(`Calling ${MODEL} for ${unresolvedIndices.length} unresolved market(s)...`);
+  log(`Calling ${LLM_PROVIDER}:${MODEL} for ${unresolvedIndices.length} unresolved market(s)...`);
   const result = await getPredictions({
+    provider: LLM_PROVIDER,
     model: MODEL,
     prompt,
     baseTools: tools,
@@ -631,10 +647,10 @@ async function processPendingPredictions() {
 
 async function main() {
   log(`Agent: ${account.address}`);
-  log(`Model: ${MODEL}`);
+  log(`Model: ${MODEL} (${LLM_PROVIDER})`);
   log(`Mode: ${MODE}`);
   log(`Lead time: ${LEAD_TIME_SECONDS}s`);
-  log(`Web search: ${TAVILY_KEY ? 'enabled' : 'disabled'}`);
+  log(`Web search: ${webSearch ? SEARCH_PROVIDER : 'disabled'}`);
   if (DRY_RUN) log(`DRY RUN — no on-chain transactions will be sent`);
 
   // DRY_RUN bypasses all queue logic and predicts a single round directly

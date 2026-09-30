@@ -1,17 +1,43 @@
 /**
- * LLM wrapper using Vercel AI SDK + OpenRouter.
+ * LLM wrapper using Vercel AI SDK with a pluggable provider (OpenRouter or Amazon Bedrock).
  * Handles the tool-use loop and extracts final predictions via a sentinel tool.
  */
 
 import { generateText, tool } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 import { z } from 'zod';
+import { getAwsCredentials } from './aws.mjs';
 
-export async function getPredictions({ model, prompt, baseTools, marketCount, maxSteps = 20 }) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
+export const LLM_PROVIDERS = ['openrouter', 'bedrock'];
 
-  const openrouter = createOpenRouter({ apiKey });
+/**
+ * Resolve a provider + model ID into an AI SDK language model.
+ *  - openrouter: MODEL is an OpenRouter slug (e.g. `anthropic/claude-opus-4`)
+ *  - bedrock:    MODEL is a Bedrock model ID, inference profile ID or ARN
+ *                (e.g. `us.anthropic.claude-sonnet-4-5-20250929-v1:0`); the model
+ *                must support tool use via the Converse API.
+ */
+function createModel(provider, model) {
+  switch (provider) {
+    case 'openrouter': {
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
+      return createOpenRouter({ apiKey })(model);
+    }
+    case 'bedrock': {
+      const bedrock = createAmazonBedrock({
+        region: process.env.BEDROCK_REGION || process.env.AWS_REGION || 'us-east-1',
+        credentialProvider: getAwsCredentials,
+      });
+      return bedrock(model);
+    }
+    default:
+      throw new Error(`Unknown LLM provider: ${provider}`);
+  }
+}
+
+export async function getPredictions({ provider = 'openrouter', model, prompt, baseTools, marketCount, maxSteps = 20 }) {
 
   let finalPredictions = null;
   let finalReasoning = null;
@@ -41,7 +67,7 @@ export async function getPredictions({ model, prompt, baseTools, marketCount, ma
   const tools = { ...baseTools, submitPredictions: submitTool };
 
   const result = await generateText({
-    model: openrouter(model),
+    model: createModel(provider, model),
     tools,
     maxSteps,
     messages: [{ role: 'user', content: prompt }],

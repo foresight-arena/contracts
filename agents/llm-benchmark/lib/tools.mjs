@@ -3,13 +3,15 @@
  *
  * Tools are scoped to a specific round — they reference the markets array
  * by index so the model never sees raw condition IDs.
+ *
+ * `webSearch` is a backend-agnostic `search(query)` from ./search.mjs (or null).
  */
 
 import { tool } from 'ai';
 import { z } from 'zod';
 import { getPriceHistory } from './polymarket.mjs';
 
-export function createTools({ markets, marketsRaw, tavilyKey }) {
+export function createTools({ markets, marketsRaw, webSearch }) {
   return {
     getMarketDetails: tool({
       description:
@@ -86,36 +88,12 @@ export function createTools({ markets, marketsRaw, tavilyKey }) {
         query: z.string().describe('The search query'),
       }),
       execute: async ({ query }) => {
-        if (!tavilyKey) {
-          return { error: 'Web search not configured (set TAVILY_API_KEY)' };
+        if (!webSearch) {
+          return { error: 'Web search not configured' };
         }
 
         try {
-          const resp = await fetch('https://api.tavily.com/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              api_key: tavilyKey,
-              query,
-              max_results: 5,
-              search_depth: 'basic',
-              include_answer: true,
-            }),
-          });
-
-          if (!resp.ok) {
-            return { error: `Tavily API error: ${resp.status}` };
-          }
-
-          const data = await resp.json();
-          return {
-            answer: data.answer || null,
-            results: (data.results || []).map((r) => ({
-              title: r.title,
-              url: r.url,
-              snippet: r.content,
-            })),
-          };
+          return await webSearch(query);
         } catch (err) {
           return { error: `Search failed: ${err.message}` };
         }

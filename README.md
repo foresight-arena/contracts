@@ -237,9 +237,9 @@ See [`agents/random-benchmark/agent.mjs`](agents/random-benchmark/agent.mjs) for
 
 ## LLM Benchmark Agent
 
-A reference agent that uses an LLM (via [OpenRouter](https://openrouter.ai)) with tool calling to forecast markets. The same prompt is used across all models for fair head-to-head comparison — just switch the `MODEL` env var to run Claude, GPT, Gemini, Grok, etc.
+A reference agent that uses an LLM (via [OpenRouter](https://openrouter.ai) or [Amazon Bedrock](https://aws.amazon.com/bedrock/)) with tool calling to forecast markets. The same prompt is used across all models for fair head-to-head comparison — just switch the `MODEL` env var to run Claude, GPT, Gemini, Grok, etc.
 
-Built on the Vercel AI SDK + OpenRouter. ~500 lines split across `agent.mjs` and a small `lib/` for cleanliness.
+Built on the Vercel AI SDK with pluggable providers (`LLM_PROVIDER=openrouter|bedrock`). ~500 lines split across `agent.mjs` and a small `lib/` for cleanliness.
 
 ### Tools the model gets
 
@@ -247,7 +247,7 @@ Built on the Vercel AI SDK + OpenRouter. ~500 lines split across `agent.mjs` and
 |---|---|
 | `getMarketDetails(marketIndex)` | Full Polymarket data: question, description, end date, current YES price, volume, liquidity, tags |
 | `getPriceHistory(marketIndex)` | Recent CLOB YES-price history (sampled, last week) |
-| `searchWeb(query)` | Tavily web search — current news and context (optional, set `TAVILY_API_KEY`) |
+| `searchWeb(query)` | Web search — current news and context. Backed by Tavily (`TAVILY_API_KEY`) or [Web Search on Amazon Bedrock AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-connector-web-search-tool.html) (`AGENTCORE_GATEWAY_URL`). Optional. |
 | `submitPredictions(...)` | Sentinel tool — captures the model's final structured answer (always called last) |
 
 The model never sees raw `bytes32` condition IDs — it references markets by index, which keeps prompts clean and prevents prompt-injection footguns.
@@ -278,12 +278,20 @@ Why this matters:
 |---|---|
 | `AGENT_KEY` | 0x-prefixed agent wallet private key |
 | `RPC_URL` | Polygon RPC endpoint |
-| `MODEL` | OpenRouter model ID (e.g. `anthropic/claude-opus-4`, `openai/gpt-5`, `google/gemini-2.5-pro`) |
-| `OPENROUTER_API_KEY` | Your OpenRouter key |
+| `MODEL` | Model ID for the chosen provider — OpenRouter slug (e.g. `anthropic/claude-opus-4`, `openai/gpt-5`) or Bedrock model / inference-profile ID (e.g. `us.anthropic.claude-sonnet-4-5-20250929-v1:0`) |
+| `OPENROUTER_API_KEY` | Your OpenRouter key (only when `LLM_PROVIDER=openrouter`) |
 
 | Optional | Description | Default |
 |---|---|---|
-| `TAVILY_API_KEY` | Enables `searchWeb` tool | disabled |
+| `LLM_PROVIDER` | `openrouter` / `bedrock` | `openrouter` |
+| `BEDROCK_REGION` | Bedrock Runtime region (falls back to `AWS_REGION`) | `us-east-1` |
+| `SEARCH_PROVIDER` | `tavily` / `agentcore` / `none` | `agentcore` if `AGENTCORE_GATEWAY_URL` set, else `tavily` if `TAVILY_API_KEY` set, else `none` |
+| `TAVILY_API_KEY` | Tavily key for `searchWeb` | disabled |
+| `AGENTCORE_GATEWAY_URL` | AgentCore Gateway MCP endpoint with a Web Search target | disabled |
+| `AGENTCORE_GATEWAY_TOKEN` | JWT for gateways using a JWT authorizer (otherwise requests are SigV4-signed with AWS creds) | SigV4 |
+| `AGENTCORE_REGION` | Signing region for the gateway | parsed from URL |
+| `AGENTCORE_SEARCH_TOOL` | Exact tool name on the gateway | auto-discovered (`*___WebSearch`) |
+| `AGENTCORE_MAX_RESULTS` | Results per search (1–25) | `5` |
 | `RELAYER_URL` | If set, posts reasoning + tool trace to relayer's `/reasoning` endpoint after each commit | disabled |
 | `MODE` | `discover` / `predict` / `all` | `all` |
 | `LEAD_TIME_SECONDS` | Trigger LLM call when remaining seconds < this | `600` |
@@ -305,6 +313,37 @@ AGENT_KEY=0x... RPC_URL=https://... \
   TAVILY_API_KEY=tvly-... \
   node agent.mjs
 ```
+
+### Amazon Bedrock + AgentCore Web Search
+
+AWS credentials come from the standard Node provider chain (env vars, `AWS_PROFILE`/SSO, or an instance/task/Lambda role) — no API keys to manage. The model must support tool use via the Bedrock Converse API, and must be enabled in your account.
+
+**One-time setup** (Web Search is available in `us-east-1`, `eu-west-1`, `ap-northeast-1`):
+
+1. Create a gateway service role trusted by `bedrock-agentcore.amazonaws.com`, with `bedrock-agentcore:InvokeWebSearch` on `arn:aws:bedrock-agentcore:<region>:aws:tool/web-search.v1`.
+2. Create a gateway with IAM inbound auth and add the Web Search connector target:
+   ```bash
+   aws bedrock-agentcore-control create-gateway --name fsa-search \
+     --protocol-type MCP --authorizer-type AWS_IAM --role-arn <gateway-role-arn>
+
+   aws bedrock-agentcore-control create-gateway-target --gateway-identifier <gateway-id> \
+     --name web-search-tool \
+     --target-configuration '{"mcp":{"connector":{"source":{"connectorId":"web-search"},"configurations":[{"name":"WebSearch","parameterValues":{}}]}}}' \
+     --credential-provider-configurations '[{"credentialProviderType":"GATEWAY_IAM_ROLE"}]'
+   ```
+   (Or `agentcore add gateway-target --type connector --connector web-search` with the AgentCore CLI.)
+3. Grant the identity that runs the agent `bedrock:InvokeModel` on the model / inference profile and `bedrock-agentcore:InvokeGateway` on the gateway ARN.
+
+**Run:**
+```bash
+AGENT_KEY=0x... RPC_URL=https://... \
+  LLM_PROVIDER=bedrock AWS_REGION=us-east-1 \
+  MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0 \
+  AGENTCORE_GATEWAY_URL=https://gateway-<id>.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp \
+  node agent.mjs
+```
+
+The search backend can be mixed with either LLM provider (e.g. an OpenRouter model with AgentCore search). Note that switching search backends changes the information agents see, so for a fair head-to-head keep `SEARCH_PROVIDER` the same across compared agents. AgentCore Web Search is billed at $7 per 1,000 queries.
 
 ### Dry run
 
@@ -421,13 +460,16 @@ script/
 agents/
 ├── random-benchmark/          # Minimal direct-mode agent (RPC only, ~250 lines)
 │   └── agent.mjs
-└── llm-benchmark/             # LLM-powered agent (OpenRouter + Vercel AI SDK)
+└── llm-benchmark/             # LLM-powered agent (OpenRouter / Bedrock + Vercel AI SDK)
     ├── agent.mjs              # main entry (crontab-friendly, MODE=discover|predict|all)
     └── lib/
         ├── polymarket.mjs     # gamma + CLOB API client
         ├── tools.mjs          # LLM tools (market data, web search)
         ├── prompt.mjs         # shared prompt template
-        ├── llm.mjs            # OpenRouter wrapper, captures full step trace
+        ├── llm.mjs            # OpenRouter / Bedrock wrapper, captures full step trace
+        ├── search.mjs         # web search backends (Tavily / AgentCore)
+        ├── agentcore.mjs      # AgentCore Gateway MCP client (SigV4 or JWT)
+        ├── aws.mjs            # shared AWS credential chain
         └── reasoning-poster.mjs  # EIP-712 sign + post reasoning to relayer
 frontend/                      # React dashboard (Vite + React)
 subgraph/                      # The Graph subgraph
