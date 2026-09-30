@@ -163,6 +163,7 @@ const QUEUE_PATH = join(STATE_DIR, `reveal-queue-${slug}.json`);
 const PENDING_PATH = join(STATE_DIR, `pending-predictions-${slug}.json`);
 const STATE_PATH = join(STATE_DIR, `state-${slug}.json`);
 const REGISTERED_FLAG_PATH = join(STATE_DIR, `registered-${account.address.toLowerCase()}.flag`);
+const REASONING_DIR = join(STATE_DIR, 'reasoning');
 
 function loadQueue() {
   if (!existsSync(QUEUE_PATH)) return [];
@@ -394,6 +395,47 @@ function buildReasoningPayload({ result }) {
     .map((p) => p.reasoning || '');
 }
 
+// ─── Local reasoning log ──────────────────────────────────────────────────────
+
+/**
+ * Write the full prediction result (per-market reasoning + tool trace with every
+ * search query and result) to state/reasoning/ for post-hoc inspection.
+ * Local only — the relayer receives just the per-market reasoning strings.
+ */
+function saveReasoningLog(roundId, { summaries, result, autoResolved }) {
+  try {
+    if (!existsSync(REASONING_DIR)) mkdirSync(REASONING_DIR, { recursive: true });
+    const ts = new Date().toISOString();
+    const path = join(REASONING_DIR, `${slug}-round-${roundId}-${ts.replace(/[:.]/g, '-')}${DRY_RUN ? '-dryrun' : ''}.json`);
+    writeFileSync(path, JSON.stringify({
+      roundId,
+      timestamp: ts,
+      dryRun: DRY_RUN,
+      provider: LLM_PROVIDER,
+      model: MODEL,
+      searchProvider: webSearch ? SEARCH_PROVIDER : 'none',
+      markets: summaries,
+      autoResolved,
+      predictions: result.predictions,
+      perMarketReasoning: result.perMarketReasoning,
+      usage: result.usage,
+      trace: result.trace,
+    }, null, 2));
+    log(`Reasoning log saved to ${path}`);
+  } catch (err) {
+    log(`Failed to save reasoning log: ${err.message}`);
+  }
+}
+
+function printReasoning(result) {
+  for (const step of result.trace || []) {
+    for (const tc of step.toolCalls) log(`  step ${step.step}: ${tc.tool}(${JSON.stringify(tc.args).slice(0, 160)})`);
+  }
+  for (const p of result.perMarketReasoning || []) {
+    log(`  [${p.marketIndex}] ${p.probabilityBps} bps — ${p.reasoning}`);
+  }
+}
+
 // ─── Gas cap ──────────────────────────────────────────────────────────────────
 
 async function baseFeeGwei() {
@@ -427,7 +469,10 @@ async function tryCommit(roundId, round) {
     return;
   }
 
+  saveReasoningLog(roundId, { summaries, result, autoResolved });
+
   if (DRY_RUN) {
+    printReasoning(result);
     log(`Round ${roundId}: DRY_RUN — skipping on-chain commit`);
     return;
   }
