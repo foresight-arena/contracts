@@ -350,6 +350,7 @@ async function predictRound(roundId, round) {
     prompt,
     baseTools: tools,
     marketCount: unresolvedIndices.length,
+    log,
   });
 
   // Map LLM's subset predictions back to original indices, shrinking toward the

@@ -285,7 +285,7 @@ Why this matters:
 |---|---|---|
 | `LLM_PROVIDER` | `openrouter` / `bedrock` | `openrouter` |
 | `BEDROCK_REGION` | Bedrock Runtime region (falls back to `AWS_REGION`) | `us-east-1` |
-| `BEDROCK_PROMPT_CACHE` | `auto` / `on` / `off` — Bedrock prompt caching; `auto` enables it for Claude and Nova models | `auto` |
+| `BEDROCK_PROMPT_CACHE` | `auto` / `on` / `off` — Bedrock prompt caching. `auto`: Claude caches the prompt and the newest tool results; Nova caches the prompt only (it rejects cache points in tool-result messages); other models don't cache. If a model rejects a cache point anyway, the step is retried uncached and caching stays off for that run. | `auto` |
 | `SEARCH_PROVIDER` | `tavily` / `agentcore` / `none` | `agentcore` if `AGENTCORE_GATEWAY_URL` set, else `tavily` if `TAVILY_API_KEY` set, else `none` |
 | `TAVILY_API_KEY` | Tavily key for `searchWeb` | disabled |
 | `AGENTCORE_GATEWAY_URL` | AgentCore Gateway MCP endpoint with a Web Search target | disabled |

@@ -38,16 +38,21 @@ function createModel(provider, model) {
 }
 
 /**
- * Bedrock prompt caching. Only Claude and Nova accept cache points — other
- * Bedrock models reject them — so `auto` enables it by model family.
- * BEDROCK_PROMPT_CACHE=on|off overrides.
+ * Bedrock prompt caching policy by model family:
+ *  - 'full':   prompt + newest tool-result messages (Claude)
+ *  - 'prompt': prompt only — Nova rejects cache points inside tool-result messages
+ *              ("extraneous key [cachePoint] is not permitted")
+ *  - 'none':   other models reject cache points entirely
+ * BEDROCK_PROMPT_CACHE=on (full) | off overrides `auto`.
  */
-function usePromptCache(provider, model) {
-  if (provider !== 'bedrock') return false;
+function promptCacheMode(provider, model) {
+  if (provider !== 'bedrock') return 'none';
   const mode = (process.env.BEDROCK_PROMPT_CACHE || 'auto').toLowerCase();
-  if (mode === 'on') return true;
-  if (mode === 'off') return false;
-  return /anthropic\.claude|amazon\.nova/.test(model);
+  if (mode === 'on') return 'full';
+  if (mode === 'off') return 'none';
+  if (/anthropic\.claude/.test(model)) return 'full';
+  if (/amazon\.nova/.test(model)) return 'prompt';
+  return 'none';
 }
 
 const CACHE_POINT = { bedrock: { cachePoint: { type: 'default' } } };
@@ -58,16 +63,18 @@ const CACHE_POINT = { bedrock: { cachePoint: { type: 'default' } } };
  * the prompt and the two most recent tool-result messages: the older one is read
  * from cache, the newest is written for the next step. Bedrock allows at most 4.
  */
-function placeCachePoints(messages) {
-  const toolIdx = messages.flatMap((m, i) => (m.role === 'tool' ? [i] : []));
-  const keep = new Set([0, ...toolIdx.slice(-2)]);
+function placeCachePoints(messages, mode) {
+  const toolIdx = mode === 'full' ? messages.flatMap((m, i) => (m.role === 'tool' ? [i] : [])) : [];
+  const keep = new Set(mode === 'none' ? [] : [0, ...toolIdx.slice(-2)]);
   messages.forEach((m, i) => {
     if (keep.has(i)) m.providerOptions = CACHE_POINT;
     else delete m.providerOptions;
   });
 }
 
-export async function getPredictions({ provider = 'openrouter', model, prompt, baseTools, marketCount, maxSteps = 20 }) {
+const isCachePointRejection = (err) => /cachePoint/i.test(err?.message || '');
+
+export async function getPredictions({ provider = 'openrouter', model, prompt, baseTools, marketCount, maxSteps = 20, log = () => {} }) {
   let finalPredictions = null;
   let finalReasoning = null;
 
@@ -96,15 +103,27 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
   const tools = { ...baseTools, submitPredictions: submitTool };
 
   const llm = createModel(provider, model);
-  const cache = usePromptCache(provider, model);
+  let cacheMode = promptCacheMode(provider, model);
   const messages = [{ role: 'user', content: prompt }];
   const steps = [];
 
   // Tool loop driven one step at a time (instead of `maxSteps`) so cache points
   // can be moved onto the newest messages before each call.
   while (steps.length < maxSteps) {
-    if (cache) placeCachePoints(messages);
-    const res = await generateText({ model: llm, tools, messages });
+    placeCachePoints(messages, cacheMode);
+    let res;
+    try {
+      res = await generateText({ model: llm, tools, messages });
+    } catch (err) {
+      // A model that rejects cache points must not cost the round: retry this
+      // step uncached and keep caching off for the rest of the run. Safe to
+      // retry — tools only execute after a successful model response.
+      if (cacheMode === 'none' || !isCachePointRejection(err)) throw err;
+      log(`Prompt caching rejected by ${model} (${err.message.slice(0, 120)}) — retrying without cache`);
+      cacheMode = 'none';
+      placeCachePoints(messages, cacheMode);
+      res = await generateText({ model: llm, tools, messages });
+    }
     const step = res.steps[0];
     steps.push(step);
     messages.push(...res.response.messages);
