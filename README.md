@@ -285,6 +285,7 @@ Why this matters:
 |---|---|---|
 | `LLM_PROVIDER` | `openrouter` / `bedrock` | `openrouter` |
 | `BEDROCK_REGION` | Bedrock Runtime region (falls back to `AWS_REGION`) | `us-east-1` |
+| `OPENROUTER_PROMPT_CACHE` | `auto` / `on` / `off` — OpenRouter prompt caching via a top-level `cache_control` (OpenRouter advances the breakpoint as the conversation grows). `auto` enables it for `anthropic/*` models only; other models' requests are unchanged. Cache reads/writes appear in the `Token usage` line (on OpenRouter, `prompt` includes the cached tokens). A rejection retries the step uncached. | `auto` |
 | `BEDROCK_PROMPT_CACHE` | `auto` / `on` / `off` — Bedrock prompt caching. `auto`: Claude caches the prompt and the newest tool results; Nova caches the prompt only (it rejects cache points in tool-result messages); other models don't cache. If a model rejects a cache point anyway, the step is retried uncached and caching stays off for that run. | `auto` |
 | `SEARCH_PROVIDER` | `tavily` / `agentcore` / `none` | `agentcore` if `AGENTCORE_GATEWAY_URL` set, else `tavily` if `TAVILY_API_KEY` set, else `none` |
 | `TAVILY_API_KEY` | Tavily key for `searchWeb` | disabled |

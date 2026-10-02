@@ -18,12 +18,12 @@ export const LLM_PROVIDERS = ['openrouter', 'bedrock'];
  *                (e.g. `us.anthropic.claude-sonnet-4-5-20250929-v1:0`); the model
  *                must support tool use via the Converse API.
  */
-function createModel(provider, model) {
+function createModel(provider, model, openRouterCache) {
   switch (provider) {
     case 'openrouter': {
       const apiKey = process.env.OPENROUTER_API_KEY;
       if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
-      return createOpenRouter({ apiKey })(model);
+      return createOpenRouter({ apiKey, fetch: createOpenRouterFetch(openRouterCache) })(model);
     }
     case 'bedrock': {
       const bedrock = createAmazonBedrock({
@@ -35,6 +35,39 @@ function createModel(provider, model) {
     default:
       throw new Error(`Unknown LLM provider: ${provider}`);
   }
+}
+
+/**
+ * OpenRouter prompt caching: Claude models cache with a top-level
+ * `cache_control` field — OpenRouter places the breakpoint on the last
+ * cacheable block and advances it as the conversation grows, which fits the
+ * tool loop. Other models are left untouched.
+ * OPENROUTER_PROMPT_CACHE=on|off overrides `auto`.
+ */
+function openRouterPromptCache(model) {
+  const mode = (process.env.OPENROUTER_PROMPT_CACHE || 'auto').toLowerCase();
+  if (mode === 'on') return true;
+  if (mode === 'off') return false;
+  return /^~?anthropic\//.test(model);
+}
+
+/**
+ * The OpenRouter SDK in use (0.0.6) knows nothing about caching, so this fetch
+ * wrapper adds `cache_control` while `state.enabled` and records the cache
+ * counters (usage.prompt_tokens_details) of the latest response in `state.last`.
+ */
+function createOpenRouterFetch(state) {
+  return async (input, init) => {
+    if (state.enabled && typeof init?.body === 'string') {
+      init = { ...init, body: JSON.stringify({ ...JSON.parse(init.body), cache_control: { type: 'ephemeral' } }) };
+    }
+    const resp = await fetch(input, init);
+    try {
+      const details = (await resp.clone().json())?.usage?.prompt_tokens_details;
+      if (details) state.last = { readTokens: details.cached_tokens || 0, writeTokens: details.cache_write_tokens || 0 };
+    } catch { /* not JSON — leave counters unset */ }
+    return resp;
+  };
 }
 
 /**
@@ -65,14 +98,16 @@ const CACHE_POINT = { bedrock: { cachePoint: { type: 'default' } } };
  */
 function placeCachePoints(messages, mode) {
   const toolIdx = mode === 'full' ? messages.flatMap((m, i) => (m.role === 'tool' ? [i] : [])) : [];
-  const keep = new Set(mode === 'none' ? [] : [0, ...toolIdx.slice(-2)]);
+  // 'request' (OpenRouter) caches via a request-level field, not message cache points
+  const keep = new Set(mode === 'full' || mode === 'prompt' ? [0, ...toolIdx.slice(-2)] : []);
   messages.forEach((m, i) => {
     if (keep.has(i)) m.providerOptions = CACHE_POINT;
     else delete m.providerOptions;
   });
 }
 
-const isCachePointRejection = (err) => /cachePoint/i.test(err?.message || '');
+// Some providers (OpenRouter SDK 0.0.6) only carry the upstream error text in responseBody
+const isCachePointRejection = (err) => /cachePoint|cache_control/i.test(`${err?.message || ''} ${err?.responseBody || ''}`);
 
 /**
  * `deadline` (ms epoch, optional): the latest moment the loop may still be
@@ -107,8 +142,10 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
 
   const tools = { ...baseTools, submitPredictions: submitTool };
 
-  const llm = createModel(provider, model);
-  let cacheMode = promptCacheMode(provider, model);
+  const openRouterCache = { enabled: provider === 'openrouter' && openRouterPromptCache(model), last: null };
+  const llm = createModel(provider, model, openRouterCache);
+  let cacheMode = provider === 'openrouter' ? (openRouterCache.enabled ? 'request' : 'none') : promptCacheMode(provider, model);
+  const stepCache = [];
   const messages = [{ role: 'user', content: prompt }];
   const steps = [];
 
@@ -116,6 +153,7 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
   // can be moved onto the newest messages before each call.
   const outOfTime = () => new Error(`Out of time: stopped before the commit deadline after ${steps.length} step(s)`);
   const call = () => {
+    openRouterCache.last = null;
     if (deadline == null) return generateText({ model: llm, tools, messages });
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw outOfTime();
@@ -133,8 +171,9 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
       // step uncached and keep caching off for the rest of the run. Safe to
       // retry — tools only execute after a successful model response.
       if (cacheMode === 'none' || !isCachePointRejection(err)) throw err;
-      log(`Prompt caching rejected by ${model} (${err.message.slice(0, 120)}) — retrying without cache`);
+      log(`Prompt caching rejected by ${model} (${(err.message || err.responseBody || '').slice(0, 120)}) — retrying without cache`);
       cacheMode = 'none';
+      openRouterCache.enabled = false;
       placeCachePoints(messages, cacheMode);
       try {
         res = await call();
@@ -145,6 +184,7 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
     }
     const step = res.steps[0];
     steps.push(step);
+    stepCache.push(openRouterCache.last);
     messages.push(...res.response.messages);
     // Stop as soon as the answer is in — no need to pay for a closing summary
     if (finalPredictions || step.finishReason !== 'tool-calls') break;
@@ -171,7 +211,9 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
     })),
     finishReason: step.finishReason || null,
     usage: step.usage || null,
-    cache: cacheUsage(step),
+    // Bedrock: from provider metadata (inputTokens exclude cached tokens).
+    // OpenRouter: from the fetch wrapper (prompt_tokens include cached tokens).
+    cache: cacheUsage(step) ?? stepCache[i] ?? null,
   }));
 
   const usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
