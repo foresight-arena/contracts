@@ -152,12 +152,18 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
   // Tool loop driven one step at a time (instead of `maxSteps`) so cache points
   // can be moved onto the newest messages before each call.
   const outOfTime = () => new Error(`Out of time: stopped before the commit deadline after ${steps.length} step(s)`);
+  // The deadline abort can surface as a timeout or, if it lands while the
+  // response body is being read, as a generic "Failed to process successful
+  // response" — so check the signal itself, not the error type.
+  let signal = null;
+  const timedOut = (err) => signal?.aborted || err.name === 'TimeoutError' || err.name === 'AbortError';
   const call = () => {
     openRouterCache.last = null;
     if (deadline == null) return generateText({ model: llm, tools, messages });
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw outOfTime();
-    return generateText({ model: llm, tools, messages, abortSignal: AbortSignal.timeout(remaining) });
+    signal = AbortSignal.timeout(remaining);
+    return generateText({ model: llm, tools, messages, abortSignal: signal });
   };
 
   while (steps.length < maxSteps) {
@@ -166,7 +172,7 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
     try {
       res = await call();
     } catch (err) {
-      if (err.name === 'TimeoutError' || err.name === 'AbortError') throw outOfTime();
+      if (timedOut(err)) throw outOfTime();
       // A model that rejects cache points must not cost the round: retry this
       // step uncached and keep caching off for the rest of the run. Safe to
       // retry — tools only execute after a successful model response.
@@ -178,7 +184,7 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
       try {
         res = await call();
       } catch (err2) {
-        if (err2.name === 'TimeoutError' || err2.name === 'AbortError') throw outOfTime();
+        if (timedOut(err2)) throw outOfTime();
         throw err2;
       }
     }
