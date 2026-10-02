@@ -74,7 +74,12 @@ function placeCachePoints(messages, mode) {
 
 const isCachePointRejection = (err) => /cachePoint/i.test(err?.message || '');
 
-export async function getPredictions({ provider = 'openrouter', model, prompt, baseTools, marketCount, maxSteps = 20, log = () => {} }) {
+/**
+ * `deadline` (ms epoch, optional): the latest moment the loop may still be
+ * talking to the model — the caller reserves time after it to commit. Checked
+ * before every step and enforced mid-call with an abort signal.
+ */
+export async function getPredictions({ provider = 'openrouter', model, prompt, baseTools, marketCount, maxSteps = 20, deadline = null, log = () => {} }) {
   let finalPredictions = null;
   let finalReasoning = null;
 
@@ -109,12 +114,21 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
 
   // Tool loop driven one step at a time (instead of `maxSteps`) so cache points
   // can be moved onto the newest messages before each call.
+  const outOfTime = () => new Error(`Out of time: stopped before the commit deadline after ${steps.length} step(s)`);
+  const call = () => {
+    if (deadline == null) return generateText({ model: llm, tools, messages });
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw outOfTime();
+    return generateText({ model: llm, tools, messages, abortSignal: AbortSignal.timeout(remaining) });
+  };
+
   while (steps.length < maxSteps) {
     placeCachePoints(messages, cacheMode);
     let res;
     try {
-      res = await generateText({ model: llm, tools, messages });
+      res = await call();
     } catch (err) {
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') throw outOfTime();
       // A model that rejects cache points must not cost the round: retry this
       // step uncached and keep caching off for the rest of the run. Safe to
       // retry — tools only execute after a successful model response.
@@ -122,7 +136,12 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
       log(`Prompt caching rejected by ${model} (${err.message.slice(0, 120)}) — retrying without cache`);
       cacheMode = 'none';
       placeCachePoints(messages, cacheMode);
-      res = await generateText({ model: llm, tools, messages });
+      try {
+        res = await call();
+      } catch (err2) {
+        if (err2.name === 'TimeoutError' || err2.name === 'AbortError') throw outOfTime();
+        throw err2;
+      }
     }
     const step = res.steps[0];
     steps.push(step);

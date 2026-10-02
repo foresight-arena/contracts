@@ -46,7 +46,7 @@ import {
 } from 'viem';
 import { polygon } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -167,6 +167,11 @@ const PENDING_PATH = join(STATE_DIR, `pending-predictions-${slug}.json`);
 const STATE_PATH = join(STATE_DIR, `state-${slug}.json`);
 const REGISTERED_FLAG_PATH = join(STATE_DIR, `registered-${account.address.toLowerCase()}.flag`);
 const REASONING_DIR = join(STATE_DIR, 'reasoning');
+// Per wallet, not per model: overlapping runs on one wallet race the nonce and
+// the reveal queue, and each pays for its own LLM call
+const LOCK_PATH = join(STATE_DIR, `run-${account.address.toLowerCase()}.lock`);
+// Time reserved after the LLM loop for simulate + send + receipt of the commit
+const COMMIT_MARGIN_SECONDS = 45;
 
 function loadQueue() {
   if (!existsSync(QUEUE_PATH)) return [];
@@ -344,12 +349,14 @@ async function predictRound(roundId, round) {
   const prompt = buildPrompt({ roundId, round, summaries: subsetSummaries, hasWebSearch: !!webSearch, now: new Date() });
 
   log(`Calling ${LLM_PROVIDER}:${MODEL} for ${unresolvedIndices.length} unresolved market(s)...`);
+  const deadline = DRY_RUN ? null : (Number(round.commitDeadline) - COMMIT_MARGIN_SECONDS) * 1000;
   const result = await getPredictions({
     provider: LLM_PROVIDER,
     model: MODEL,
     prompt,
     baseTools: tools,
     marketCount: unresolvedIndices.length,
+    deadline,
     log,
   });
 
@@ -733,6 +740,42 @@ async function preflightWebSearch() {
   }
 }
 
+// ─── Run lock ─────────────────────────────────────────────────────────────────
+
+function isAlive(pid) {
+  try { process.kill(pid, 0); return true; }
+  catch (err) { return err.code === 'EPERM'; }
+}
+
+/**
+ * One run at a time per wallet. A slow LLM call can outlast the cron interval;
+ * without this the next run predicts the same round again. A lock whose process
+ * is gone (crash, reboot) is taken over.
+ */
+function acquireLock() {
+  const take = () => {
+    try {
+      writeFileSync(LOCK_PATH, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), { flag: 'wx' });
+      process.on('exit', () => { try { unlinkSync(LOCK_PATH); } catch { /* already gone */ } });
+      return true;
+    } catch (err) {
+      if (err.code === 'EEXIST') return false;
+      throw err;
+    }
+  };
+  if (take()) return true;
+
+  let holder = {};
+  try { holder = JSON.parse(readFileSync(LOCK_PATH, 'utf-8')); } catch { /* unreadable = stale */ }
+  if (holder.pid && isAlive(holder.pid)) {
+    log(`Previous run still active (pid ${holder.pid}, started ${holder.startedAt}) — skipping this run`);
+    return false;
+  }
+  log(`Removing stale lock from pid ${holder.pid ?? '?'}`);
+  try { unlinkSync(LOCK_PATH); } catch { /* another run got there first */ }
+  return take();
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -760,6 +803,8 @@ async function main() {
     log('Done.');
     return;
   }
+
+  if (!acquireLock()) return;
 
   await ensureRegistered();
 

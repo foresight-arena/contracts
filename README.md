@@ -406,6 +406,12 @@ MODE=$MODE node agent.mjs
 */5 * * * * /path/to/run-agent.sh predict gemini   >> gemini-predict.log   2>&1
 ```
 
+### Overlapping runs and slow models
+
+Each run takes a per-wallet lock (`state/run-<address>.lock`); if the previous run is still going — e.g. a slow model outlasting a 2-minute cron — the new run logs `Previous run still active` and exits. A lock left by a dead process is taken over.
+
+The LLM loop stops 45s before the commit deadline (checked before each step and enforced mid-call), leaving time for the commit transaction. Slow reasoning models (e.g. Claude Fable) can take several minutes per round — give them a larger `LEAD_TIME_SECONDS` (e.g. `900`).
+
 ### Multiple models in one directory
 
 You can run any number of models from the same install — state files are namespaced by `<model>-<address>` so they never collide. Each model needs its own funded wallet (one commit per address per round is enforced on-chain).
