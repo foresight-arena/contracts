@@ -89,6 +89,7 @@ function promptCacheMode(provider, model) {
 }
 
 const CACHE_POINT = { bedrock: { cachePoint: { type: 'default' } } };
+const MAX_SUBMIT_NUDGES = 2;
 
 /**
  * Each step re-sends the whole conversation, so tool results (search snippets)
@@ -146,6 +147,7 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
   const llm = createModel(provider, model, openRouterCache);
   let cacheMode = provider === 'openrouter' ? (openRouterCache.enabled ? 'request' : 'none') : promptCacheMode(provider, model);
   const stepCache = [];
+  let nudges = 0;
   const messages = [{ role: 'user', content: prompt }];
   const steps = [];
 
@@ -193,7 +195,19 @@ export async function getPredictions({ provider = 'openrouter', model, prompt, b
     stepCache.push(openRouterCache.last);
     messages.push(...res.response.messages);
     // Stop as soon as the answer is in — no need to pay for a closing summary
-    if (finalPredictions || step.finishReason !== 'tool-calls') break;
+    if (finalPredictions) break;
+    if (step.finishReason !== 'tool-calls') {
+      // Some models (e.g. Nova) write their answer as text instead of calling
+      // the tool. Ask again rather than lose the round — forcing tool_choice
+      // isn't an option, newer Claude models reject it.
+      if (nudges >= MAX_SUBMIT_NUDGES) break;
+      nudges++;
+      log(`Model stopped without calling submitPredictions (${step.finishReason}) — asking it to submit (${nudges}/${MAX_SUBMIT_NUDGES})`);
+      messages.push({
+        role: 'user',
+        content: `You have not called submitPredictions. Call the submitPredictions tool now with exactly ${marketCount} predictions (marketIndex 0 to ${marketCount - 1}). Do not answer in text.`,
+      });
+    }
   }
 
   if (!finalPredictions) {
