@@ -18,22 +18,12 @@
 import { writeFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { parseArgs } from './lib/common.mjs';
 
 const SUBGRAPH_URL = process.env.SUBGRAPH_URL
   || 'https://api.studio.thegraph.com/query/1745354/foresight-arena/version/latest';
 const RELAYER_URL = process.env.RELAYER_URL || 'https://api.foresightarena.xyz';
 const ZERO_HASH = '0x' + '0'.repeat(64);
-
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i++) {
-    const key = argv[i].replace(/^--/, '');
-    const next = argv[i + 1];
-    if (next === undefined || next.startsWith('--')) args[key] = true; // boolean flag
-    else { args[key] = next; i++; }
-  }
-  return args;
-}
 
 const toUnix = (date) => Math.floor(Date.parse(`${date}T00:00:00Z`) / 1000);
 
@@ -101,7 +91,7 @@ async function getMarketMeta(conditionId) {
 const ROUNDS_QUERY = `
   query($where: Round_filter!, $skip: Int!) {
     rounds(first: 100, skip: $skip, orderBy: roundId, where: $where) {
-      roundId commitDeadline revealDeadline invalidated outcomesTriggered resolvedBitmask
+      roundId commitDeadline revealStart revealDeadline invalidated outcomesTriggered outcomesTriggeredAt resolvedBitmask
       roundMarkets(orderBy: marketIndex) {
         marketIndex benchmarkPrice
         market { conditionId outcome resolvedAtTimestamp }
@@ -149,6 +139,8 @@ async function main() {
         ...metaById[rm.market.conditionId],
         benchmarkBps: rm.benchmarkPrice,
         outcome: rm.market.outcome,
+        // When the condition resolved on the CTF (null if not yet)
+        resolvedAt: rm.market.resolvedAtTimestamp ? new Date(Number(rm.market.resolvedAtTimestamp) * 1000).toISOString() : null,
         // Only markets resolved at trigger time count toward on-chain scores
         scored: ((bitmask >> BigInt(rm.marketIndex)) & 1n) === 1n,
         benchmarkBrier: outcome == null || rm.benchmarkPrice == null ? null : (rm.benchmarkPrice / 1e4 - outcome) ** 2,
@@ -185,6 +177,8 @@ async function main() {
     out.push({
       roundId: Number(r.roundId),
       commitDeadline: new Date(Number(r.commitDeadline) * 1000).toISOString(),
+      revealStart: new Date(Number(r.revealStart) * 1000).toISOString(),
+      outcomesTriggeredAt: r.outcomesTriggeredAt ? new Date(Number(r.outcomesTriggeredAt) * 1000).toISOString() : null,
       markets,
       agents: agentRows,
     });
