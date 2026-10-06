@@ -10,6 +10,7 @@
  * Usage:
  *   node export-history.mjs --from 2026-04-01 --to 2026-05-01 [--agents 0xa,0xb] [--out file.json]
  *   node export-history.mjs --from-round 1 --to-round 50
+ *   node export-history.mjs --from-round 169 --include-pending   (also revealed rounds without outcomes yet)
  *
  * Env: SUBGRAPH_URL (default: public Studio endpoint), RELAYER_URL (default: production).
  */
@@ -25,7 +26,12 @@ const ZERO_HASH = '0x' + '0'.repeat(64);
 
 function parseArgs(argv) {
   const args = {};
-  for (let i = 0; i < argv.length; i += 2) args[argv[i].replace(/^--/, '')] = argv[i + 1];
+  for (let i = 0; i < argv.length; i++) {
+    const key = argv[i].replace(/^--/, '');
+    const next = argv[i + 1];
+    if (next === undefined || next.startsWith('--')) args[key] = true; // boolean flag
+    else { args[key] = next; i++; }
+  }
   return args;
 }
 
@@ -109,7 +115,10 @@ const ROUNDS_QUERY = `
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const where = { invalidated: false, outcomesTriggered: true };
+  const where = { invalidated: false };
+  // Default: scored rounds only. --include-pending also exports revealed rounds
+  // whose outcomes aren't triggered yet (outcome/Brier/alpha are null there).
+  if (!('include-pending' in args)) where.outcomesTriggered = true;
   if (args.from) where.commitDeadline_gte = toUnix(args.from);
   if (args.to) where.commitDeadline_lt = toUnix(args.to);
   if (args['from-round']) where.roundId_gte = args['from-round'];
@@ -122,7 +131,7 @@ async function main() {
     rounds.push(...page);
     if (page.length < 100) break;
   }
-  console.error(`${rounds.length} scored round(s)`);
+  console.error(`${rounds.length} round(s)${where.outcomesTriggered ? ' with outcomes' : ''}`);
 
   const conditionIds = [...new Set(rounds.flatMap((r) => r.roundMarkets.map((m) => m.market.conditionId)))];
   console.error(`Fetching metadata for ${conditionIds.length} market(s)...`);
