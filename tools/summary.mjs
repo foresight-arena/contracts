@@ -13,6 +13,12 @@
  *
  * Usage:
  *   node summary.mjs [--in out/history-full.json] [--agents name1,name2] [--out out/summary.md]
+ *                    [--settled-benchmark]
+ *
+ * --settled-benchmark: re-score markets already settled on the CTF at the commit
+ * deadline against the settled value (0/1) instead of the posted benchmark —
+ * the relayer posted a 5000 fallback for every such market (no CLOB trades
+ * around the deadline), handing +0.25 alpha to any agent that checks the CTF.
  */
 
 import { readFileSync, writeFileSync } from 'fs';
@@ -35,6 +41,7 @@ const args = parseArgs(process.argv.slice(2));
 const inPath = args.in || join(HERE, 'out', 'history-full.json');
 const agents = args.agents ? args.agents.split(',') : DEFAULT_AGENTS;
 const data = JSON.parse(readFileSync(inPath, 'utf-8'));
+const settledBenchmark = !!args['settled-benchmark'];
 const short = (name) => name.replace(/^benchmark-/, '').replace(/^(claude|amazon)-/, '');
 const ts = (iso) => (iso ? Date.parse(iso) : Infinity);
 
@@ -47,20 +54,24 @@ for (const r of data.rounds) {
     for (const pm of a.perMarket) {
       const m = r.markets[pm.index];
       if (!m?.scored || pm.alpha == null) continue;
+      const o = m.outcome === 'YES' ? 1 : 0;
+      const preResolved = ts(m.resolvedAt) <= ts(r.commitDeadline);
+      // Re-score pre-resolved markets against the settled value when requested
+      const rescore = settledBenchmark && preResolved;
       rows.push({
         agent: a.name,
         round: r.roundId,
         date: r.commitDeadline.slice(0, 10),
         category: category(m.question),
         p: pm.predictionBps / 1e4,
-        m: m.benchmarkBps / 1e4,
-        o: m.outcome === 'YES' ? 1 : 0,
-        alpha: pm.alpha,
+        m: rescore ? o : m.benchmarkBps / 1e4,
+        o,
+        alpha: rescore ? -pm.brier : pm.alpha,
         brier: pm.brier,
-        mBrier: m.benchmarkBrier,
+        mBrier: rescore ? 0 : m.benchmarkBrier,
         // Settled on the CTF before the commit deadline: agents that check the
         // CTF auto-fill these, so they say nothing about forecasting skill
-        preResolved: ts(m.resolvedAt) <= ts(r.commitDeadline),
+        preResolved,
       });
     }
   }
@@ -94,7 +105,9 @@ out.push(`# Benchmark summary
 
 Source: \`${inPath.split('/').slice(-2).join('/')}\` (exported ${data.exportedAt.slice(0, 10)}), ${roundsAll.length} rounds with outcomes (${Math.min(...roundsAll.map((r) => r.roundId))}–${Math.max(...roundsAll.map((r) => r.roundId))}). Scored markets only; VOID (50/50) resolutions are not scored on-chain.
 Alpha per market = market Brier − agent Brier (positive = beat the market price at the commit deadline). CI: 95% bootstrap resampling whole rounds.
-"Excl. pre-resolved" drops markets already settled on the CTF before the commit deadline (free alpha for any agent that checks the CTF).`);
+"Excl. pre-resolved" drops markets already settled on the CTF before the commit deadline (free alpha for any agent that checks the CTF).${settledBenchmark ? `
+
+**Benchmark re-scored (--settled-benchmark):** markets already settled on the CTF at the commit deadline use the settled value (0/1) as the market price instead of the posted 5000 fallback. These numbers differ from the on-chain scores.` : ''}`);
 
 const summaryBody = agents.map((name) => {
   const s = rows.filter((r) => r.agent === name);
