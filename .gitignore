@@ -13,3 +13,7 @@ docs/
 
 # Node modules (subgraph)
 node_modules/
+
+# Agent runtime state (reveal queues with salts, reasoning logs)
+agents/*/state/
+tools/out/

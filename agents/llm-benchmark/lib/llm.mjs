@@ -1,18 +1,121 @@
 /**
- * LLM wrapper using Vercel AI SDK + OpenRouter.
+ * LLM wrapper using Vercel AI SDK with a pluggable provider (OpenRouter or Amazon Bedrock).
  * Handles the tool-use loop and extracts final predictions via a sentinel tool.
  */
 
 import { generateText, tool } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 import { z } from 'zod';
+import { getAwsCredentials } from './aws.mjs';
 
-export async function getPredictions({ model, prompt, baseTools, marketCount, maxSteps = 20 }) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
+export const LLM_PROVIDERS = ['openrouter', 'bedrock'];
 
-  const openrouter = createOpenRouter({ apiKey });
+/**
+ * Resolve a provider + model ID into an AI SDK language model.
+ *  - openrouter: MODEL is an OpenRouter slug (e.g. `anthropic/claude-opus-4`)
+ *  - bedrock:    MODEL is a Bedrock model ID, inference profile ID or ARN
+ *                (e.g. `us.anthropic.claude-sonnet-4-5-20250929-v1:0`); the model
+ *                must support tool use via the Converse API.
+ */
+function createModel(provider, model, openRouterCache) {
+  switch (provider) {
+    case 'openrouter': {
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
+      return createOpenRouter({ apiKey, fetch: createOpenRouterFetch(openRouterCache) })(model);
+    }
+    case 'bedrock': {
+      const bedrock = createAmazonBedrock({
+        region: process.env.BEDROCK_REGION || process.env.AWS_REGION || 'us-east-1',
+        credentialProvider: getAwsCredentials,
+      });
+      return bedrock(model);
+    }
+    default:
+      throw new Error(`Unknown LLM provider: ${provider}`);
+  }
+}
 
+/**
+ * OpenRouter prompt caching: Claude models cache with a top-level
+ * `cache_control` field — OpenRouter places the breakpoint on the last
+ * cacheable block and advances it as the conversation grows, which fits the
+ * tool loop. Other models are left untouched.
+ * OPENROUTER_PROMPT_CACHE=on|off overrides `auto`.
+ */
+function openRouterPromptCache(model) {
+  const mode = (process.env.OPENROUTER_PROMPT_CACHE || 'auto').toLowerCase();
+  if (mode === 'on') return true;
+  if (mode === 'off') return false;
+  return /^~?anthropic\//.test(model);
+}
+
+/**
+ * The OpenRouter SDK in use (0.0.6) knows nothing about caching, so this fetch
+ * wrapper adds `cache_control` while `state.enabled` and records the cache
+ * counters (usage.prompt_tokens_details) of the latest response in `state.last`.
+ */
+function createOpenRouterFetch(state) {
+  return async (input, init) => {
+    if (state.enabled && typeof init?.body === 'string') {
+      init = { ...init, body: JSON.stringify({ ...JSON.parse(init.body), cache_control: { type: 'ephemeral' } }) };
+    }
+    const resp = await fetch(input, init);
+    try {
+      const details = (await resp.clone().json())?.usage?.prompt_tokens_details;
+      if (details) state.last = { readTokens: details.cached_tokens || 0, writeTokens: details.cache_write_tokens || 0 };
+    } catch { /* not JSON — leave counters unset */ }
+    return resp;
+  };
+}
+
+/**
+ * Bedrock prompt caching policy by model family:
+ *  - 'full':   prompt + newest tool-result messages (Claude)
+ *  - 'prompt': prompt only — Nova rejects cache points inside tool-result messages
+ *              ("extraneous key [cachePoint] is not permitted")
+ *  - 'none':   other models reject cache points entirely
+ * BEDROCK_PROMPT_CACHE=on (full) | off overrides `auto`.
+ */
+function promptCacheMode(provider, model) {
+  if (provider !== 'bedrock') return 'none';
+  const mode = (process.env.BEDROCK_PROMPT_CACHE || 'auto').toLowerCase();
+  if (mode === 'on') return 'full';
+  if (mode === 'off') return 'none';
+  if (/anthropic\.claude/.test(model)) return 'full';
+  if (/amazon\.nova/.test(model)) return 'prompt';
+  return 'none';
+}
+
+const CACHE_POINT = { bedrock: { cachePoint: { type: 'default' } } };
+const MAX_SUBMIT_NUDGES = 2;
+
+/**
+ * Each step re-sends the whole conversation, so tool results (search snippets)
+ * from early steps are paid for again on every later step. Put cache points on
+ * the prompt and the two most recent tool-result messages: the older one is read
+ * from cache, the newest is written for the next step. Bedrock allows at most 4.
+ */
+function placeCachePoints(messages, mode) {
+  const toolIdx = mode === 'full' ? messages.flatMap((m, i) => (m.role === 'tool' ? [i] : [])) : [];
+  // 'request' (OpenRouter) caches via a request-level field, not message cache points
+  const keep = new Set(mode === 'full' || mode === 'prompt' ? [0, ...toolIdx.slice(-2)] : []);
+  messages.forEach((m, i) => {
+    if (keep.has(i)) m.providerOptions = CACHE_POINT;
+    else delete m.providerOptions;
+  });
+}
+
+// Some providers (OpenRouter SDK 0.0.6) only carry the upstream error text in responseBody
+const isCachePointRejection = (err) => /cachePoint|cache_control/i.test(`${err?.message || ''} ${err?.responseBody || ''}`);
+
+/**
+ * `deadline` (ms epoch, optional): the latest moment the loop may still be
+ * talking to the model — the caller reserves time after it to commit. Checked
+ * before every step and enforced mid-call with an abort signal.
+ */
+export async function getPredictions({ provider = 'openrouter', model, prompt, baseTools, marketCount, maxSteps = 20, deadline = null, log = () => {} }) {
   let finalPredictions = null;
   let finalReasoning = null;
 
@@ -40,22 +143,82 @@ export async function getPredictions({ model, prompt, baseTools, marketCount, ma
 
   const tools = { ...baseTools, submitPredictions: submitTool };
 
-  const result = await generateText({
-    model: openrouter(model),
-    tools,
-    maxSteps,
-    messages: [{ role: 'user', content: prompt }],
-  });
+  const openRouterCache = { enabled: provider === 'openrouter' && openRouterPromptCache(model), last: null };
+  const llm = createModel(provider, model, openRouterCache);
+  let cacheMode = provider === 'openrouter' ? (openRouterCache.enabled ? 'request' : 'none') : promptCacheMode(provider, model);
+  const stepCache = [];
+  let nudges = 0;
+  const messages = [{ role: 'user', content: prompt }];
+  const steps = [];
+
+  // Tool loop driven one step at a time (instead of `maxSteps`) so cache points
+  // can be moved onto the newest messages before each call.
+  const outOfTime = () => new Error(`Out of time: stopped before the commit deadline after ${steps.length} step(s)`);
+  // The deadline abort can surface as a timeout or, if it lands while the
+  // response body is being read, as a generic "Failed to process successful
+  // response" — so check the signal itself, not the error type.
+  let signal = null;
+  const timedOut = (err) => signal?.aborted || err.name === 'TimeoutError' || err.name === 'AbortError';
+  const call = () => {
+    openRouterCache.last = null;
+    if (deadline == null) return generateText({ model: llm, tools, messages });
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw outOfTime();
+    signal = AbortSignal.timeout(remaining);
+    return generateText({ model: llm, tools, messages, abortSignal: signal });
+  };
+
+  while (steps.length < maxSteps) {
+    placeCachePoints(messages, cacheMode);
+    let res;
+    try {
+      res = await call();
+    } catch (err) {
+      if (timedOut(err)) throw outOfTime();
+      // A model that rejects cache points must not cost the round: retry this
+      // step uncached and keep caching off for the rest of the run. Safe to
+      // retry — tools only execute after a successful model response.
+      if (cacheMode === 'none' || !isCachePointRejection(err)) throw err;
+      log(`Prompt caching rejected by ${model} (${(err.message || err.responseBody || '').slice(0, 120)}) — retrying without cache`);
+      cacheMode = 'none';
+      openRouterCache.enabled = false;
+      placeCachePoints(messages, cacheMode);
+      try {
+        res = await call();
+      } catch (err2) {
+        if (timedOut(err2)) throw outOfTime();
+        throw err2;
+      }
+    }
+    const step = res.steps[0];
+    steps.push(step);
+    stepCache.push(openRouterCache.last);
+    messages.push(...res.response.messages);
+    // Stop as soon as the answer is in — no need to pay for a closing summary
+    if (finalPredictions) break;
+    if (step.finishReason !== 'tool-calls') {
+      // Some models (e.g. Nova) write their answer as text instead of calling
+      // the tool. Ask again rather than lose the round — forcing tool_choice
+      // isn't an option, newer Claude models reject it.
+      if (nudges >= MAX_SUBMIT_NUDGES) break;
+      nudges++;
+      log(`Model stopped without calling submitPredictions (${step.finishReason}) — asking it to submit (${nudges}/${MAX_SUBMIT_NUDGES})`);
+      messages.push({
+        role: 'user',
+        content: `You have not called submitPredictions. Call the submitPredictions tool now with exactly ${marketCount} predictions (marketIndex 0 to ${marketCount - 1}). Do not answer in text.`,
+      });
+    }
+  }
 
   if (!finalPredictions) {
-    throw new Error(`Model did not call submitPredictions after ${maxSteps} steps. Last text: ${result.text?.slice(0, 200)}`);
+    throw new Error(`Model did not call submitPredictions after ${steps.length} steps. Last text: ${steps.at(-1)?.text?.slice(0, 200)}`);
   }
 
   // Sort by marketIndex and return as plain array
   const sorted = [...finalPredictions].sort((a, b) => a.marketIndex - b.marketIndex);
 
   // Flatten all steps into a serializable trace (tool calls + responses + text)
-  const trace = (result.steps || []).map((step, i) => ({
+  const trace = steps.map((step, i) => ({
     step: i,
     text: step.text || null,
     toolCalls: (step.toolCalls || []).map((tc) => ({
@@ -68,7 +231,19 @@ export async function getPredictions({ model, prompt, baseTools, marketCount, ma
     })),
     finishReason: step.finishReason || null,
     usage: step.usage || null,
+    // Bedrock: from provider metadata (inputTokens exclude cached tokens).
+    // OpenRouter: from the fetch wrapper (prompt_tokens include cached tokens).
+    cache: cacheUsage(step) ?? stepCache[i] ?? null,
   }));
+
+  const usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  for (const step of trace) {
+    for (const k of Object.keys(usage)) usage[k] += step.usage?.[k] || 0;
+    if (step.cache) {
+      usage.cacheReadTokens = (usage.cacheReadTokens || 0) + step.cache.readTokens;
+      usage.cacheWriteTokens = (usage.cacheWriteTokens || 0) + step.cache.writeTokens;
+    }
+  }
 
   return {
     predictions: sorted.map((p) => p.probabilityBps),
@@ -79,6 +254,12 @@ export async function getPredictions({ model, prompt, baseTools, marketCount, ma
       reasoning: p.reasoning,
     })),
     trace,
-    usage: result.usage,
+    usage,
   };
+}
+
+function cacheUsage(step) {
+  const u = step.providerMetadata?.bedrock?.usage;
+  if (!u) return null;
+  return { readTokens: u.cacheReadInputTokens || 0, writeTokens: u.cacheWriteInputTokens || 0 };
 }

@@ -3,7 +3,7 @@
  * Same prompt is used across all models for fair comparison.
  */
 
-export function buildPrompt({ roundId, round, summaries, hasWebSearch }) {
+export function buildPrompt({ roundId, round, summaries, hasWebSearch, now = new Date() }) {
   const marketLines = summaries
     .map((s) => {
       if (s.error) return `[${s.index}] ${s.error}`;
@@ -26,6 +26,7 @@ export function buildPrompt({ roundId, round, summaries, hasWebSearch }) {
   return `You are competing in an on-chain prediction tournament called Foresight Arena. Your goal is to forecast the outcomes of real-world prediction markets BETTER than the current market consensus.
 
 # Round ${roundId}
+Current date and time: ${now.toISOString().slice(0, 16).replace('T', ' ')} UTC. Your training data may be older — rely on this date, not your prior, for what "now" is${hasWebSearch ? ' (and use the correct year in search queries)' : ''}.
 You are predicting ${summaries.length} markets. Reveal deadline: ${new Date(Number(round.revealDeadline) * 1000).toISOString()}.
 
 # Markets
